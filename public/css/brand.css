@@ -1,0 +1,175 @@
+/* LaundryKu Brand CSS */
+:root {
+    --lk-primary: #1A3A5C;
+    --lk-secondary: #4A90D9;
+    --lk-tertiary: #2ECC71;
+    --lk-neutral: #F5F7FA;
+    --lk-text: #1f2937;
+    --lk-muted: #6b7280;
+    --lk-danger: #dc3545;
+    --lk-warning: #ffc107;
+}
+
+body {
+    background: var(--lk-neutral);
+    color: var(--lk-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+a { color: var(--lk-secondary); text-decoration: none; }
+a:hover { color: var(--lk-primary); text-decoration: underline; }
+
+.lk-navbar { background: var(--lk-primary) !important; }
+.lk-navbar .nav-link { color: rgba(255,255,255,.85); }
+.lk-navbar .nav-link:hover { color: #fff; }
+.lk-navbar .navbar-brand { color: #fff; }
+
+.btn-lk-primary { background: var(--lk-primary); border-color: var(--lk-primary); color: #fff; }
+.btn-lk-primary:hover { background: #142e48; border-color: #142e48; color: #fff; }
+.btn-lk-secondary { background: var(--lk-secondary); border-color: var(--lk-secondary); color: #fff; }
+.btn-lk-secondary:hover { background: #3a7bc0; border-color: #3a7bc0; color: #fff; }
+.btn-lk-tertiary { background: var(--lk-tertiary); border-color: var(--lk-tertiary); color: #fff; }
+.btn-lk-tertiary:hover { background: #27ae60; border-color: #27ae60; color: #fff; }
+.btn-outline-lk-primary { border-color: var(--lk-primary); color: var(--lk-primary); }
+.btn-outline-lk-primary:hover { background: var(--lk-primary); color: #fff; }
+
+.text-lk-primary { color: var(--lk-primary) !important; }
+.text-lk-secondary { color: var(--lk-secondary) !important; }
+.text-lk-tertiary { color: var(--lk-tertiary) !important; }
+.bg-lk-primary { background: var(--lk-primary) !important; }
+.bg-lk-secondary { background: var(--lk-secondary) !important; }
+.bg-lk-tertiary { background: var(--lk-tertiary) !important; }
+.bg-lk-neutral { background: var(--lk-neutral) !important; }
+
+.lk-hero {
+    background: linear-gradient(135deg, var(--lk-primary) 0%, var(--lk-secondary) 100%);
+    color: #fff;
+    padding: 4rem 0 5rem;
+}
+.lk-hero h1 { font-weight: 800; }
+.lk-hero .lead { opacity: .9; }
+
+.lk-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    border: 1px solid rgba(0,0,0,.05);
+    transition: box-shadow .2s, transform .2s;
+}
+.lk-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); transform: translateY(-1px); }
+
+.lk-card-store { cursor: pointer; }
+.lk-card-store .store-rating { color: var(--lk-warning); }
+
+.lk-badge-tertiary { background: var(--lk-tertiary); color: #fff; }
+.lk-badge-primary { background: var(--lk-primary); color: #fff; }
+.lk-badge-secondary { background: var(--lk-secondary); color: #fff; }
+
+.lk-timeline { list-style: none; padding: 0; margin: 0; }
+.lk-timeline li {
+    position: relative;
+    padding: .75rem 0 .75rem 2rem;
+    border-left: 2px solid #e5e7eb;
+    margin-left: .5rem;
+}
+.lk-timeline li::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 1.1rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px #e5e7eb;
+}
+.lk-timeline li.active::before { background: var(--lk-tertiary); box-shadow: 0 0 0 2px var(--lk-tertiary); }
+.lk-timeline li.active { border-left-color: var(--lk-tertiary); }
+.lk-timeline li.done::before { background: var(--lk-secondary); box-shadow: 0 0 0 2px var(--lk-secondary); }
+
+.lk-footer { background: var(--lk-primary); }
+
+.lk-map {
+    width: 100%;
+    height: 500px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #e5e7eb;
+    position: relative;
+}
+.lk-map-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--lk-muted);
+    text-align: center;
+    padding: 2rem;
+}
+
+.lk-ai-widget-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--lk-secondary);
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    z-index: 1050;
+    cursor: pointer;
+    font-size: 1.5rem;
+}
+.lk-ai-widget-btn:hover { background: #3a7bc0; }
+
+.lk-ai-panel {
+    position: fixed;
+    bottom: 96px;
+    right: 24px;
+    width: 360px;
+    max-width: calc(100vw - 32px);
+    height: 500px;
+    max-height: calc(100vh - 120px);
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    z-index: 1050;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.lk-ai-panel.open { display: flex; }
+.lk-ai-header { background: var(--lk-primary); color: #fff; padding: .75rem 1rem; }
+.lk-ai-messages { flex: 1; overflow-y: auto; padding: 1rem; background: var(--lk-neutral); }
+.lk-ai-msg { margin-bottom: .75rem; max-width: 80%; padding: .5rem .75rem; border-radius: 12px; }
+.lk-ai-msg.user { background: var(--lk-secondary); color: #fff; margin-left: auto; }
+.lk-ai-msg.bot { background: #fff; border: 1px solid #e5e7eb; }
+.lk-ai-input { padding: .75rem; border-top: 1px solid #e5e7eb; display: flex; gap: .5rem; }
+.lk-ai-input input { flex: 1; }
+
+.lk-pulse {
+    animation: lk-pulse 1.5s ease-in-out infinite;
+}
+@keyframes lk-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+}
+
+.lk-status-pill { padding: .25rem .75rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+.lk-status-pending { background: #fef3c7; color: #92400e; }
+.lk-status-confirmed { background: #dbeafe; color: #1e40af; }
+.lk-status-process { background: #e0e7ff; color: #3730a3; }
+.lk-status-delivering { background: #fce7f3; color: #9d174d; }
+.lk-status-completed { background: #d1fae5; color: #065f46; }
+.lk-status-cancelled { background: #fee2e2; color: #991b1b; }
+
+@media (max-width: 768px) {
+    .lk-hero { padding: 2.5rem 0 3rem; }
+    .lk-hero h1 { font-size: 1.75rem; }
+    .lk-map { height: 400px; }
+    .lk-ai-panel { width: calc(100vw - 32px); right: 16px; bottom: 88px; }
+    .lk-ai-widget-btn { right: 16px; bottom: 16px; }
+}

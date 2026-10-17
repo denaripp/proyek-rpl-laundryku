@@ -1,0 +1,51 @@
+# =====================================================
+# LANDURYKU .gitignore — Tahap 21
+# =====================================================
+# SENSITIVE: NEVER commit these to git.
+.env
+.env.*
+!.env.example
+cookies.txt
+*.key
+
+# Local-only storage + cache (may contain user data / SQL dumps).
+/storage/app/backups/
+/storage/app/private/
+/storage/framework/cache/data/
+/storage/framework/sessions/
+/storage/framework/views/
+/storage/logs/*.log
+!storage/logs/.gitkeep
+
+# Composer / npm
+/vendor/
+/node_modules/
+
+# Build artefacts
+/public/build/
+/public/hot
+/public/storage
+
+# Editor + OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Test artefacts
+/.phpunit.result.cache
+/.phpunit.cache/
+/coverage/
+
+# Queue workers
+/supervisord.log
+/supervisord.pid
+
+# Local docker-compose overrides
+/docker-compose.override.yml
+
+# Sensitive docs
+# Uncomment if you ever commit private keys, certs, .pem, .key
+# *.pem
+# *.key
+# *.p12

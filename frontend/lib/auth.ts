@@ -1,0 +1,497 @@
+/**
+ * Authentication client services for LaundryKu (FASE 1 - OTP Only)
+ * Conforms to PRD 12.1 Standard API Response Structure
+ */
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+export class AuthApiError extends Error {
+  status: number;
+  code?: string;
+  fieldErrors?: Record<string, string[]>;
+
+  constructor(message: string, status: number, code?: string, fieldErrors?: Record<string, string[]>) {
+    super(message);
+    this.name = 'AuthApiError';
+    this.status = status;
+    this.code = code;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+export interface OwnedStoreItem {
+  id: string;
+  name: string;
+  approval_status: 'pending' | 'approved' | 'rejected' | string;
+  operational_status: 'active' | 'inactive' | 'suspended' | string;
+  rejection_reason?: string | null;
+  approved_at?: string | null;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  verified_at: string | null;
+  avatar_url?: string | null;
+  roles: string[] | { id: number; code: string; name: string }[];
+  active_roles?: string[];
+  stores?: OwnedStoreItem[];
+  active_mode?: 'customer' | 'store' | 'courier' | string;
+  available_modes?: ('customer' | 'store' | 'courier' | string)[];
+}
+
+export interface RegisterResult {
+  user_id: string;
+  name: string;
+  channel: 'email' | 'whatsapp';
+  destination: string;
+  status: string;
+  otp_sent: boolean;
+  delivery_status?: 'sent' | 'simulated' | 'failed';
+  debug_otp?: string | null;
+}
+
+export interface LoginResult {
+  user_id: string;
+  channel: 'email' | 'whatsapp';
+  destination: string;
+  otp_sent: boolean;
+  delivery_status?: 'sent' | 'simulated' | 'failed';
+  debug_otp?: string | null;
+}
+
+export interface AuthSuccessResult {
+  user: AuthUser;
+  token: string;
+  token_type: string;
+}
+
+export const LOGIN_PATH = '/auth';
+
+/**
+ * Validates and returns a safe internal redirect path.
+ * Prevents open redirect attacks (e.g. //evil.com, https://evil.com, /\\evil.com).
+ */
+export function getSafeRedirectPath(target: string | null | undefined, defaultPath: string = '/'): string {
+  if (!target || typeof target !== 'string') return defaultPath;
+  const trimmed = target.trim();
+  // Must start with '/' and not start with '//' or '/\' and not contain protocol '://'
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\') && !trimmed.includes('://')) {
+    return trimmed;
+  }
+  return defaultPath;
+}
+
+/**
+ * Generates the login URL with optional internal redirect parameter.
+ */
+export function getLoginRedirectUrl(redirectPath?: string): string {
+  if (!redirectPath) return LOGIN_PATH;
+  const safe = getSafeRedirectPath(redirectPath, '');
+  if (!safe || safe === '/') return LOGIN_PATH;
+  return `${LOGIN_PATH}?redirect=${encodeURIComponent(safe)}`;
+}
+
+const TOKEN_KEY = 'laundryku_token';
+const USER_KEY = 'laundryku_user';
+
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function isAuthenticated(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(localStorage.getItem(TOKEN_KEY));
+}
+
+export function getStoredUser(): AuthUser | null {
+  if (typeof window === 'undefined') return null;
+  const user = localStorage.getItem(USER_KEY);
+  if (!user) return null;
+  try {
+    return JSON.parse(user);
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthSession(token: string, user: AuthUser): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
+}
+
+export function updateStoredUser(updates: Partial<AuthUser>): AuthUser | null {
+  if (typeof window === 'undefined') return null;
+  const current = getStoredUser();
+  if (!current) return null;
+  const updated: AuthUser = { ...current, ...updates };
+  localStorage.setItem(USER_KEY, JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: updated }));
+  return updated;
+}
+
+export function clearAuthSession(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: null }));
+}
+
+export async function register(data: {
+  name: string;
+  channel: 'email' | 'whatsapp';
+  destination: string;
+  password: string;
+  password_confirmation: string;
+}): Promise<RegisterResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg =
+      json?.message ||
+      json?.error?.message ||
+      (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
+      (res.status === 429 ? 'Terlalu banyak percobaan. Silakan tunggu sebentar.' : 'Registrasi gagal.');
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+  }
+
+  return json.data;
+}
+
+export async function login(data: {
+  channel: 'email' | 'whatsapp';
+  destination: string;
+  password: string;
+}): Promise<AuthSuccessResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg =
+      json?.message ||
+      json?.error?.message ||
+      (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
+      (res.status === 401 ? 'Kontak atau password salah.' : (res.status === 429 ? 'Terlalu banyak percobaan. Silakan tunggu sebentar.' : 'Login gagal.'));
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+  }
+
+  setAuthSession(json.data.token, json.data.user);
+  return json.data;
+}
+
+export async function verifyOtp(data: {
+  user_id?: string;
+  channel?: 'email' | 'whatsapp';
+  destination?: string;
+  otp: string;
+}): Promise<AuthSuccessResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/otp/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg =
+      json?.message ||
+      json?.error?.message ||
+      (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
+      'Verifikasi OTP gagal.';
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+  }
+
+  setAuthSession(json.data.token, json.data.user);
+  return json.data;
+}
+
+export async function sendOtp(data: {
+  user_id?: string;
+  channel?: 'email' | 'whatsapp';
+  destination?: string;
+}): Promise<{ otp_sent: boolean; delivery_status?: string; debug_otp?: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/otp/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg =
+      json?.message ||
+      json?.error?.message ||
+      (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
+      'Gagal mengirim OTP.';
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+  }
+
+  return json.data;
+}
+
+export async function requestPasswordSetup(data: {
+  channel: 'email' | 'whatsapp';
+  destination: string;
+}): Promise<{ destination: string; channel: string; debug_otp?: string | null }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/password/request-setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg =
+      json?.message ||
+      json?.error?.message ||
+      (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
+      'Permintaan OTP atur kata sandi gagal.';
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+  }
+
+  return json.data;
+}
+
+export async function setupPassword(data: {
+  channel: 'email' | 'whatsapp';
+  destination: string;
+  otp: string;
+  password: string;
+  password_confirmation: string;
+}): Promise<AuthSuccessResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/password/setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg =
+      json?.message ||
+      json?.error?.message ||
+      (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
+      'Pengaturan kata sandi gagal.';
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+  }
+
+  setAuthSession(json.data.token, json.data.user);
+  return json.data;
+}
+
+export async function logout(): Promise<void> {
+  const token = getStoredToken();
+  if (token) {
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+    } catch {
+      // Ignore network errors on logout
+    }
+  }
+  clearAuthSession();
+}
+
+export async function fetchMe(): Promise<AuthUser | null> {
+  const token = getStoredToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${API_URL}/me`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      clearAuthSession();
+      return null;
+    }
+
+    const json = await res.json();
+    const user = json.data;
+    if (typeof window !== 'undefined' && user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    }
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+export function hasRole(user: AuthUser | null, roleCode: string): boolean {
+  if (!user || !user.roles) return false;
+  return user.roles.some((r) => {
+    if (typeof r === 'string') return r === roleCode;
+    return r.code === roleCode;
+  });
+}
+
+export function getApprovedStores(user: AuthUser | null): OwnedStoreItem[] {
+  if (!user || !user.stores || !Array.isArray(user.stores)) return [];
+  return user.stores.filter((s) => s.approval_status === 'approved');
+}
+
+export function hasApprovedStore(user: AuthUser | null): boolean {
+  return getApprovedStores(user).length > 0;
+}
+
+export function getActiveStoreId(user?: AuthUser | null): string | null {
+  if (typeof window === 'undefined') return null;
+  const stored = sessionStorage.getItem('laundryku_active_store_id');
+  const u = user || getStoredUser();
+  const approved = getApprovedStores(u);
+
+  if (stored && approved.some((s) => s.id === stored)) {
+    return stored;
+  }
+
+  if (approved.length > 0) {
+    const defaultStore = approved[0];
+    sessionStorage.setItem('laundryku_active_store_id', defaultStore.id);
+    return defaultStore.id;
+  }
+
+  return null;
+}
+
+export function setActiveStoreId(storeId: string): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem('laundryku_active_store_id', storeId);
+  window.dispatchEvent(new CustomEvent('laundryku_active_store_change', { detail: storeId }));
+}
+
+/**
+ * Resolves the primary home path based on user role and store ownership.
+ * - super_admin -> /admin
+ * - store_admin or owner with approved store -> /store
+ * - courier -> /courier
+ * - customer / other -> /stores (Marketplace)
+ * - unauthenticated -> /
+ */
+export function getHomePathForRole(user: AuthUser | null): string {
+  if (!user) return '/';
+  if (hasRole(user, 'super_admin')) return '/admin';
+  if (user.active_mode === 'courier') return '/courier';
+  if (user.active_mode === 'store') return '/store';
+  if (user.active_mode === 'customer') return '/stores';
+  if (hasRole(user, 'store_admin') || hasApprovedStore(user)) return '/store';
+  if (hasRole(user, 'courier')) return '/courier';
+  return '/stores';
+}
+
+export async function switchUserMode(
+  mode: 'customer' | 'store' | 'courier'
+): Promise<AuthUser> {
+  const token = getStoredToken();
+  if (!token) {
+    throw new AuthApiError('Sesi tidak ditemukan. Silakan masuk kembali.', 401, 'UNAUTHENTICATED');
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/me/mode`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ mode }),
+    });
+  } catch {
+    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    const errorMsg = json?.error?.message || json?.message || 'Gagal mengubah mode pengguna.';
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || 'MODE_SWITCH_FAILED');
+  }
+
+  // Update local session
+  const current = getStoredUser();
+  const updated: AuthUser = current
+    ? {
+        ...current,
+        active_mode: json.data?.active_mode || mode,
+        available_modes: json.data?.available_modes || current.available_modes,
+      }
+    : (json.data as AuthUser);
+
+  localStorage.setItem(USER_KEY, JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: updated }));
+  window.dispatchEvent(new CustomEvent('laundryku_auth_change', { detail: updated }));
+
+  return updated;
+}
+
