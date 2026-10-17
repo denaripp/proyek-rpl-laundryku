@@ -28,6 +28,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Database\Eloquent\Relations\Relation::morphMap([
+            'user' => \App\Models\User::class,
+            'customer' => \App\Models\User::class,
+            'mitra' => \App\Models\User::class,
+            'courier' => \App\Models\User::class,
+            'admin' => \App\Models\User::class,
+            \App\Models\CustomerUser::class => \App\Models\User::class,
+            \App\Models\MitraUser::class => \App\Models\User::class,
+            \App\Models\CourierUser::class => \App\Models\User::class,
+            \App\Models\AdminUser::class => \App\Models\User::class,
+            \App\Models\User::class => \App\Models\User::class,
+        ]);
+
         $this->configureRateLimiters();
     }
 

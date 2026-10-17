@@ -9,6 +9,7 @@
         "php": "^8.2",
         "bacon/bacon-qr-code": "^3.1",
         "laravel/framework": "^12.0",
+        "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.30",
         "laravel/tinker": "^2.10.1",
         "pragmarx/google2fa-laravel": "^3.0",
@@ -68,6 +69,9 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
+        "platform": {
+            "php": "8.3.30"
+        },
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
