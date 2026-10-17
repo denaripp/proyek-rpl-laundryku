@@ -120,3 +120,25 @@
   3. Verifikasi:
      - Dibuat feature test RoleIsolatedLoginBugTest (9 tests, 44 assertions) — 100% lulus.
      - Seluruh test suite (277 tests, 1015 assertions) — 100% lulus hijau.
+
+- 2026-10-17 (Fase 2: Laravel Sanctum API Auth, RBAC Middleware & Portal Isolation):
+  1. Integrasi Resmi Laravel Sanctum & Platform PHP 8.3.30:
+     - Sanctum terpasang via Composer resmi (v4.3.3) dengan config.platform.php = 8.3.30.
+     - Tabel personal_access_tokens termigrasi.
+     - Relation::morphMap di AppServiceProvider memetakan scoped model aliases (CustomerUser, MitraUser, CourierUser, AdminUser) ke App\Models\User::class untuk menjaga integritas polymorphic tokenable_type.
+  2. Dua Lapis Validasi Autentikasi & RBAC (Token Ability + Real-Time DB Role Check):
+     - Dibuat middleware EnsureUserRole (alias 'role') yang memvalidasi kolom users.role langsung dari database secara real-time pada setiap request terproteksi.
+     - Setiap rute privat API memvalidasi token ability (ability:role:<expected_role>) DAN database role (role:<expected_role>). Jika role di DB berubah atau dimanipulasi, token langsung ditolak dengan 403 Forbidden.
+  3. Isolasi Multi-Tenant Portal Mitra:
+     - Mitra store access mencakup Store Owner (stores.owner_user_id) dan Store Staff (store_staff.user_id).
+     - Restriksi toko pending/submitted: Mitra dengan toko belum di-approve dapat mengakses profil toko, namun dilarang mengakses pesanan/operasional (403 Forbidden).
+  4. Autentikasi 2FA Dua Langkah:
+     - Super Admin (wajib) dan Mitra dengan 2FA aktif: Tahap 1 menerbitkan token sementara dengan ability terbatas ['2fa-pending'] (masa berlaku 5 menit).
+     - Tahap 2 (/api/v1/auth/admin/2fa dan /api/v1/auth/mitra/2fa) memvalidasi TOTP Google Authenticator dan menukar token sementara dengan full token (role:super_admin / role:store_admin).
+  5. Siklus Hidup Token & Rate Limiting:
+     - Re-login otomatis mencabut token lama untuk role tersebut (satu sesi token aktif per role).
+     - Logout mencabut token saat ini via $user->currentAccessToken()->delete().
+     - Semua endpoint auth API dilindungi rate limiter throttle:login (5 percobaan per menit).
+  6. Pengujian & Verifikasi:
+     - Feature test baru ApiAuthAndPortalTest (15 tests, 86 assertions) — 100% lulus.
+     - Seluruh test suite (294 tests, 1109 assertions) — 100% lulus tanpa kegagalan.

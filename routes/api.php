@@ -16,6 +16,14 @@ use App\Http\Controllers\Api\CourierController;
 use App\Http\Controllers\Api\StoreOwnerController;
 use App\Http\Controllers\Api\StoreDocumentController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\Auth\CustomerApiAuthController;
+use App\Http\Controllers\Api\Auth\MitraApiAuthController;
+use App\Http\Controllers\Api\Auth\CourierApiAuthController;
+use App\Http\Controllers\Api\Auth\AdminApiAuthController;
+use App\Http\Controllers\Api\Portal\CustomerPortalController;
+use App\Http\Controllers\Api\Portal\MitraPortalController;
+use App\Http\Controllers\Api\Portal\CourierPortalController;
+use App\Http\Controllers\Api\Portal\AdminPortalController;
 
 // ===== Public webhooks =====
 Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])
@@ -148,3 +156,68 @@ Route::middleware('auth')->group(function () {
     Route::patch('/admin/settings/{key}', [AdminController::class, 'settingsUpdate']);
     Route::get('/admin/monitoring', [AdminController::class, 'monitoring']);
 });
+
+// =========================================================================
+// API V1 — Official Authentication & Protected Portals (Sanctum + RBAC)
+// =========================================================================
+Route::prefix('v1')->group(function () {
+
+    // ===== Auth Endpoints =====
+    Route::prefix('auth')->group(function () {
+        // Customer Auth
+        Route::post('/customer/register', [CustomerApiAuthController::class, 'register'])
+            ->middleware('throttle:login');
+        Route::post('/customer/login', [CustomerApiAuthController::class, 'login'])
+            ->middleware('throttle:login');
+        Route::post('/customer/logout', [CustomerApiAuthController::class, 'logout'])
+            ->middleware(['auth:sanctum', 'ability:role:customer', 'role:customer']);
+
+        // Mitra Auth
+        Route::post('/mitra/register', [MitraApiAuthController::class, 'register'])
+            ->middleware('throttle:login');
+        Route::post('/mitra/login', [MitraApiAuthController::class, 'login'])
+            ->middleware('throttle:login');
+        Route::post('/mitra/2fa', [MitraApiAuthController::class, 'verify2fa'])
+            ->middleware(['auth:sanctum', 'ability:2fa-pending', 'throttle:login']);
+        Route::post('/mitra/logout', [MitraApiAuthController::class, 'logout'])
+            ->middleware(['auth:sanctum', 'ability:role:store_admin', 'role:store_admin']);
+
+        // Courier Auth
+        Route::post('/kurir/login', [CourierApiAuthController::class, 'login'])
+            ->middleware('throttle:login');
+        Route::post('/kurir/logout', [CourierApiAuthController::class, 'logout'])
+            ->middleware(['auth:sanctum', 'ability:role:courier', 'role:courier']);
+
+        // Admin Auth
+        Route::post('/admin/login', [AdminApiAuthController::class, 'login'])
+            ->middleware('throttle:login');
+        Route::post('/admin/2fa', [AdminApiAuthController::class, 'verify2fa'])
+            ->middleware(['auth:sanctum', 'ability:2fa-pending', 'throttle:login']);
+        Route::post('/admin/logout', [AdminApiAuthController::class, 'logout'])
+            ->middleware(['auth:sanctum', 'ability:role:super_admin', 'role:super_admin']);
+    });
+
+    // ===== Protected Customer Portal =====
+    Route::prefix('customer')->middleware(['auth:sanctum', 'ability:role:customer', 'role:customer'])->group(function () {
+        Route::get('/profile', [CustomerPortalController::class, 'profile']);
+        Route::get('/orders', [CustomerPortalController::class, 'orders']);
+    });
+
+    // ===== Protected Mitra Portal =====
+    Route::prefix('mitra')->middleware(['auth:sanctum', 'ability:role:store_admin', 'role:store_admin'])->group(function () {
+        Route::get('/store', [MitraPortalController::class, 'storeProfile']);
+        Route::get('/profile', [MitraPortalController::class, 'storeProfile']);
+        Route::get('/orders', [MitraPortalController::class, 'orders']);
+    });
+
+    // ===== Protected Courier Portal =====
+    Route::prefix('kurir')->middleware(['auth:sanctum', 'ability:role:courier', 'role:courier'])->group(function () {
+        Route::get('/tasks', [CourierPortalController::class, 'tasks']);
+    });
+
+    // ===== Protected Admin Portal =====
+    Route::prefix('admin')->middleware(['auth:sanctum', 'ability:role:super_admin', 'role:super_admin'])->group(function () {
+        Route::get('/overview', [AdminPortalController::class, 'overview']);
+    });
+});
+

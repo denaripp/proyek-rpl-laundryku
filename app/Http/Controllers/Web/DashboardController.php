@@ -46,7 +46,12 @@ class DashboardController extends Controller
      */
     public function root()
     {
-        $user = Auth::user();
+        $user = Auth::guard('admin')->user()
+            ?: Auth::guard('mitra')->user()
+            ?: Auth::guard('kurir')->user()
+            ?: Auth::guard('web')->user()
+            ?: Auth::user();
+
         if (!$user) {
             return redirect()->route('login');
         }
@@ -76,7 +81,7 @@ class DashboardController extends Controller
 
     public function storeDashboard(Request $request)
     {
-        $user = Auth::user();
+        $user = Auth::guard('mitra')->user() ?: Auth::user();
         $store = $this->resolveStore($user);
         abort_unless($store, 403, 'No store associated with user.');
 
@@ -150,7 +155,7 @@ class DashboardController extends Controller
 
     public function courierDashboard(Request $request)
     {
-        $user = Auth::user();
+        $user = Auth::guard('kurir')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('view_courier_dashboard'), 403);
         $courier = Courier::where('user_id', $user->id)->first();
         abort_unless($courier, 404, 'Courier profile not found.');
@@ -189,7 +194,7 @@ class DashboardController extends Controller
 
     public function courierToggleAvailability(Request $request)
     {
-        $user = Auth::user();
+        $user = Auth::guard('kurir')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('view_courier_dashboard'), 403);
         $request->validate(['is_available' => 'required|boolean']);
         $courier = Courier::where('user_id', $user->id)->firstOrFail();
@@ -206,7 +211,7 @@ class DashboardController extends Controller
 
     public function adminDashboard(Request $request)
     {
-        $user = Auth::user();
+        $user = Auth::guard('admin')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('view_admin_dashboard'), 403);
 
         $tab = $request->query('tab', 'overview');
@@ -293,7 +298,7 @@ class DashboardController extends Controller
 
     public function adminApproveStore(Request $request, Store $store)
     {
-        $user = Auth::user();
+        $user = Auth::guard('admin')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('manage_platform') || $user->hasPermissionTo('approve_store'), 403);
 
         try {
@@ -313,7 +318,7 @@ class DashboardController extends Controller
 
     public function adminRejectStore(Request $request, Store $store)
     {
-        $user = Auth::user();
+        $user = Auth::guard('admin')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('manage_platform') || $user->hasPermissionTo('approve_store'), 403);
         $request->validate(['reason' => 'required|string|max:500']);
 
@@ -334,7 +339,7 @@ class DashboardController extends Controller
 
     public function adminSuspendStore(Request $request, Store $store)
     {
-        $user = Auth::user();
+        $user = Auth::guard('admin')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('manage_platform') || $user->hasPermissionTo('approve_store'), 403);
         $request->validate(['reason' => 'required|string|max:500']);
 
@@ -348,7 +353,7 @@ class DashboardController extends Controller
 
     public function adminReactivateStore(Request $request, Store $store)
     {
-        $user = Auth::user();
+        $user = Auth::guard('admin')->user() ?: Auth::user();
         abort_unless($user->hasPermissionTo('manage_platform') || $user->hasPermissionTo('approve_store'), 403);
 
         try {
