@@ -1,63 +1,63 @@
 @extends('layouts.app')
 
-@section('title', 'Daftar — LaundryKu')
+@section('title', 'Daftar Customer — LaundryKu')
 
 @section('content')
     <div class="container py-5">
         <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="lk-card p-4">
-                    <h2 class="h4 fw-bold text-lk-primary mb-3 text-center">Daftar Akun Baru</h2>
+            <div class="col-md-5">
+                <div class="lk-card p-4 shadow-sm border-0 rounded-4" style="background: #ffffff;">
+                    <div class="text-center mb-4">
+                        <div class="badge px-3 py-2 rounded-pill mb-2" style="background: rgba(26, 58, 92, 0.1); color: #1A3A5C; font-weight: 600;">
+                            Registrasi Pelanggan
+                        </div>
+                        <h2 class="h4 fw-bold mb-1" style="color: #1A3A5C;">Buat Akun Baru</h2>
+                        <p class="text-muted small">Daftar sekarang untuk pesan layanan laundry dari mitra terbaik.</p>
+                    </div>
 
                     @if($errors->any())
-                        <div class="alert alert-danger small">{{ $errors->first() }}</div>
+                        <div class="alert alert-danger small py-2 px-3 rounded-3">{{ $errors->first() }}</div>
                     @endif
 
-                    {{-- PRIMARY: Google OAuth untuk customer publik (PRD §7.6) --}}
-                    <a href="{{ route('google.redirect') }}" class="btn btn-outline-secondary w-100 mb-3">
-                        <i class="bi bi-google me-1"></i>Daftar dengan Google
+                    <a href="{{ route('google.redirect') }}" class="btn btn-outline-secondary w-100 mb-3 py-2 fw-medium rounded-3">
+                        <i class="bi bi-google me-2 text-danger"></i>Daftar Cepat dengan Google
                     </a>
 
                     <div class="d-flex align-items-center mb-3">
-                        <hr class="flex-grow-1">
-                        <span class="px-2 small text-muted">atau</span>
-                        <hr class="flex-grow-1">
+                        <hr class="flex-grow-1 border-secondary-subtle">
+                        <span class="px-3 small text-muted">atau isi form</span>
+                        <hr class="flex-grow-1 border-secondary-subtle">
                     </div>
-
-                    {{-- SECONDARY: email/password form (untuk staff internal / admin) --}}
-                    <p class="small text-muted mb-2">
-                        Form email &amp; password di bawah ini hanya untuk
-                        <strong>pembuatan akun internal</strong> (Store Owner / Courier / Platform Admin)
-                        oleh administrator. Pelanggan publik mohon daftar melalui Google.
-                    </p>
 
                     <form method="POST" action="{{ route('register') }}">
                         @csrf
                         <div class="mb-3">
-                            <label class="form-label small">Nama</label>
-                            <input type="text" name="name" class="form-control" required value="{{ old('name') }}" autofocus>
+                            <label class="form-label small fw-semibold text-secondary">Nama Lengkap</label>
+                            <input type="text" name="name" class="form-control rounded-3" placeholder="Nama Anda" required value="{{ old('name') }}" autofocus>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">Email</label>
-                            <input type="email" name="email" class="form-control" required value="{{ old('email') }}">
+                            <label class="form-label small fw-semibold text-secondary">Email</label>
+                            <input type="email" name="email" class="form-control rounded-3" placeholder="nama@email.com" required value="{{ old('email') }}">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">No. Telepon (opsional)</label>
-                            <input type="tel" name="phone" class="form-control" value="{{ old('phone') }}">
+                            <label class="form-label small fw-semibold text-secondary">No. WhatsApp / Telepon</label>
+                            <input type="text" name="phone" class="form-control rounded-3" placeholder="08xxxxxxxxxx" value="{{ old('phone') }}">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">Password</label>
-                            <input type="password" name="password" class="form-control" required minlength="8">
+                            <label class="form-label small fw-semibold text-secondary">Password</label>
+                            <input type="password" name="password" class="form-control rounded-3" placeholder="Minimal 8 karakter" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">Konfirmasi Password</label>
-                            <input type="password" name="password_confirmation" class="form-control" required>
+                            <label class="form-label small fw-semibold text-secondary">Konfirmasi Password</label>
+                            <input type="password" name="password_confirmation" class="form-control rounded-3" placeholder="Ulangi password" required>
                         </div>
-                        <button class="btn btn-lk-primary w-100" type="submit">Daftar</button>
+                        <button class="btn w-100 py-2 fw-semibold text-white rounded-3 shadow-sm" type="submit" style="background-color: #1A3A5C;">
+                            Daftar Sekarang
+                        </button>
                     </form>
 
-                    <p class="text-center small mt-3 mb-0">
-                        Sudah punya akun? <a href="{{ route('login') }}">Masuk</a>
+                    <p class="text-center small mt-4 mb-0 text-muted">
+                        Sudah punya akun? <a href="{{ route('login') }}" class="fw-semibold text-decoration-none" style="color: #4A90D9;">Masuk</a>
                     </p>
                 </div>
             </div>

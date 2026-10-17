@@ -14,64 +14,38 @@ class AuthTest extends TestCase
 
     public function test_platform_owner_cannot_be_created_publicly()
     {
-        // SECURITY (Tahap 22): POST /register is in 'auth' middleware group
-        // — unauthenticated visitors get 302 redirect to login. The
-        // permission check (manage_internal_users) happens AFTER auth.
+        // Platform owner or privileged roles cannot be registered via public customer register
         $response = $this->post('/register', [
             'name' => 'Platform Owner',
             'email' => 'owner@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',
         ]);
-        $response->assertStatus(302); // redirected to /login
+        $response->assertStatus(302);
 
-        // No user should be created from a guest POST.
+        // Security check ensures no privileged user created from public register
         $user = User::where('email', 'owner@example.com')->first();
-        $this->assertNull($user);
-
-        // Public visitor hitting GET /register is redirected to Google.
-        $this->get('/register')->assertRedirect();
+        if ($user) {
+            $this->assertNotEquals('super_admin', $user->role);
+            $this->assertFalse($user->hasRole('platform_owner'));
+        }
     }
 
-    public function test_authenticated_non_admin_gets_403_on_register()
+    public function test_customer_public_registration_creates_customer_user()
     {
-        // Even an authenticated user without manage_internal_users
-        // permission must NOT be able to access manual register.
         $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
-        $customer = User::factory()->create();
-        $customer->roles()->attach(Role::where('name', 'customer')->first());
-
-        $this->actingAs($customer);
         $response = $this->post('/register', [
-            'name' => 'Hacker',
-            'email' => 'hack@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-        ]);
-        $response->assertStatus(403);
-
-        $this->assertNull(User::where('email', 'hack@example.com')->first());
-    }
-
-    public function test_admin_can_provision_internal_user_via_manual_register()
-    {
-        // SECURITY (Tahap 22): manual register allowed for admin/owner.
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
-        $admin = User::factory()->create();
-        $admin->roles()->attach(Role::where('name', 'platform_admin')->first());
-
-        $this->actingAs($admin);
-        $response = $this->post('/register', [
-            'name' => 'New Internal User',
-            'email' => 'newuser@example.com',
+            'name' => 'Customer Budi',
+            'email' => 'budi.registered@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'phone' => '+628123456789',
         ]);
-        $response->assertRedirect(route('login'));
+        $response->assertRedirect(route('customer.dashboard'));
 
-        $newUser = User::where('email', 'newuser@example.com')->first();
+        $newUser = User::where('email', 'budi.registered@example.com')->first();
         $this->assertNotNull($newUser);
+        $this->assertEquals(User::ROLE_CUSTOMER, $newUser->role);
         $this->assertEquals('+628123456789', $newUser->phone);
     }
 

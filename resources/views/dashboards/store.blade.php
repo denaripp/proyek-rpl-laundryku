@@ -4,7 +4,7 @@
     @php
         $menu = [
             ['key' => 'overview', 'label' => 'Overview', 'route' => 'store.dashboard', 'icon' => 'speedometer2'],
-            ['key' => 'orders', 'label' => 'Orders', 'route' => 'customer.dashboard', 'icon' => 'box'],
+            ['key' => 'orders', 'label' => 'Orders', 'route' => 'store.dashboard', 'icon' => 'box'],
             ['key' => 'services', 'label' => 'Services & Pricing', 'route' => 'store.dashboard', 'icon' => 'tag'],
             ['key' => 'staff', 'label' => 'Staff', 'route' => 'store.dashboard', 'icon' => 'people'],
             ['key' => 'couriers', 'label' => 'Couriers', 'route' => 'store.dashboard', 'icon' => 'truck'],

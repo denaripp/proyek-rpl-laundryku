@@ -14,9 +14,15 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes;
 
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+    public const ROLE_STORE_ADMIN = 'store_admin';
+    public const ROLE_COURIER = 'courier';
+    public const ROLE_CUSTOMER = 'customer';
+
     protected $fillable = [
         'name',
         'email',
+        'role',
         'phone',
         'password',
         'google_id',
@@ -41,12 +47,32 @@ class User extends Authenticatable
         'google2fa_secret' => 'string',
     ];
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    public function isStoreAdmin(): bool
+    {
+        return $this->role === self::ROLE_STORE_ADMIN;
+    }
+
+    public function isCourier(): bool
+    {
+        return $this->role === self::ROLE_COURIER;
+    }
+
+    public function isCustomer(): bool
+    {
+        return $this->role === self::ROLE_CUSTOMER;
+    }
+
     // ========== RELATIONSHIPS ==========
 
     // Roles via user_roles (many-to-many with extra fields)
     public function roles(): BelongsToMany
     {
-        return $this->belongsToMany(Role::class, 'user_roles')
+        return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
             ->using(UserRole::class)
             ->withPivot('store_id', 'assigned_at', 'assigned_by')
             ->withTimestamps();

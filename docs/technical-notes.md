@@ -86,3 +86,21 @@
   4. Pengujian & Verifikasi:
      - Seluruh 252 tests PHPUnit backend lulus tanpa regresi (`php artisan test`).
      - TypeScript typecheck (`npx tsc --noEmit`), linter (`npm run lint`), dan produksi Next.js build (36 static & dynamic pages) seluruhnya lulus dengan exit code 0.
+- 2026-10-17 (Fase 1: Fondasi, Multi-Guard Auth & Role Isolation):
+  1. Multi-Guard Architecture: 4 guard independen dikonfigurasi di config/auth.php: web (Customer / CustomerUser), mitra (Store Admin / MitraUser), kurir (Kurir / CourierUser), dan admin (Super Admin / AdminUser). Setiap guard memiliki provider model Eloquent ter-scope dengan global scope role.
+  2. Strict Role Isolation: Fitur switch-role dilarang keras dan dihapus sepenuhnya (rute /switch-role mengembalikan 404). Setiap akun terikat permanen pada perannya via kolom role enum (super_admin, store_admin, courier, customer) dan indeks unik gabungan (email, role) sehingga email yang sama dapat mendaftar peran berbeda secara terisolasi tanpa tabrakan.
+  3. Pintu Masuk Terpisah & Autentikasi:
+     - Customer: /login, /register (redirect: /orders).
+     - Mitra: /mitra/login, /mitra/register (redirect: /mitra/dashboard).
+     - Kurir: /kurir/login (tanpa registrasi publik, redirect: /kurir/dashboard).
+     - Super Admin: /admin/login (wajib Google2FA TOTP verification, redirect: /admin/dashboard).
+     - Percobaan login silang pintu ditolak secara otomatis dengan pesan error scoped.
+  4. Fondasi Database & Ledger COD:
+     - Tabel settings (key-value ber-tipe dengan caching Redis otomatis via model Setting).
+     - Tabel cod_collections (pencatatan setoran tunai kurir dengan lifecycle status PENDING, COLLECTED, DEPOSITED, RECONCILED, dan verifikasi OTP).
+  5. UI & Layouts:
+     - Layout terisolasi untuk tiap portal: layouts/app.blade.php, layouts/mitra.blade.php, layouts/kurir.blade.php, dan layouts/dashboard.blade.php.
+     - Palet warna konsisten sesuai token brand: #1A3A5C, #4A90D9, #2ECC71, #F5F7FA, #2C3E50.
+  6. Pengujian & Verifikasi:
+     - Phase1FoundationAuthTest (12 tests, 65 assertions) — 100% lulus.
+     - Seluruh test suite (268 tests, 971 assertions) — 100% lulus tanpa kegagalan.

@@ -38,7 +38,19 @@ return [
     'guards' => [
         'web' => [
             'driver' => 'session',
-            'provider' => 'users',
+            'provider' => 'customers',
+        ],
+        'mitra' => [
+            'driver' => 'session',
+            'provider' => 'mitra',
+        ],
+        'kurir' => [
+            'driver' => 'session',
+            'provider' => 'kurir',
+        ],
+        'admin' => [
+            'driver' => 'session',
+            'provider' => 'admin',
         ],
     ],
 
@@ -64,11 +76,22 @@ return [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
         ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+        'customers' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\CustomerUser::class,
+        ],
+        'mitra' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\MitraUser::class,
+        ],
+        'kurir' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\CourierUser::class,
+        ],
+        'admin' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\AdminUser::class,
+        ],
     ],
 
     /*

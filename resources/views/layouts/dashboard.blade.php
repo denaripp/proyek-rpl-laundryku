@@ -23,15 +23,25 @@
     </style>
 </head>
 <body>
+    @php
+        $isMitra = auth('mitra')->check();
+        $isKurir = auth('kurir')->check();
+        $isAdmin = auth('admin')->check();
+        $currentUser = auth('mitra')->user() ?? auth('kurir')->user() ?? auth('admin')->user() ?? auth()->user();
+        $brandUrl = $isMitra ? route('mitra.dashboard') : ($isKurir ? route('kurir.dashboard') : ($isAdmin ? route('admin.dashboard') : route('home')));
+        $logoutUrl = $isMitra ? route('mitra.logout') : ($isKurir ? route('kurir.logout') : ($isAdmin ? route('admin.logout') : route('logout')));
+    @endphp
     <nav class="navbar navbar-expand-lg navbar-dark lk-navbar sticky-top" style="z-index: 1030;">
         <div class="container-fluid px-4">
-            <a class="navbar-brand fw-bold" href="{{ route('home') }}">
+            <a class="navbar-brand fw-bold" href="{{ $brandUrl }}">
                 <i class="bi bi-droplet-fill me-1"></i>LaundryKu
             </a>
             <div class="d-flex align-items-center gap-2 ms-auto">
-                <span class="text-light small d-none d-md-inline">{{ auth()->user()->name }}</span>
-                <a href="{{ route('home') }}" class="btn btn-sm btn-outline-light">Lihat Situs</a>
-                <form action="{{ route('logout') }}" method="POST" class="d-inline">
+                <span class="text-light small d-none d-md-inline">{{ $currentUser->name ?? '' }}</span>
+                @if(!$isMitra && !$isKurir && !$isAdmin)
+                    <a href="{{ route('home') }}" class="btn btn-sm btn-outline-light">Lihat Situs</a>
+                @endif
+                <form action="{{ $logoutUrl }}" method="POST" class="d-inline">
                     @csrf
                     <button class="btn btn-sm btn-light">Logout</button>
                 </form>

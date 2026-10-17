@@ -9,6 +9,7 @@ cookies.txt
 *.key
 
 # Local-only storage + cache (may contain user data / SQL dumps).
+/storage/*.sql
 /storage/app/backups/
 /storage/app/private/
 /storage/framework/cache/data/

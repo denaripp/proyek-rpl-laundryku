@@ -16,6 +16,14 @@
     @stack('head')
 </head>
 <body>
+    @php
+        $isCustomer = auth('web')->check();
+        $isMitra = auth('mitra')->check();
+        $isKurir = auth('kurir')->check();
+        $isAdmin = auth('admin')->check();
+        $isAnyAuth = $isCustomer || $isMitra || $isKurir || $isAdmin;
+    @endphp
+
     {{-- Navbar --}}
     <nav class="navbar navbar-expand-lg navbar-dark lk-navbar sticky-top">
         <div class="container">
@@ -30,20 +38,47 @@
                     <li class="nav-item"><a class="nav-link" href="{{ route('marketplace.index') }}">Cari Laundry</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#cara-pesan">Cara Pesan</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#faq">FAQ</a></li>
+                    @if(!$isAnyAuth)
+                        <li class="nav-item"><a class="nav-link text-warning fw-semibold" href="{{ route('mitra.register') }}"><i class="bi bi-shop me-1"></i>Gabung Jadi Mitra</a></li>
+                    @endif
                 </ul>
                 <ul class="navbar-nav ms-auto align-items-lg-center">
-                    @auth
-                        <li class="nav-item"><a class="nav-link" href="{{ route('dashboard') }}">Dashboard</a></li>
+                    @if($isCustomer)
+                        <li class="nav-item"><a class="nav-link" href="{{ route('customer.dashboard') }}"><i class="bi bi-person-circle me-1"></i>{{ auth('web')->user()->name }}</a></li>
                         <li class="nav-item">
                             <form action="{{ route('logout') }}" method="POST" class="d-inline">
                                 @csrf
-                                <button class="btn btn-sm btn-outline-light ms-2" type="submit">Logout</button>
+                                <button class="btn btn-sm btn-outline-light ms-2 rounded-pill px-3" type="submit">Logout</button>
+                            </form>
+                        </li>
+                    @elseif($isMitra)
+                        <li class="nav-item"><a class="nav-link" href="{{ route('mitra.dashboard') }}"><i class="bi bi-shop me-1"></i>Dashboard Mitra</a></li>
+                        <li class="nav-item">
+                            <form action="{{ route('mitra.logout') }}" method="POST" class="d-inline">
+                                @csrf
+                                <button class="btn btn-sm btn-outline-light ms-2 rounded-pill px-3" type="submit">Logout</button>
+                            </form>
+                        </li>
+                    @elseif($isKurir)
+                        <li class="nav-item"><a class="nav-link" href="{{ route('kurir.dashboard') }}"><i class="bi bi-bicycle me-1"></i>Portal Kurir</a></li>
+                        <li class="nav-item">
+                            <form action="{{ route('kurir.logout') }}" method="POST" class="d-inline">
+                                @csrf
+                                <button class="btn btn-sm btn-outline-light ms-2 rounded-pill px-3" type="submit">Logout</button>
+                            </form>
+                        </li>
+                    @elseif($isAdmin)
+                        <li class="nav-item"><a class="nav-link" href="{{ route('admin.dashboard') }}"><i class="bi bi-shield-lock me-1"></i>Admin Panel</a></li>
+                        <li class="nav-item">
+                            <form action="{{ route('admin.logout') }}" method="POST" class="d-inline">
+                                @csrf
+                                <button class="btn btn-sm btn-outline-light ms-2 rounded-pill px-3" type="submit">Logout</button>
                             </form>
                         </li>
                     @else
                         <li class="nav-item"><a class="nav-link" href="{{ route('login') }}">Masuk</a></li>
-                        <li class="nav-item"><a class="btn btn-sm btn-lk-secondary ms-2" href="{{ route('register') }}">Daftar</a></li>
-                    @endauth
+                        <li class="nav-item"><a class="btn btn-sm btn-lk-secondary ms-2 rounded-pill px-3" href="{{ route('register') }}">Daftar</a></li>
+                    @endif
                 </ul>
             </div>
         </div>
@@ -60,13 +95,13 @@
             <div class="row g-4">
                 <div class="col-md-4">
                     <h6 class="fw-bold"><i class="bi bi-droplet-fill me-1"></i>LaundryKu</h6>
-                    <p class="small mb-0">Platform laundry online. Cari, bandingkan, pesan — semua dari rumah.</p>
+                    <p class="small mb-0">Platform marketplace laundry online multi-tenant terpercaya.</p>
                 </div>
                 <div class="col-md-4">
                     <h6 class="fw-bold">Untuk Mitra</h6>
                     <ul class="list-unstyled small mb-0">
-                        <li><a class="text-light" href="{{ route('store.onboard') }}">Daftarkan Laundry Anda</a></li>
-                        <li><a class="text-light" href="{{ route('login') }}">Login Mitra</a></li>
+                        <li><a class="text-light" href="{{ route('mitra.register') }}">Daftarkan Laundry Anda</a></li>
+                        <li><a class="text-light" href="{{ route('mitra.login') }}">Login Mitra</a></li>
                     </ul>
                 </div>
                 <div class="col-md-4">

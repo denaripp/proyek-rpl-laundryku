@@ -2,34 +2,58 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\CustomerUser;
+use App\Models\Role;
 use App\Models\User;
 use App\Notifications\NotificationTrigger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use App\Http\Controllers\Controller;
 
 class AuthController extends Controller
 {
     public function showLoginForm()
     {
+        if (Auth::guard('web')->check()) {
+            return redirect()->route('customer.dashboard');
+        }
+        if (Auth::guard('mitra')->check()) {
+            return redirect()->route('mitra.dashboard');
+        }
+        if (Auth::guard('kurir')->check()) {
+            return redirect()->route('kurir.dashboard');
+        }
+        if (Auth::guard('admin')->check()) {
+            return redirect()->route('admin.dashboard');
+        }
+
         return view('auth.login');
     }
 
-    public function login(\App\Http\Requests\Auth\LoginRequest $request)
+    public function login(Request $request)
     {
-        // SECURITY (Tahap 19): rate limiting now applied via throttle:login
-        // middleware on POST /login (AppServiceProvider::configureRateLimiters).
-        // 5 attempts/minute per email+IP. Manual check removed here to
-        // avoid double-counting.
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+        ]);
 
-        $credentials = $request->validated();
+        $credentials = $request->only('email', 'password');
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (!Auth::attempt($credentials, $request->boolean('remember'))) {
+            AuditLog::create([
+                'actor_id' => null,
+                'actor_role' => 'customer',
+                'action' => 'CUSTOMER_LOGIN_FAILED',
+                'resource_type' => 'auth',
+                'resource_id' => null,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'after_value' => json_encode(['email' => $request->input('email')]),
+            ]);
+
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);
@@ -37,41 +61,43 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        if (! $user->is_active) {
+        if (!$user->is_active) {
             Auth::logout();
             throw ValidationException::withMessages([
                 'email' => 'Akun Anda dinonaktifkan.',
             ]);
         }
 
-        // Regenerate session to prevent fixation
         $request->session()->regenerate();
 
-        // Check if 2FA is required
+        // 2FA requirement check
         if ($user->two_factor_enabled) {
             $request->session()->put('pending_2fa', true);
             return redirect()->route('2fa.verify');
         }
 
-        // Update last login
         $user->update(['last_login_at' => now()]);
 
-        // Ensure user has store_owner role if they own a store
+        // Auto-sync store owner role if user owns a store
         if ($user->ownedStores()->exists() && !$user->hasRole('store_owner')) {
-            $storeOwnerRole = \App\Models\Role::where('name', 'store_owner')->first();
+            $storeOwnerRole = Role::where('name', 'store_owner')->first();
             if ($storeOwnerRole) {
                 $user->roles()->attach($storeOwnerRole->id, ['store_id' => $user->ownedStores()->first()->id]);
             }
         }
 
-        // SECURITY (Tahap 23+24): honour ?next= param for redirect-back
-        // after login. Strict validation against open-redirect attacks:
-        //  - Must start with EXACTLY one "/"
-        //  - Second char must NOT be "/" (//evil.com — protocol-relative
-        //    URL) or "\" (/\evil.com — some browsers normalise backslash
-        //    to slash, treating it as protocol-relative)
-        //  - Whitelist of allowed path characters only
-        $next = $request->input('next');
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role ?? 'customer',
+            'action' => 'LOGIN_SUCCESS',
+            'resource_type' => 'user',
+            'resource_id' => $user->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        // Validate safe ?next= redirect parameter
+        $next = $request->input('next') ?? $request->query('next');
         if (is_string($next)
             && isset($next[0]) && $next[0] === '/'
             && (!isset($next[1]) || ($next[1] !== '/' && $next[1] !== '\\'))
@@ -80,73 +106,156 @@ class AuthController extends Controller
             return redirect($next);
         }
 
-        return redirect()->intended('/dashboard');
+        // Role-based destination for /login fallback
+        if ($user->hasRole('platform_admin') || $user->hasRole('platform_owner') || $user->hasPermissionTo('manage_platform')) {
+            return redirect()->intended('/dashboard');
+        }
+        if ($user->hasRole('store_owner') || $user->ownedStores()->exists()) {
+            $store = $user->ownedStores()->first();
+            if ($store && $store->isApproved()) {
+                return redirect()->intended(route('store.dashboard'));
+            }
+            return redirect()->intended(route('store.onboard'));
+        }
+        if ($user->hasRole('courier')) {
+            return redirect()->intended(route('courier.dashboard'));
+        }
+
+        return redirect()->intended(route('customer.dashboard'));
     }
 
     public function showRegisterForm()
     {
-        // SECURITY: manual register is admin/owner-only (PRD §7 — public
-        // customers must use Google OAuth). If the visitor is not logged-in
-        // (or lacks manage_internal_users permission), redirect to Google.
-        $user = Auth::user();
-        if (!$user || !$user->hasPermissionTo('manage_internal_users')) {
-            return redirect()->route('google.redirect');
+        // If logged in as admin with manage_internal_users: show admin provisioning form
+        if (Auth::check() && Auth::user()->hasPermissionTo('manage_internal_users')) {
+            return view('auth.register');
+        }
+
+        if (Auth::guard('web')->check()) {
+            return redirect()->route('customer.dashboard');
+        }
+        if (Auth::guard('mitra')->check()) {
+            return redirect()->route('mitra.dashboard');
         }
 
         return view('auth.register');
     }
 
-    public function register(\App\Http\Requests\Auth\RegisterRequest $request)
+    public function register(Request $request)
     {
-        // SECURITY: manual register is admin/owner-only. Guest/public
-        // customers cannot self-register — they MUST use Google OAuth.
-        $user = Auth::user();
-        abort_unless(
-            $user && $user->hasPermissionTo('manage_internal_users'),
-            403,
-            'Manual registration is restricted to platform admin/owner. Public customers must sign up with Google.'
-        );
+        // 1. If authenticated user is attempting manual internal user provisioning
+        if (Auth::check()) {
+            abort_unless(
+                Auth::user()->hasPermissionTo('manage_internal_users'),
+                403,
+                'Manual registration is restricted to platform admin/owner. Public customers must sign up with Google or customer portal.'
+            );
 
-        $validated = $request->validated();
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|max:255|unique:users,email',
+                'password' => 'required|string|min:8|confirmed',
+                'phone' => 'nullable|string|max:32',
+            ]);
 
-        $newUser = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'phone' => $validated['phone'] ?? null,
+            $newUser = User::create([
+                'name' => $request->input('name'),
+                'email' => $request->input('email'),
+                'password' => Hash::make($request->input('password')),
+                'phone' => $request->input('phone'),
+                'is_active' => true,
+            ]);
+
+            NotificationTrigger::registered($newUser);
+
+            AuditLog::create([
+                'actor_id' => Auth::id(),
+                'action' => 'internal_user_provisioned',
+                'resource_type' => 'users',
+                'resource_id' => $newUser->id,
+                'after_value' => json_encode(['email' => $newUser->email, 'name' => $newUser->name]),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return redirect()->route('login')->with('status', 'User created. They can now log in.');
+        }
+
+        // 2. Security check: Platform Owner / Admin / privileged roles cannot be created publicly
+        if (stripos($request->input('name', ''), 'Platform Owner') !== false ||
+            stripos($request->input('name', ''), 'Admin') !== false ||
+            stripos($request->input('email', ''), 'owner@') !== false) {
+            return redirect()->route('login')->withErrors(['email' => 'Role internal ini tidak dapat didaftarkan secara publik.']);
+        }
+
+        // 3. Public Customer Registration
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                function ($attribute, $value, $fail) {
+                    if (User::where('email', $value)->where('role', User::ROLE_CUSTOMER)->exists()) {
+                        $fail('Email sudah terdaftar sebagai customer.');
+                    }
+                },
+            ],
+            'phone' => 'nullable|string|max:32',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = CustomerUser::create([
+            'name' => $request->input('name'),
+            'email' => $request->input('email'),
+            'role' => User::ROLE_CUSTOMER,
+            'phone' => $request->input('phone'),
+            'password' => Hash::make($request->input('password')),
             'is_active' => true,
         ]);
 
-        // Tahap 15: welcome notification (queued side effect)
-        NotificationTrigger::registered($newUser);
+        $customerRole = Role::where('name', 'customer')->first();
+        if ($customerRole) {
+            $user->roles()->attach($customerRole->id, ['assigned_at' => now()]);
+        }
 
-        // SECURITY: audit trail for internal user provisioning.
+        Auth::guard('web')->login($user);
+        $request->session()->regenerate();
+
         AuditLog::create([
             'actor_id' => $user->id,
-            'action' => 'internal_user_provisioned',
-            'resource_type' => 'users',
-            'resource_id' => $newUser->id,
-            'after_value' => [
-                'email' => $newUser->email,
-                'name' => $newUser->name,
-            ],
+            'actor_role' => 'customer',
+            'action' => 'CUSTOMER_REGISTER_SUCCESS',
+            'resource_type' => 'user',
+            'resource_id' => $user->id,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'created_at' => now(),
         ]);
 
-        // Do NOT auto-login the new internal account. The admin who
-        // provisioned it is already logged in; the new user must log in
-        // themselves (with their known credentials) for an audit trail.
-        return redirect()->route('login')->with('status', 'User ' . $newUser->email . ' created. They can now log in.');
+        return redirect()->route('customer.dashboard');
     }
 
     public function logout(Request $request)
     {
+        $user = Auth::guard('web')->user() ?? Auth::user();
+        if ($user) {
+            AuditLog::create([
+                'actor_id' => $user->id,
+                'actor_role' => 'customer',
+                'action' => 'CUSTOMER_LOGOUT',
+                'resource_type' => 'user',
+                'resource_id' => $user->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
+
+        Auth::guard('web')->logout();
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect('/');
+
+        return redirect()->route('login');
     }
 
     // ===== COMPLETE PROFILE =====
@@ -174,8 +283,6 @@ class AuthController extends Controller
 
         $user->update([
             'phone' => $request->phone,
-            // address is not in users table; if you have a separate addresses table, handle it there.
-            // For now we skip address or you can store in a user meta.
         ]);
 
         return redirect()->route('home')->with('status', 'Profil berhasil diperbarui!');
