@@ -104,3 +104,19 @@
   6. Pengujian & Verifikasi:
      - Phase1FoundationAuthTest (12 tests, 65 assertions) — 100% lulus.
      - Seluruh test suite (268 tests, 971 assertions) — 100% lulus tanpa kegagalan.
+
+- 2026-10-17 (Perbaikan Bug Login Akun Lama & Sinkronisasi Role Idempoten):
+  1. Akar Masalah Kontak atau password salah:
+     - Akun lama hasil dump/prototype sebelumnya memiliki role customer di database lama meskipun memiliki relasi toko/kurir, sehingga scope query MitraUser dan CourierUser menolak login mereka di portal mitra/kurir.
+     - Akun lama sempat tidak ada di tabel users aktif pasca inisialisasi skema Phase 1.
+     - Beberapa akun lama dari prototype awal memiliki password NULL di database asal.
+     - AuthController sebelumnya memanggil Auth::attempt() tanpa binding eksplisit ke guard web.
+     - File terjemahan lang/id/auth.php dan lang/en/auth.php belum mendefinisikan pesan failed terstandarisasi (Kontak atau password salah).
+  2. Perbaikan & Sinkronisasi:
+     - Dibuat command idempoten php artisan auth:sync-roles (SyncUserRolesCommand) yang memulihkan akun lama tanpa mengubah/mereset password yang ada, mensinkronkan users.role berdasarkan kepemilikan stores/couriers/user_roles, dan menautkan pivot role.
+     - AuthController diperketat secara eksplisit menggunakan Auth::guard(web)->attempt(), Auth::guard(web)->user(), dan Auth::guard(web)->logout().
+     - DefaultUsersSeeder dibentengi agar hanya berjalan di environment local dan testing.
+     - File bahasa lang/id/auth.php dan lang/en/auth.php dikonfigurasi dengan pesan kegagalan Kontak atau password salah.
+  3. Verifikasi:
+     - Dibuat feature test RoleIsolatedLoginBugTest (9 tests, 44 assertions) — 100% lulus.
+     - Seluruh test suite (277 tests, 1015 assertions) — 100% lulus hijau.

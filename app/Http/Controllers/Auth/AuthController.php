@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Models\AuditLog;
 use App\Models\CustomerUser;
 use App\Models\Role;
@@ -33,16 +34,11 @@ class AuthController extends Controller
         return view('auth.login');
     }
 
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
-
         $credentials = $request->only('email', 'password');
 
-        if (!Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (!Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
             AuditLog::create([
                 'actor_id' => null,
                 'actor_role' => 'customer',
@@ -59,10 +55,10 @@ class AuthController extends Controller
             ]);
         }
 
-        $user = Auth::user();
+        $user = Auth::guard('web')->user();
 
         if (!$user->is_active) {
-            Auth::logout();
+            Auth::guard('web')->logout();
             throw ValidationException::withMessages([
                 'email' => 'Akun Anda dinonaktifkan.',
             ]);

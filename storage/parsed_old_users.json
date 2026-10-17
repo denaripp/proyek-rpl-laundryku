@@ -1,0 +1,292 @@
+[
+    {
+        "old_id": "01a0fca8-8afb-7199-9f01-7b897c9e5a6c",
+        "name": "Super Administrator",
+        "username": "admin",
+        "email": "admin@laundryku.id",
+        "phone": "+6281100000001",
+        "password_hash": "$2y$12$nqCC8SBwpHfZDqtcwjXGAedREpDMvU5wf7bMNbHH9wZmvVfTw0u3W",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fca8-8b36-73fe-aa5b-b0437f480022",
+        "name": "Rian Permana (Laundry Barokah)",
+        "username": "NULL",
+        "email": "rian.barokah@example.com",
+        "phone": "6281220011001",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fca8-8b45-725c-b409-db15b71e2c89",
+        "name": "Maya Kartika (Fresh & Clean)",
+        "username": "NULL",
+        "email": "maya.freshclean@example.com",
+        "phone": "6281220011002",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcac-be09-71d6-a175-5bdf4bab7f7e",
+        "name": "Budi Santoso",
+        "username": "NULL",
+        "email": "budi.live@example.com",
+        "phone": "NULL",
+        "password_hash": "NULL",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcac-c688-7383-aa4d-fb2a31f4938b",
+        "name": "Siti Rahma",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6281234567890",
+        "password_hash": "NULL",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcad-3147-7072-b72f-ab0e14685bb0",
+        "name": "Dewi Sartika",
+        "username": "NULL",
+        "email": "dewi.sartika@example.com",
+        "phone": "NULL",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcad-4210-7200-b9f2-defb841acace",
+        "name": "Bambang Pamungkas",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "628315068475",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcb7-9cec-72a1-98ee-f9f7a3b44b9a",
+        "name": "Browser Tester",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6289911223344",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcbd-2300-71f1-ace1-ccb75155b8e0",
+        "name": "Browser Tester Email",
+        "username": "NULL",
+        "email": "browsertest@example.com",
+        "phone": "NULL",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fccb-bf05-73ba-b21b-17fc9caf771d",
+        "name": "arsya",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6285143275779",
+        "password_hash": "NULL",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcf2-d20e-7110-81c6-1494780a86c1",
+        "name": "Budi Customer",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6281299887766",
+        "password_hash": "NULL",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fcff-c21d-7304-aeeb-8e428fa3f407",
+        "name": "Muhammad Najwa Syarif",
+        "username": "NULL",
+        "email": "muhammadnajwasyarif@gmail.com",
+        "phone": "NULL",
+        "password_hash": "$2y$12$.CWJp.WpEbgvObqFvxiYXe9c7ZIrX.FzdRUxJUgRK3HIOx\/UujSvK",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fd09-b429-72a8-8f10-4ee8a7e2299d",
+        "name": "Budi Customer Baru",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6281234567891",
+        "password_hash": "NULL",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fd17-1778-7369-9aab-2ea16be316cd",
+        "name": "Budi Customer Baru",
+        "username": "NULL",
+        "email": "budi.auto@laundryku.test",
+        "phone": "NULL",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a0fd27-c26d-72ea-929e-9159692c26ab",
+        "name": "Budi Kurir",
+        "username": "NULL",
+        "email": "kurir.test@laundryku.test",
+        "phone": "NULL",
+        "password_hash": "NULL",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101ea-5188-73a8-8465-75a75d31da14",
+        "name": "Trace Test User",
+        "username": "NULL",
+        "email": "tracetest1791033495@laundryku.test",
+        "phone": "NULL",
+        "password_hash": "$2y$12$2TtlEiC8D3Pnv293aymQw.nuOONjQ863oCedsaI6W.FbGZLfq8QCm",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101f5-0f30-7394-ade0-4d30345e3871",
+        "name": "Siti Aminah",
+        "username": "NULL",
+        "email": "siti1791034196@laundryku.test",
+        "phone": "NULL",
+        "password_hash": "$2y$12$LBPKCM9RNx50jmdm050auerDSFSCfa9ew4vDRqET2KEqsP3QYSWQm",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101f5-1119-719e-904d-3486a270d88f",
+        "name": "Dewi Sri",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6289911914384",
+        "password_hash": "$2y$12$JbJGVQgv.n49KamKzhzLSuvxLyU5J1twqkBzamozc\/UCa8RZ3TlPq",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101f5-1508-71f1-9f01-6e6ddc1d9081",
+        "name": "Rahmat",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6289922788287",
+        "password_hash": "$2y$12$zfgL1bi0xkTN6zkJUf2epeHzpB8gEY9feKRifVSpTIHY0yPmr73JO",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101f5-761e-7161-af46-8e3ee342000c",
+        "name": "Siti Aminah",
+        "username": "NULL",
+        "email": "siti1791034223@laundryku.test",
+        "phone": "NULL",
+        "password_hash": "$2y$12$Tkx\/ikMZZlVjIXefiA\/LIu4pIBczU1zcXI\/NH4\/PR2H5wcK2tXnnS",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101f5-77fe-702e-b48c-ae8480c3b91f",
+        "name": "Dewi Sri",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6289911699290",
+        "password_hash": "$2y$12$M5Hymo1C3aEcmG0fo4T5ieXEtF09kddrvedsbiqWE4ldwzjNFhG3O",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a101f5-83e2-7105-9829-5860c5ac5ee5",
+        "name": "Rahmat",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6289922444828",
+        "password_hash": "$2y$12$06o99K\/c.Lmw8XrPWC.VWugkowwvbcMfpub4RYYS\/oCleQvOvy41q",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a10208-940c-7388-a7ba-a4e300df56b9",
+        "name": "WA Test User",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6281271191001",
+        "password_hash": "$2y$12$t53WdQve6cki3diSTYY\/lOLpBJAfgF6YwjLU\/VqDd.niEpxt7E\/OK",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a10208-f22c-71ac-b7f0-96098e4e363f",
+        "name": "WA Test User",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6281274418535",
+        "password_hash": "$2y$12$HarWF2BqXS91cUXNm7QGlexfRZY3sZgl5AxCBFDfmbBjgJdprXpc.",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a10222-42e1-70a0-a598-26fe23419495",
+        "name": "Arep 18",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "6283150684755",
+        "password_hash": "$2y$12$ZPkdmp7ghdyGQohuUIRZS.qRQLClwvCklZbsNcLTMIw9\/3lgr56gq",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a10568-d25a-7326-87a0-a002d250e4a0",
+        "name": "Cellos",
+        "username": "NULL",
+        "email": "stokcellos11@gmail.com",
+        "phone": "NULL",
+        "password_hash": "$2y$12$vFJrn7\/3.V49MEARnx6IZOibIloJnSUDp9ZGRNZw0mlbtJWJWVT9.",
+        "status": "active",
+        "active_mode": "courier"
+    },
+    {
+        "old_id": "01a105a2-b116-7358-ba6e-bff19f4c7eee",
+        "name": "Budi Santoso",
+        "username": "NULL",
+        "email": "budi@example.com",
+        "phone": "081234567890",
+        "password_hash": "$2y$12$7he\/0pQ058CysA1sl0dnh.WKplTRIyY93sMdRuN\/hdkUX7snsMAO2",
+        "status": "active",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a11c1c-3544-73f7-9b42-e5e0ade656e8",
+        "name": "Test Customer",
+        "username": "NULL",
+        "email": "testcustomer@example.com",
+        "phone": "NULL",
+        "password_hash": "NULL",
+        "status": "pending_verification",
+        "active_mode": "customer"
+    },
+    {
+        "old_id": "01a14801-9a6d-718f-b411-8e9dd13070d8",
+        "name": "Wildan",
+        "username": "NULL",
+        "email": "NULL",
+        "phone": "62895357335523",
+        "password_hash": "$2y$12$o64PEgUS2hDFrKRfIeN09.WqX0XZlGAZtaoc.4OsWHBJbRjAL12TG",
+        "status": "active",
+        "active_mode": "customer"
+    }
+]
