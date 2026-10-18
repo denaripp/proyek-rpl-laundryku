@@ -95,17 +95,17 @@ export function getLoginRedirectUrl(redirectPath?: string): string {
   return `${LOGIN_PATH}?redirect=${encodeURIComponent(safe)}`;
 }
 
-const TOKEN_KEY = 'laundryku_token';
 const USER_KEY = 'laundryku_user';
 
 export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  // Tokens are stored strictly in httpOnly cookies (laundryku_customer_token)
+  // and are never accessible or stored in client-side JavaScript / localStorage.
+  return null;
 }
 
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(localStorage.getItem(TOKEN_KEY));
+  return Boolean(localStorage.getItem(USER_KEY));
 }
 
 export function getStoredUser(): AuthUser | null {
@@ -119,9 +119,10 @@ export function getStoredUser(): AuthUser | null {
   }
 }
 
-export function setAuthSession(token: string, user: AuthUser): void {
+export function setAuthSession(token: string | null | undefined, user: AuthUser): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(TOKEN_KEY, token);
+  // Tokens are stored in httpOnly cookies by the Next.js BFF.
+  // We only store the non-sensitive user profile in localStorage for synchronous UI rendering.
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
 }
@@ -138,7 +139,6 @@ export function updateStoredUser(updates: Partial<AuthUser>): AuthUser | null {
 
 export function clearAuthSession(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: null }));
 }
@@ -152,7 +152,7 @@ export async function register(data: {
 }): Promise<RegisterResult> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/auth/register`, {
+    res = await fetch('/api/auth/customer/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -184,7 +184,7 @@ export async function login(data: {
 }): Promise<AuthSuccessResult> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/auth/login`, {
+    res = await fetch('/api/auth/customer/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -206,8 +206,12 @@ export async function login(data: {
     throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
   }
 
-  setAuthSession(json.data.token, json.data.user);
-  return json.data;
+  setAuthSession(null, json.data.user);
+  return {
+    user: json.data.user,
+    token: '',
+    token_type: 'Bearer',
+  };
 }
 
 export async function verifyOtp(data: {
@@ -218,7 +222,7 @@ export async function verifyOtp(data: {
 }): Promise<AuthSuccessResult> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/auth/otp/verify`, {
+    res = await fetch('/api/auth/customer/otp-verify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -240,8 +244,12 @@ export async function verifyOtp(data: {
     throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
   }
 
-  setAuthSession(json.data.token, json.data.user);
-  return json.data;
+  setAuthSession(null, json.data.user);
+  return {
+    user: json.data.user,
+    token: '',
+    token_type: 'Bearer',
+  };
 }
 
 export async function sendOtp(data: {
@@ -251,7 +259,7 @@ export async function sendOtp(data: {
 }): Promise<{ otp_sent: boolean; delivery_status?: string; debug_otp?: string }> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/auth/otp/send`, {
+    res = await fetch('/api/auth/customer/otp-send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -343,32 +351,24 @@ export async function setupPassword(data: {
 }
 
 export async function logout(): Promise<void> {
-  const token = getStoredToken();
-  if (token) {
-    try {
-      await fetch(`${API_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-    } catch {
-      // Ignore network errors on logout
-    }
+  try {
+    await fetch('/api/auth/customer/logout', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+  } catch {
+    // Ignore network errors on logout
   }
   clearAuthSession();
 }
 
 export async function fetchMe(): Promise<AuthUser | null> {
-  const token = getStoredToken();
-  if (!token) return null;
-
   try {
-    const res = await fetch(`${API_URL}/me`, {
+    const res = await fetch('/api/auth/customer/session', {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${token}`,
       },
     });
 
@@ -378,7 +378,7 @@ export async function fetchMe(): Promise<AuthUser | null> {
     }
 
     const json = await res.json();
-    const user = json.data;
+    const user = json.user;
     if (typeof window !== 'undefined' && user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     }

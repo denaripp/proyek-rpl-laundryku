@@ -64,7 +64,10 @@ export default function StoreDashboardOverviewPage() {
       userRole="store_admin"
       userName={currentUser?.name || 'Admin Toko'}
       userEmail={currentUser?.email || currentUser?.phone || 'admin@toko.id'}
-      onLogout={logout}
+      onLogout={async () => {
+        await fetch('/api/auth/mitra/logout', { method: 'POST' }).catch(() => null);
+        window.location.href = '/mitra/login';
+      }}
     >
       <div className="space-y-6">
         {/* Header Title & Actions */}

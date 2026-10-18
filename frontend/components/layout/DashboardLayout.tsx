@@ -220,8 +220,19 @@ export const DashboardLayout = ({
   };
 
   const handleLogout = onLogout || (async () => {
-    await logout();
-    router.push('/auth');
+    if (userRole === 'store_admin') {
+      await fetch('/api/auth/mitra/logout', { method: 'POST' }).catch(() => null);
+      router.push('/mitra/login');
+    } else if (userRole === 'courier') {
+      await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
+      router.push('/courier/login');
+    } else if (userRole === 'super_admin') {
+      await fetch('/api/auth/admin/logout', { method: 'POST' }).catch(() => null);
+      router.push('/admin/login');
+    } else {
+      await logout();
+      router.push('/auth');
+    }
   });
 
   const roleNavItems: Record<UserRole, { label: string; href: string; icon: React.ComponentType<{ className?: string }> }[]> = {

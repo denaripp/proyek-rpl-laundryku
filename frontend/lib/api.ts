@@ -66,15 +66,14 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     headers.set('Content-Type', 'application/json');
   }
 
-  // Automatically attach Sanctum Bearer token if available
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('laundryku_token');
-    if (token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-  }
+  // When running in the browser, route through the Next.js BFF proxy which attaches
+  // the appropriate httpOnly cookie as a Bearer token to Laravel.
+  const isBrowser = typeof window !== 'undefined';
+  const url = isBrowser
+    ? `/api/proxy${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+    : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-  const response = await fetch(`${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
+  const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',

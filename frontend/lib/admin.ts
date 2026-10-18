@@ -212,19 +212,15 @@ export const adminApi = {
   },
 
   async logout(): Promise<void> {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('laundryku_token') : null;
-    if (token) {
-      try {
-        await fetch(`${API_URL}/admin/logout`, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-      } catch {
-        // ignore network error
-      }
+    try {
+      await fetch('/api/auth/admin/logout', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+    } catch {
+      // ignore network error
     }
     clearAuthSession();
   },

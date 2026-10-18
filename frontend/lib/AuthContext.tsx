@@ -29,17 +29,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
 
   const syncAuth = useCallback(async () => {
-    const storedToken = getStoredToken();
     const storedUser = getStoredUser();
-
-    setToken(storedToken);
     setUser(storedUser);
+    setToken(storedUser ? 'session_active' : null);
 
-    if (storedToken) {
+    if (storedUser) {
       try {
         const freshUser = await fetchMe();
         if (freshUser) {
           setUser(freshUser);
+          setToken('session_active');
         } else {
           setUser(null);
           setToken(null);
@@ -49,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } else {
       setUser(null);
+      setToken(null);
     }
     setLoading(false);
   }, []);
@@ -80,9 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [syncAuth]);
 
-  const handleSetUserSession = useCallback((newToken: string, newUser: AuthUser) => {
-    setAuthSession(newToken, newUser);
-    setToken(newToken);
+  const handleSetUserSession = useCallback((newToken: string | null | undefined, newUser: AuthUser) => {
+    setAuthSession(null, newUser);
+    setToken('session_active');
     setUser(newUser);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('laundryku_auth_change'));
@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         loading,
-        isAuthenticated: Boolean(token && user),
+        isAuthenticated: Boolean(user),
         setUserSession: handleSetUserSession,
         logoutUser: handleLogout,
         refreshProfile: handleRefreshProfile,

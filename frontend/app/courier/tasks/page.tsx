@@ -84,8 +84,8 @@ export default function CourierTasksPage() {
   }, [activeTab]);
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
+    router.push('/courier/login');
   };
 
   // Claim Task Handler
