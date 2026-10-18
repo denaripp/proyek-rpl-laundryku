@@ -19,11 +19,11 @@ export default function MitraStatusPage() {
           const json = await res.json();
           setUser(json.user);
         } else {
-          const fallback = getStoredUser();
+          const fallback = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('laundryku_mitra_user') || 'null') : null;
           setUser(fallback);
         }
       } catch {
-        const fallback = getStoredUser();
+        const fallback = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('laundryku_mitra_user') || 'null') : null;
         setUser(fallback);
       } finally {
         setLoading(false);
@@ -39,7 +39,7 @@ export default function MitraStatusPage() {
       // Ignore
     }
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('laundryku_user');
+      localStorage.removeItem('laundryku_mitra_user');
     }
     router.push('/mitra/login');
   };

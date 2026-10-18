@@ -51,7 +51,7 @@ function AdminLoginForm() {
 
       // If no 2FA required (fallback)
       if (typeof window !== 'undefined' && json.data?.user) {
-        localStorage.setItem('laundryku_user', JSON.stringify(json.data.user));
+        localStorage.setItem('laundryku_admin_user', JSON.stringify(json.data.user));
         window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: json.data.user }));
       }
       router.push(redirectTarget);
@@ -88,7 +88,7 @@ function AdminLoginForm() {
       }
 
       if (typeof window !== 'undefined' && json.data?.user) {
-        localStorage.setItem('laundryku_user', JSON.stringify(json.data.user));
+        localStorage.setItem('laundryku_admin_user', JSON.stringify(json.data.user));
         window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: json.data.user }));
       }
 
@@ -209,27 +209,6 @@ function AdminLoginForm() {
                 />
               </div>
 
-              {process.env.NODE_ENV !== 'production' && (
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('/api/dev/totp');
-                        const data = await res.json();
-                        if (data.otp) {
-                          setTwoFactorCode(data.otp);
-                        }
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="text-[11px] text-blue-400 hover:text-blue-300 underline cursor-pointer"
-                  >
-                    [Dev] Ambil & Masukkan Kode TOTP Google Authenticator Aktif
-                  </button>
-                </div>
-              )}
 
               <button
                 type="submit"

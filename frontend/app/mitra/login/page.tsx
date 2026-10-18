@@ -51,7 +51,7 @@ function MitraLoginForm() {
 
       // Login success without 2FA
       if (typeof window !== 'undefined' && json.data?.user) {
-        localStorage.setItem('laundryku_user', JSON.stringify(json.data.user));
+        localStorage.setItem('laundryku_mitra_user', JSON.stringify(json.data.user));
         window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: json.data.user }));
       }
 
@@ -95,7 +95,7 @@ function MitraLoginForm() {
       }
 
       if (typeof window !== 'undefined' && json.data?.user) {
-        localStorage.setItem('laundryku_user', JSON.stringify(json.data.user));
+        localStorage.setItem('laundryku_mitra_user', JSON.stringify(json.data.user));
         window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: json.data.user }));
       }
 
