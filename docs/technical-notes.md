@@ -142,3 +142,22 @@
   6. Pengujian & Verifikasi:
      - Feature test baru ApiAuthAndPortalTest (15 tests, 86 assertions) — 100% lulus.
      - Seluruh test suite (294 tests, 1109 assertions) — 100% lulus tanpa kegagalan.
+
+- 2026-10-18 (Fase 3: Pintu Autentikasi Terisolasi Next.js, BFF dan Cookie httpOnly per Portal):
+  1. Arsitektur BFF dan Cookie httpOnly Terisolasi:
+     - Dibuat helper server-side frontend/lib/bff.ts dan catch-all proxy frontend/app/api/proxy/[...path]/route.ts yang memvalidasi Origin/CSRF dan membatasi akses melalui whitelist endpoint.
+     - Token otentikasi dipindahkan sepenuhnya dari localStorage ke cookie httpOnly, SameSite=Lax, Path=/, secure (production).
+     - Nama cookie terisolasi per portal: laundryku_customer_token, laundryku_mitra_token, laundryku_courier_token, laundryku_admin_token, serta cookie sementara laundryku_admin_temp_token dan laundryku_mitra_temp_token (berumur 5 menit untuk 2FA).
+     - Token Laravel tidak pernah diekspos ke respon JSON browser atau JavaScript klien.
+  2. Pintu Masuk Next.js Mandiri per Aktor:
+     - Customer: /auth (tetap mempertahankan registrasi OTP WhatsApp/Email, login sandi, verifikasi OTP, resend).
+     - Mitra: /mitra/login dan /mitra/register (registrasi toko baru menghasilkan status submitted/pending, dilengkapi tampilan /mitra/status dan dukungan 2FA).
+     - Kurir: /courier/login (tanpa registrasi publik, langsung mengarah ke /courier/tasks).
+     - Super Admin: /admin/login (alur 2 langkah wajib Google Authenticator 2FA TOTP sebelum masuk ke /admin).
+  3. Strict Role Isolation dan Multi-Session Coexistence:
+     - Percobaan login kredensial salah role di setiap portal ditolak dengan pesan generic terstandarisasi (Kontak atau password salah).
+     - Sesi customer dan mitra/admin dapat hidup bersamaan pada browser yang sama tanpa saling mengganggu. Logout pada satu portal hanya menghapus cookie dan mencabut token portal tersebut.
+  4. Pengujian dan Verifikasi:
+     - Seluruh test suite Laravel (300 passed, 1142 assertions).
+     - Next.js build produksi berhasil untuk 40 rute tanpa error.
+     - Pengujian UI browser subagent end-to-end terverifikasi untuk seluruh portal (Customer, Mitra, Kurir, Super Admin).
