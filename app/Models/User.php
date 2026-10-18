@@ -141,6 +141,22 @@ class User extends Authenticatable
         return $this->hasMany(AiConversation::class, 'user_id');
     }
 
+    public function otpChallenges(): HasMany
+    {
+        return $this->hasMany(OtpChallenge::class, 'user_id');
+    }
+
+    public function getStatusAttribute(): string
+    {
+        if (! $this->is_active) {
+            return 'inactive';
+        }
+        if (is_null($this->email_verified_at) && is_null($this->phone_verified_at)) {
+            return 'pending_verification';
+        }
+        return 'active';
+    }
+
     // ========== SCOPES ==========
 
     public function scopeActive($query)

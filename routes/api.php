@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Auth\CustomerApiAuthController;
 use App\Http\Controllers\Api\Auth\MitraApiAuthController;
 use App\Http\Controllers\Api\Auth\CourierApiAuthController;
 use App\Http\Controllers\Api\Auth\AdminApiAuthController;
+use App\Http\Controllers\Api\Auth\OtpRegistrationApiController;
 use App\Http\Controllers\Api\Portal\CustomerPortalController;
 use App\Http\Controllers\Api\Portal\MitraPortalController;
 use App\Http\Controllers\Api\Portal\CourierPortalController;
@@ -164,6 +165,18 @@ Route::prefix('v1')->group(function () {
 
     // ===== Auth Endpoints =====
     Route::prefix('auth')->group(function () {
+        // Standard Customer OTP & Client Auth
+        Route::post('/register', [OtpRegistrationApiController::class, 'register'])
+            ->middleware('throttle:login');
+        Route::post('/login', [OtpRegistrationApiController::class, 'login'])
+            ->middleware('throttle:login');
+        Route::post('/otp/verify', [OtpRegistrationApiController::class, 'verifyOtp'])
+            ->middleware('throttle:login');
+        Route::post('/otp/send', [OtpRegistrationApiController::class, 'sendOtp'])
+            ->middleware('throttle:login');
+        Route::post('/logout', [OtpRegistrationApiController::class, 'logout'])
+            ->middleware('auth:sanctum');
+
         // Customer Auth
         Route::post('/customer/register', [CustomerApiAuthController::class, 'register'])
             ->middleware('throttle:login');
@@ -219,5 +232,9 @@ Route::prefix('v1')->group(function () {
     Route::prefix('admin')->middleware(['auth:sanctum', 'ability:role:super_admin', 'role:super_admin'])->group(function () {
         Route::get('/overview', [AdminPortalController::class, 'overview']);
     });
+
+    // ===== User Session Info =====
+    Route::get('/me', [OtpRegistrationApiController::class, 'me'])
+        ->middleware('auth:sanctum');
 });
 
