@@ -25,7 +25,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { DynamicStoreMap } from '@/components/map/DynamicStoreMap';
-import { getStoredToken } from '@/lib/auth';
+import { useAuth } from '@/lib/AuthContext';
 import {
   getCourierStatus,
   applyCourier,
@@ -43,6 +43,7 @@ const DRAFT_KEY_STORE = 'laundryku_store_draft';
 export default function UpgradePage() {
   const router = useRouter();
   const { success: toastSuccess, error: toastError } = useToast();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'courier' | 'store'>('courier');
   const [loading, setLoading] = useState(true);
@@ -81,8 +82,8 @@ export default function UpgradePage() {
 
   // Initial Data & Draft Loading
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
+    if (authLoading) return;
+    if (!isAuthenticated) {
       router.push('/auth?redirect=/upgrade');
       return;
     }

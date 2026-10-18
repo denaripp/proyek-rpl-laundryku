@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   AuthUser,
-  getStoredToken,
   getStoredUser,
   setAuthSession,
   clearAuthSession,
@@ -30,27 +29,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const syncAuth = useCallback(async () => {
     const storedUser = getStoredUser();
-    setUser(storedUser);
-    setToken(storedUser ? 'session_active' : null);
-
     if (storedUser) {
-      try {
-        const freshUser = await fetchMe();
-        if (freshUser) {
-          setUser(freshUser);
-          setToken('session_active');
-        } else {
-          setUser(null);
-          setToken(null);
-        }
-      } catch {
-        // Keep stored user if offline or network glitch
-      }
-    } else {
-      setUser(null);
-      setToken(null);
+      setUser(storedUser);
+      setToken('session_active');
     }
-    setLoading(false);
+
+    try {
+      const freshUser = await fetchMe();
+      if (freshUser) {
+        setUser(freshUser);
+        setToken('session_active');
+      } else {
+        setUser(null);
+        setToken(null);
+      }
+    } catch {
+      // Keep stored user if offline or network glitch
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

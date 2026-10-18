@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { AvatarUploader } from '@/components/ui/AvatarUploader';
 import { useToast } from '@/components/ui/Toast';
-import { getStoredToken } from '@/lib/auth';
+import { useAuth } from '@/lib/AuthContext';
 import {
   getProfile,
   updateProfile,
@@ -38,6 +38,7 @@ import {
 export default function ProfilePage() {
   const router = useRouter();
   const { success, error: toastError } = useToast();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
@@ -61,8 +62,8 @@ export default function ProfilePage() {
   const [deletingAddr, setDeletingAddr] = useState(false);
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
+    if (authLoading) return;
+    if (!isAuthenticated) {
       router.push('/auth');
       return;
     }
@@ -83,7 +84,7 @@ export default function ProfilePage() {
     }
 
     loadData();
-  }, [router, toastError]);
+  }, [authLoading, isAuthenticated, router, toastError]);
 
   // Handle Save Profile Info
   const handleSaveProfile = async (e: React.FormEvent) => {

@@ -450,9 +450,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       }
 
       const data = await res.json();
+      const resolvedUser = data.data?.user || (data.data?.id ? data.data : data.user) || null;
       return NextResponse.json({
         success: true,
-        user: data.data?.user || data.user,
+        user: resolvedUser,
       });
     } catch {
       return NextResponse.json({ success: false, user: null }, { status: 502 });

@@ -370,6 +370,7 @@ export async function fetchMe(): Promise<AuthUser | null> {
       headers: {
         'Accept': 'application/json',
       },
+      cache: 'no-store',
     });
 
     if (!res.ok) {
@@ -378,9 +379,10 @@ export async function fetchMe(): Promise<AuthUser | null> {
     }
 
     const json = await res.json();
-    const user = json.user;
+    const user = json.user || null;
     if (typeof window !== 'undefined' && user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
+      window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
     }
     return user;
   } catch {
@@ -452,20 +454,15 @@ export function getHomePathForRole(user: AuthUser | null): string {
 export async function switchUserMode(
   mode: 'customer' | 'store' | 'courier'
 ): Promise<AuthUser> {
-  const token = getStoredToken();
-  if (!token) {
-    throw new AuthApiError('Sesi tidak ditemukan. Silakan masuk kembali.', 401, 'UNAUTHENTICATED');
-  }
-
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/me/mode`, {
+    res = await fetch('/api/proxy/me/mode', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
       },
+      credentials: 'include',
       body: JSON.stringify({ mode }),
     });
   } catch {
