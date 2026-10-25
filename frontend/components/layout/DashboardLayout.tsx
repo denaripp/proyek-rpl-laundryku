@@ -78,9 +78,8 @@ export const DashboardLayout = ({
   const isCourierPortal = userRole === 'courier' || pathname.startsWith('/courier');
   const targetPortal = isStorePortal ? 'mitra' : isCourierPortal ? 'courier' : 'customer';
 
-  const [portalUser, setPortalUser] = useState<AuthUser | null>(() => {
-    return getStoredUser(targetPortal);
-  });
+  const [mounted, setMounted] = useState(false);
+  const [portalUser, setPortalUser] = useState<AuthUser | null>(null);
 
   const { user } = useAuth();
   const availableModes = (user?.available_modes || (userRole === 'store_admin' ? ['customer', 'store'] : userRole === 'courier' ? ['customer', 'courier'] : ['customer'])) as string[];
@@ -136,6 +135,13 @@ export const DashboardLayout = ({
   }, [isStorePortal, isCourierPortal, portalUser]);
 
   useEffect(() => {
+    setMounted(true);
+    const stored = getStoredUser(targetPortal);
+    if (stored) {
+      setPortalUser(stored);
+      syncStores(stored);
+    }
+
     if (isStorePortal || isCourierPortal) {
       fetchPortalSession(targetPortal).then((freshUser) => {
         if (freshUser) {
@@ -304,15 +310,38 @@ export const DashboardLayout = ({
   const isSuspended = activeStore?.operational_status === 'suspended';
   const isOpen = activeStore?.operational_status === 'active';
 
-  const displayUser = isStorePortal
-    ? (portalUser || getStoredUser('mitra'))
+  const serverFallbackName = isStorePortal
+    ? 'Admin Toko'
     : isCourierPortal
-    ? (portalUser || getStoredUser('courier'))
-    : null;
+    ? 'Kurir LaundryKu'
+    : userRole === 'super_admin'
+    ? 'Super Admin'
+    : 'Pelanggan LaundryKu';
 
-  const resolvedUserName = displayUser?.name || (userName !== 'Pelanggan LaundryKu' && userName !== 'Admin Toko' ? userName : null) || (isStorePortal ? 'Admin Toko' : isCourierPortal ? 'Kurir LaundryKu' : userName);
-  const resolvedUserEmail = displayUser?.email || displayUser?.phone || (userEmail !== 'customer@laundryku.id' && userEmail !== 'admin@toko.id' ? userEmail : null) || (isStorePortal ? 'admin@toko.id' : isCourierPortal ? 'kurir@laundryku.id' : userEmail);
-  const resolvedAvatar = displayUser?.avatar_url || activeAvatar || userAvatar;
+  const serverFallbackEmail = isStorePortal
+    ? 'admin@toko.id'
+    : isCourierPortal
+    ? 'kurir@laundryku.id'
+    : 'customer@laundryku.id';
+
+  // Before mounted, both server and initial client hydration render MUST output identical defaults
+  const displayUser = mounted ? portalUser : null;
+
+  const resolvedUserName = mounted && displayUser?.name
+    ? displayUser.name
+    : mounted && userName !== 'Pelanggan LaundryKu' && userName !== 'Admin Toko' && userName !== 'Kurir LaundryKu'
+    ? userName
+    : serverFallbackName;
+
+  const resolvedUserEmail = mounted && (displayUser?.email || displayUser?.phone)
+    ? (displayUser.email || displayUser.phone)
+    : mounted && userEmail !== 'customer@laundryku.id' && userEmail !== 'admin@toko.id' && userEmail !== 'kurir@laundryku.id'
+    ? userEmail
+    : serverFallbackEmail;
+
+  const resolvedAvatar = mounted
+    ? (displayUser?.avatar_url || activeAvatar || userAvatar)
+    : (userAvatar || null);
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
@@ -545,7 +574,7 @@ export const DashboardLayout = ({
           {/* Right Header Actions */}
           <div className="flex items-center gap-3">
             {/* Mode Switcher */}
-            {availableModes.length > 1 && (
+            {mounted && availableModes.length > 1 && (
               <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 text-[11px] mr-1">
                 {availableModes.includes('customer') && (
                   <button

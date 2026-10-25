@@ -1,21 +1,24 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui';
-import { getStoredUser, logout } from '@/lib/auth';
+import { getStoredUser, AuthUser } from '@/lib/auth';
 import { Settings, User } from 'lucide-react';
 
 export default function StoreSettingsPage() {
-  const user = getStoredUser();
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser('mitra'));
+  }, []);
 
   return (
     <DashboardLayout
       userRole="store_admin"
-      userName={user?.name || 'Admin Toko'}
-      userEmail={user?.email || user?.phone || 'admin@toko.id'}
-      onLogout={logout}
+      userName={currentUser?.name || 'Admin Toko'}
+      userEmail={currentUser?.email || currentUser?.phone || 'admin@toko.id'}
     >
       <div className="space-y-6">
         <div>
