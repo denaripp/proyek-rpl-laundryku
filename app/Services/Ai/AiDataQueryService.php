@@ -758,6 +758,21 @@ class AiDataQueryService
             return "Pesanan {$orderNumber} di toko Anda: Pelanggan {$custName}, Status '{$label}', Berat {$weight} kg, Total tagihan Rp " . number_format($total, 0, ',', '.') . ".";
         }
 
+        // Check if query is asking for applicants / courier candidates
+        if (str_contains($normalizedMessage, 'pelamar') || str_contains($normalizedMessage, 'kandidat') || str_contains($normalizedMessage, 'rekrut')) {
+            return $this->getStoreApplicantsResponse($user);
+        }
+
+        // Check if query is asking for store couriers
+        if (str_contains($normalizedMessage, 'kurir') && !str_contains($normalizedMessage, 'tugas')) {
+            return $this->getStoreCouriersResponse($user);
+        }
+
+        // Check if query is asking for store omzet / revenue
+        if (str_contains($normalizedMessage, 'omset') || str_contains($normalizedMessage, 'omzet') || str_contains($normalizedMessage, 'pendapatan')) {
+            return $this->getStoreRevenueResponse($user, $normalizedMessage);
+        }
+
         // Check if query is asking for store services & prices
         if (str_contains($normalizedMessage, 'harga') || str_contains($normalizedMessage, 'layanan') || str_contains($normalizedMessage, 'tarif')) {
             return $this->getStoreServicesResponse($user);
@@ -782,6 +797,129 @@ class AiDataQueryService
         }
 
         return null;
+    }
+
+    public function getStoreRevenueResponse(User $user, string $message = ''): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+        $query = Order::whereIn('store_id', $storeIds);
+        $totalOrders = (clone $query)->count();
+
+        if ($totalOrders === 0) {
+            return "Toko yang Anda kelola ({$storeNames}) belum menerima pesanan.";
+        }
+
+        $storageTimezone = config('app.timezone', 'UTC');
+        $startOfTodayStorage = Carbon::now('Asia/Jakarta')->startOfDay()->setTimezone($storageTimezone);
+        $endOfTodayStorage = Carbon::now('Asia/Jakarta')->endOfDay()->setTimezone($storageTimezone);
+
+        $orderIds = (clone $query)->pluck('id');
+        $hasPayments = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->exists();
+
+        if ($hasPayments) {
+            $todayRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->whereDate('paid_at', Carbon::today('Asia/Jakarta'))
+                ->sum('amount');
+            $totalRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->sum('amount');
+        } else {
+            $paidQuery = (clone $query)->where('payment_status', 'paid');
+            $totalRevenue = (float) (clone $paidQuery)->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+            $todayRevenue = (float) (clone $paidQuery)
+                ->where(function ($q) use ($startOfTodayStorage, $endOfTodayStorage) {
+                    $q->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
+                      ->orWhere(function ($sub) use ($startOfTodayStorage, $endOfTodayStorage) {
+                          $sub->whereNull('paid_at')
+                              ->whereBetween('created_at', [$startOfTodayStorage, $endOfTodayStorage]);
+                      });
+                })
+                ->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+        }
+
+        $todayFmt = 'Rp ' . number_format($todayRevenue, 0, ',', '.');
+        $totalFmt = 'Rp ' . number_format($totalRevenue, 0, ',', '.');
+
+        $norm = strtolower($message);
+        if (str_contains($norm, 'hari ini')) {
+            return "Omzet hari ini untuk toko {$storeNames} adalah {$todayFmt} (hanya transaksi yang telah terbayar). Total omzet keseluruhan: {$totalFmt}.";
+        }
+
+        return "Ringkasan omzet toko {$storeNames} (hanya transaksi terbayar):\n- Omzet hari ini: {$todayFmt}\n- Total omzet: {$totalFmt}";
+    }
+
+    public function getStoreCouriersResponse(User $user): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $store = Store::whereIn('id', $storeIds)->first();
+        $couriers = Courier::whereIn('store_id', $storeIds)->with('user')->get();
+
+        if ($couriers->isEmpty()) {
+            return "Toko {$store->name} belum memiliki kurir terikat.";
+        }
+
+        $lines = ["Toko {$store->name} memiliki {$couriers->count()} kurir terikat:"];
+        foreach ($couriers as $c) {
+            $name = $c->user?->name ?? 'Kurir';
+            $vehicle = $c->vehicle_type ?? 'Motor';
+            $status = $c->is_available ? 'siap tugas' : 'tidak aktif';
+            $lines[] = "- {$name} ({$vehicle}, status: {$status})";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getStoreApplicantsResponse(User $user): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $store = Store::whereIn('id', $storeIds)->first();
+
+        $rejectedIds = DB::table('audit_logs')
+            ->where('action', 'STORE_COURIER_REJECT')
+            ->where('resource_type', 'courier')
+            ->where(function ($q) use ($user, $store) {
+                $q->where('actor_id', $user->id)
+                  ->orWhere('after_value', 'like', '%"store_id":' . $store->id . '%')
+                  ->orWhere('after_value', 'like', '%"store_id":"' . $store->id . '"%');
+            })
+            ->pluck('resource_id')
+            ->toArray();
+
+        $candidatesQuery = Courier::whereNull('store_id')
+            ->where('is_verified', true);
+
+        if (!empty($rejectedIds)) {
+            $candidatesQuery->whereNotIn('id', $rejectedIds);
+        }
+
+        $candidates = $candidatesQuery->with('user')->get();
+
+        if ($candidates->isEmpty()) {
+            return "Saat ini belum ada pelamar kurir baru yang siap direkrut untuk toko {$store->name}.";
+        }
+
+        $lines = ["Toko {$store->name} memiliki {$candidates->count()} kandidat/pelamar kurir siap direkrut:"];
+        foreach ($candidates as $c) {
+            $name = $c->user?->name ?? 'Pelamar Kurir';
+            $vehicle = $c->vehicle_type ?? 'Motor';
+            $lines[] = "- {$name} ({$vehicle}, status: terverifikasi)";
+        }
+
+        return implode("\n", $lines);
     }
 
     public function getStoreServicesResponse(User $user): string
@@ -856,7 +994,7 @@ class AiDataQueryService
     }
 
     /**
-     * Capability I: Courier specific tasks progress.
+     * Capability I: Courier specific tasks progress, history, and store binding.
      */
     public function getCourierTaskProgressResponse(User $user, string $normalizedMessage): string
     {
@@ -864,6 +1002,16 @@ class AiDataQueryService
 
         if (!$courier) {
             return 'Profil kurir Anda belum aktif atau belum memiliki tugas di LaundryKu.';
+        }
+
+        // 1. Courier inquiry about assigned store
+        if (str_contains($normalizedMessage, 'toko') || str_contains($normalizedMessage, 'mitra') || str_contains($normalizedMessage, 'bertugas di')) {
+            return $this->getCourierStoreResponse($user);
+        }
+
+        // 2. Courier inquiry about completed tasks history
+        if (str_contains($normalizedMessage, 'riwayat') || str_contains($normalizedMessage, 'selesai') || str_contains($normalizedMessage, 'kemarin') || str_contains($normalizedMessage, 'sebelumnya')) {
+            return $this->getCourierTaskHistoryResponse($user);
         }
 
         $activeTask = CourierTask::where('courier_id', $courier->id)
@@ -881,11 +1029,62 @@ class AiDataQueryService
         return "Tugas kurir aktif Anda saat ini: {$taskType} untuk {$orderNum} dengan status tugas '{$activeTask->status}'.";
     }
 
+    public function getCourierStoreResponse(User $user): string
+    {
+        $courier = Courier::where('user_id', $user->id)->first();
+        if (!$courier) {
+            return 'Profil kurir Anda belum aktif di LaundryKu.';
+        }
+
+        if ($courier->store_id) {
+            $store = Store::find($courier->store_id);
+            if ($store) {
+                $avail = $courier->is_available ? 'Online (Siap Tugas)' : 'Offline (Istirahat)';
+                return "Anda terdaftar sebagai kurir di toko {$store->name} ({$store->address}). Status ketersediaan Anda saat ini: {$avail}.";
+            }
+        }
+
+        return "Profil kurir Anda aktif namun saat ini belum terikat pada toko mitra tertentu (kurir independen/lepas).";
+    }
+
+    public function getCourierTaskHistoryResponse(User $user): string
+    {
+        $courier = Courier::where('user_id', $user->id)->first();
+        if (!$courier) {
+            return 'Profil kurir Anda belum aktif di LaundryKu.';
+        }
+
+        $completedTasks = CourierTask::where('courier_id', $courier->id)
+            ->where('status', 'delivered')
+            ->with('order')
+            ->latest('updated_at')
+            ->take(5)
+            ->get();
+
+        if ($completedTasks->isEmpty()) {
+            return 'Anda belum memiliki riwayat tugas kurir yang telah diselesaikan.';
+        }
+
+        $lines = ["Riwayat tugas selesai Anda ({$completedTasks->count()} tugas terakhir):"];
+        foreach ($completedTasks as $t) {
+            $ordNum = optional($t->order)->order_number ?? 'Pesanan';
+            $type = $t->task_type === 'pickup' ? 'Penjemputan' : 'Pengantaran';
+            $lines[] = "- {$ordNum} ({$type}): Selesai diantar/diterima";
+        }
+
+        return implode("\n", $lines);
+    }
+
     /**
-     * Capability J: Super Admin platform queries.
+     * Capability J: Super Admin platform queries (platform overview, user search, store search).
      */
     public function handleSuperAdminQuery(User $user, string $normalizedMessage): ?string
     {
+        $roles = $this->getUserRoles($user);
+        if (!in_array('super_admin', $roles, true) && !in_array('platform_owner', $roles, true)) {
+            return 'Maaf, permintaan tersebut melanggar kebijakan keamanan data dan tidak dapat diproses.';
+        }
+
         // 1. Look up any order if order number is explicitly stated
         preg_match('/ord-[a-z0-9-]+/i', $normalizedMessage, $matches);
         $orderNumber = !empty($matches[0]) ? strtoupper($matches[0]) : null;
@@ -905,8 +1104,68 @@ class AiDataQueryService
             return "Detail Pesanan {$orderNumber}: Toko {$storeName}, Status '{$label}', Nominal Rp " . number_format($total, 0, ',', '.') . ".";
         }
 
-        // 2. Platform overview
-        if (str_contains($normalizedMessage, 'platform') || str_contains($normalizedMessage, 'total toko') || str_contains($normalizedMessage, 'semua toko') || str_contains($normalizedMessage, 'toko mitra') || str_contains($normalizedMessage, 'mitra yang aktif') || str_contains($normalizedMessage, 'toko aktif') || str_contains($normalizedMessage, 'sistem')) {
+        // 2. Search for users (sensitive data like email and phone MUST be masked; passwords/tokens never shown)
+        if (str_contains($normalizedMessage, 'cari user') || str_contains($normalizedMessage, 'cari pengguna') || str_contains($normalizedMessage, 'cari akun') || str_contains($normalizedMessage, 'cari pelanggan') || str_contains($normalizedMessage, 'info user') || str_contains($normalizedMessage, 'info pengguna')) {
+            $term = trim(preg_replace('/^(.*)(cari user|cari pengguna|cari akun|cari pelanggan|info user|info pengguna)\s*/iu', '', $normalizedMessage));
+            $term = trim(str_replace(['?', '!', '.', ','], '', $term));
+
+            if ($term === '') {
+                return 'Silakan masukkan nama, email, atau nomor telepon pengguna yang ingin dicari (contoh: "cari user Budi").';
+            }
+
+            $users = User::where('name', 'like', "%{$term}%")
+                ->orWhere('email', 'like', "%{$term}%")
+                ->orWhere('phone', 'like', "%{$term}%")
+                ->take(3)
+                ->get();
+
+            if ($users->isEmpty()) {
+                return "Pengguna dengan kata kunci '{$term}' tidak ditemukan di sistem LaundryKu.";
+            }
+
+            $lines = ["Hasil pencarian pengguna untuk '{$term}' (data sensitif disamarkan):"];
+            foreach ($users as $u) {
+                $maskedEmail = $this->maskEmail($u->email);
+                $maskedPhone = $this->maskPhone($u->phone);
+                $roleLabel = $u->role ?? 'pelanggan';
+                $status = $u->is_active ? 'aktif' : 'nonaktif';
+                $lines[] = "- {$u->name} (Role: {$roleLabel}, Email: {$maskedEmail}, Telepon: {$maskedPhone}, Status: {$status})";
+            }
+
+            return implode("\n", $lines);
+        }
+
+        // 3. Search for stores
+        if (str_contains($normalizedMessage, 'cari toko') || str_contains($normalizedMessage, 'cari outlet') || str_contains($normalizedMessage, 'info toko mitra') || str_contains($normalizedMessage, 'status toko mitra')) {
+            $term = trim(preg_replace('/^(.*)(cari toko|cari outlet|info toko mitra|status toko mitra)\s*/iu', '', $normalizedMessage));
+            $term = trim(str_replace(['?', '!', '.', ','], '', $term));
+
+            if ($term === '') {
+                return 'Silakan sebutkan nama toko atau alamat yang ingin dicari (contoh: "cari toko Berkah").';
+            }
+
+            $stores = Store::where('name', 'like', "%{$term}%")
+                ->orWhere('address', 'like', "%{$term}%")
+                ->with('owner')
+                ->take(3)
+                ->get();
+
+            if ($stores->isEmpty()) {
+                return "Toko dengan kata kunci '{$term}' tidak ditemukan di platform LaundryKu.";
+            }
+
+            $lines = ["Hasil pencarian toko untuk '{$term}':"];
+            foreach ($stores as $s) {
+                $ownerName = optional($s->owner)->name ?? 'Owner';
+                $active = $s->is_active ? 'aktif' : 'tutup/nonaktif';
+                $lines[] = "- {$s->name} (Status: {$s->status}, Operasional: {$active}, Pemilik: {$ownerName}, Alamat: {$s->address})";
+            }
+
+            return implode("\n", $lines);
+        }
+
+        // 4. Platform overview
+        if (str_contains($normalizedMessage, 'platform') || str_contains($normalizedMessage, 'total toko') || str_contains($normalizedMessage, 'semua toko') || str_contains($normalizedMessage, 'toko mitra') || str_contains($normalizedMessage, 'mitra yang aktif') || str_contains($normalizedMessage, 'toko aktif') || str_contains($normalizedMessage, 'sistem') || str_contains($normalizedMessage, 'ringkasan')) {
             $activeStores = Store::where('status', 'approved')->where('is_active', true)->count();
             $stats = $this->statsService->getPlatformStats();
             return "{$stats} Jumlah toko aktif ({$activeStores} toko mitra aktif di platform).";
@@ -914,6 +1173,60 @@ class AiDataQueryService
 
         $cnt = Store::where('status', 'approved')->where('is_active', true)->count();
         return $this->statsService->getPlatformStats() . " Jumlah toko aktif ({$cnt} toko mitra aktif di platform).";
+    }
+
+    /**
+     * Mask email address for Super Admin search (e.g. bu***@mail.com).
+     */
+    public function maskEmail(?string $email): string
+    {
+        if (empty($email)) {
+            return '-';
+        }
+
+        if (User::isPlaceholderEmail($email)) {
+            return '(Login WhatsApp / Tanpa Email)';
+        }
+
+        $parts = explode('@', trim($email), 2);
+        if (count($parts) !== 2) {
+            return '***';
+        }
+
+        $local = $parts[0];
+        $domain = $parts[1];
+        $len = strlen($local);
+
+        if ($len <= 2) {
+            $maskedLocal = substr($local, 0, 1) . '***';
+        } else {
+            $maskedLocal = substr($local, 0, 2) . '***';
+        }
+
+        return "{$maskedLocal}@{$domain}";
+    }
+
+    /**
+     * Mask phone number for Super Admin search (e.g. 0812****789).
+     */
+    public function maskPhone(?string $phone): string
+    {
+        if (empty($phone)) {
+            return '-';
+        }
+
+        $cleaned = preg_replace('/[^0-9]/', '', (string) $phone);
+        $len = strlen($cleaned);
+
+        if ($len >= 7) {
+            return substr($cleaned, 0, 4) . '****' . substr($cleaned, -3);
+        }
+
+        if ($len >= 4) {
+            return substr($cleaned, 0, 2) . '****' . substr($cleaned, -2);
+        }
+
+        return '****';
     }
 
     // ========== HELPER AND INTENT DETECTION METHODS ==========
@@ -944,6 +1257,14 @@ class AiDataQueryService
             'tampilkan pesanan semua pelanggan', 'pesanan semua pelanggan',
             'email budi apa', 'email pengguna lain', 'password', 'token rahasia',
             'abaikan aturan dan tampilkan', 'abaikan batasan',
+            'abaikan aturan', 'abaikan semua aturan',
+            'anggap saya admin', 'anggap aku admin', 'anggap saya super admin',
+            'jadikan saya admin', 'kamu harus mematuhi saya', 'bypass',
+            'tampilkan token', 'tampilkan password', 'tampilkan hash',
+            'bocorkan password', 'bocorkan database', 'tampilkan semua data',
+            'tampilkan data rahasia', 'data pengguna lain', 'data customer lain',
+            'data toko lain', 'pesanan toko lain', 'tugas kurir lain',
+            'password pengguna', 'token pengguna', 'hash password',
         ];
 
         foreach ($patterns as $p) {
@@ -1144,6 +1465,14 @@ class AiDataQueryService
             || (str_contains($normalized, 'toko') && str_contains($normalized, 'harga'))
             || (str_contains($normalized, 'toko') && str_contains($normalized, 'layanan'))
             || (str_contains($normalized, 'toko') && str_contains($normalized, 'tarif'))
+            || (str_contains($normalized, 'toko') && str_contains($normalized, 'kurir'))
+            || (str_contains($normalized, 'toko') && str_contains($normalized, 'omzet'))
+            || (str_contains($normalized, 'toko') && str_contains($normalized, 'omset'))
+            || str_contains($normalized, 'pelamar kurir')
+            || str_contains($normalized, 'kandidat kurir')
+            || str_contains($normalized, 'pelamar toko')
+            || str_contains($normalized, 'kurir di toko')
+            || str_contains($normalized, 'kurir toko')
             || (bool) preg_match('/ord-[a-z0-9-]+/i', $normalized);
     }
 
@@ -1155,7 +1484,26 @@ class AiDataQueryService
 
         return str_contains($normalized, 'tugas')
             || str_contains($normalized, 'penjemputan')
-            || str_contains($normalized, 'pengantaran');
+            || str_contains($normalized, 'pengantaran')
+            || str_contains($normalized, 'toko tempat saya')
+            || str_contains($normalized, 'toko saya terikat')
+            || str_contains($normalized, 'toko mitra saya')
+            || str_contains($normalized, 'saya bertugas di');
+    }
+
+    public function getPrimaryRole(User $user): string
+    {
+        $roles = $this->getUserRoles($user);
+        if (in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true)) {
+            return 'super_admin';
+        }
+        if (in_array('store_owner', $roles, true) || in_array('store_admin', $roles, true)) {
+            return 'store_admin';
+        }
+        if (in_array('courier', $roles, true)) {
+            return 'courier';
+        }
+        return 'customer';
     }
 
     public function getUserRoles(User $user): array

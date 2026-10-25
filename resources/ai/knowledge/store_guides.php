@@ -91,4 +91,21 @@ return [
         ],
         'note' => 'Merespons komplain dengan cepat dan sopan akan menjaga reputasi bintang dan rating toko Anda.',
     ],
+
+    'guide_store_couriers' => [
+        'id' => 'guide_store_couriers',
+        'role' => 'store_admin',
+        'title' => 'Panduan Mengelola Kurir & Merekrut Pelamar Kurir Toko',
+        'keywords' => [
+            'kelola kurir', 'rekrut kurir', 'pelamar kurir', 'kandidat kurir',
+            'terima kurir', 'tolak kurir', 'daftar kurir toko', 'cara rekrut kurir',
+        ],
+        'steps' => [
+            'Buka "Dashboard Mitra" (/store) dan masuk ke menu "Manajemen Kurir" (/store/couriers).',
+            'Pada tab "Kurir Aktif", Anda dapat melihat daftar kurir yang terikat dengan toko Anda beserta nomor kontak dan status ketersediaannya.',
+            'Pada tab "Kandidat / Pelamar", Anda dapat meninjau calon kurir yang telah diverifikasi oleh platform.',
+            'Klik tombol "Setujui" untuk merekrut kurir tersebut ke armada toko Anda, atau klik "Tolak" bila kuota kurir sudah penuh.',
+        ],
+        'note' => 'Kurir yang telah direkrut akan otomatis dapat menerima tugas penjemputan dan pengantaran pesanan toko Anda.',
+    ],
 ];

@@ -137,7 +137,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
         // If message is out-of-scope or a jailbreak attempt, DO NOT call OpenRouter provider!
         if (!$classification['allowed']) {
-            $reply = $this->guardrail->getOutOfScopeResponse();
+            $primaryRole = $this->dataQueryService->getPrimaryRole($user);
+            $reply = $this->guardrail->getOutOfScopeResponse(null, $primaryRole);
 
             AiMessage::create([
                 'conversation_id' => $conversation->id,
@@ -190,8 +191,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         $lowerMsg = mb_strtolower(trim($message));
 
         if (!($this->client instanceof \Tests\Feature\FakeAiClient)) {
-            // Direct mutation requests via chat (cancel order, refund, change address)
-            // Guardrail: AI chatbot tidak melakukan mutasi langsung; tolak sopan, arahkan ke menu aplikasi, DAN sertakan panduan caranya.
+            // Direct mutation requests via chat (cancel order, refund, change address, courier/store/admin actions)
+            // Guardrail: AI chatbot is strictly read-only. Tolak mutasi secara eksplisit, arahkan ke halaman aplikasi (mis. Pesanan /orders), dan sertakan panduan.
             $mutationRefusal = $this->handleMutationChatRequest($user, $lowerMsg);
             if ($mutationRefusal !== null) {
                 $routing = $this->router->route($user, $message, $conversationContext);
@@ -236,7 +237,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
             // Out of Scope (e.g. guardrail/jailbreak caught in router)
             if ($routing['intent'] === AiIntentRouter::INTENT_OUT_OF_SCOPE) {
-                return $this->recordDeterministicReply($conversation, $user, $this->guardrail->getOutOfScopeResponse(), 'out_of_scope', $routing);
+                $primaryRole = $this->dataQueryService->getPrimaryRole($user);
+                return $this->recordDeterministicReply($conversation, $user, $this->guardrail->getOutOfScopeResponse(null, $primaryRole), 'out_of_scope', $routing);
             }
 
             // Deterministic Greetings, Thanks, and Goodbye (Zero tokens)
@@ -263,7 +265,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         }
 
         if (!($this->client instanceof \Tests\Feature\FakeTrackingAiClient) && !($this->client instanceof \Tests\Feature\FakeAiClient)) {
-            $messages = $this->buildFallbackKnowledgeMessages($message, $user->role);
+            $primaryRole = $this->dataQueryService->getPrimaryRole($user);
+            $messages = $this->buildFallbackKnowledgeMessages($message, $primaryRole);
         } else {
             $messages = $this->buildMessages($conversation, $user);
         }
@@ -329,7 +332,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
         // Post-call output guardrail: check for code blocks or forbidden off-topic content
         if ($reply !== null && $this->guardrail->containsCodeOrForbidden((string) $reply)) {
-            $reply = $this->guardrail->getOutOfScopeResponse();
+            $primaryRole = $this->dataQueryService->getPrimaryRole($user);
+            $reply = $this->guardrail->getOutOfScopeResponse(null, $primaryRole);
         }
 
         // Sanitize output: remove AI self-referential disclaimers while keeping substantive notes
@@ -475,7 +479,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         $isStoreManager = in_array('store_owner', $roles, true) || in_array('store_admin', $roles, true);
         $isCourier = in_array('courier', $roles, true);
 
-        if ($isSuperAdmin && ($intent === AiIntentRouter::INTENT_SUPER_ADMIN_PLATFORM || $orderNumber !== null || str_contains($normalized, 'platform'))) {
+        if ($isSuperAdmin && ($intent === AiIntentRouter::INTENT_SUPER_ADMIN_PLATFORM || $intent === AiIntentRouter::INTENT_SUPER_ADMIN_SEARCH || $orderNumber !== null || str_contains($normalized, 'platform') || str_contains($normalized, 'cari') || str_contains($normalized, 'toko') || str_contains($normalized, 'user') || str_contains($normalized, 'pengguna'))) {
             $adminRes = $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
             if ($adminRes !== null) {
                 return $adminRes;
@@ -483,17 +487,29 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             return $this->orderStatsService->getStatsResponse($user, $normalized);
         }
 
-        if ($isStoreManager && ($intent === AiIntentRouter::INTENT_STORE_ORDERS || $intent === AiIntentRouter::INTENT_STORE_STATS || $this->dataQueryService->isStoreManagementInquiry($normalized))) {
+        if ($isStoreManager && ($intent === AiIntentRouter::INTENT_STORE_ORDERS || $intent === AiIntentRouter::INTENT_STORE_STATS || $intent === AiIntentRouter::INTENT_STORE_COURIERS_DATA || $intent === AiIntentRouter::INTENT_STORE_APPLICANTS_DATA || $this->dataQueryService->isStoreManagementInquiry($normalized))) {
+            if ($intent === AiIntentRouter::INTENT_STORE_COURIERS_DATA || str_contains($normalized, 'kurir saya') || str_contains($normalized, 'daftar kurir')) {
+                return $this->dataQueryService->getStoreCouriersResponse($user);
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_APPLICANTS_DATA || str_contains($normalized, 'pelamar') || str_contains($normalized, 'kandidat')) {
+                return $this->dataQueryService->getStoreApplicantsResponse($user);
+            }
             if ($orderNumber || str_contains($normalized, 'rating') || str_contains($normalized, 'ulasan')) {
                 $storeRes = $this->dataQueryService->handleStoreManagerQuery($user, $normalized);
                 if ($storeRes !== null) {
                     return $storeRes;
                 }
             }
-            return $this->orderStatsService->getStatsResponse($user, $normalized);
+            return $this->orderStatsService->getStoreManagerStats($user);
         }
 
-        if ($isCourier && ($intent === AiIntentRouter::INTENT_COURIER_TASKS || $this->dataQueryService->isCourierTaskInquiry($normalized))) {
+        if ($isCourier && ($intent === AiIntentRouter::INTENT_COURIER_TASKS || $intent === AiIntentRouter::INTENT_COURIER_STORE_INFO || $this->dataQueryService->isCourierTaskInquiry($normalized))) {
+            if ($intent === AiIntentRouter::INTENT_COURIER_STORE_INFO || str_contains($normalized, 'toko saya') || str_contains($normalized, 'toko tempat') || str_contains($normalized, 'nama toko')) {
+                return $this->dataQueryService->getCourierStoreResponse($user);
+            }
+            if (str_contains($normalized, 'riwayat') || str_contains($normalized, 'selesai') || str_contains($normalized, 'history')) {
+                return $this->dataQueryService->getCourierTaskHistoryResponse($user);
+            }
             if (str_contains($normalized, 'berapa') || str_contains($normalized, 'total') || str_contains($normalized, 'jumlah') || str_contains($normalized, 'statistik')) {
                 return $this->orderStatsService->getStatsResponse($user, $normalized);
             }
@@ -522,7 +538,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             if ($orderNumber !== null) {
                 return $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
             }
-            if (str_contains($normalized, 'platform') || str_contains($normalized, 'semua toko') || str_contains($normalized, 'total toko') || str_contains($normalized, 'ringkasan platform')) {
+            if (str_contains($normalized, 'platform') || str_contains($normalized, 'semua toko') || str_contains($normalized, 'total toko') || str_contains($normalized, 'ringkasan platform') || str_contains($normalized, 'cari toko') || str_contains($normalized, 'cari user') || str_contains($normalized, 'cari pengguna')) {
                 return $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
             }
         }
@@ -546,7 +562,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
                 return 'Sampai jumpa! Terima kasih telah menggunakan LaundryKu. Semoga pakaian dan cucian Anda selalu bersih, wangi, dan rapi!';
 
             case AiIntentRouter::INTENT_OUT_OF_SCOPE:
-                return $this->guardrail->getOutOfScopeResponse();
+                $primaryRole = $this->dataQueryService->getPrimaryRole($user);
+                return $this->guardrail->getOutOfScopeResponse(null, $primaryRole);
 
             case AiIntentRouter::INTENT_GUIDE_ORDER:
             case AiIntentRouter::INTENT_GUIDE_PAYMENT:
@@ -581,15 +598,31 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             case AiIntentRouter::INTENT_STORE_HOURS_DATA:
                 return $this->dataQueryService->getStoreHoursResponse($user);
 
+            case AiIntentRouter::INTENT_STORE_COURIERS_DATA:
+                return $this->dataQueryService->getStoreCouriersResponse($user);
+
+            case AiIntentRouter::INTENT_STORE_APPLICANTS_DATA:
+                return $this->dataQueryService->getStoreApplicantsResponse($user);
+
             case AiIntentRouter::INTENT_STORE_STATS:
             case AiIntentRouter::INTENT_STORE_ORDERS:
                 $store = $this->dataQueryService->handleStoreManagerQuery($user, $normalized);
                 return $store ?? $this->orderStatsService->getStoreManagerStats($user);
 
             case AiIntentRouter::INTENT_SUPER_ADMIN_PLATFORM:
+            case AiIntentRouter::INTENT_SUPER_ADMIN_SEARCH:
                 return $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
 
+            case AiIntentRouter::INTENT_COURIER_STORE_INFO:
+                return $this->dataQueryService->getCourierStoreResponse($user);
+
             case AiIntentRouter::INTENT_COURIER_TASKS:
+                if (str_contains($normalized, 'toko saya') || str_contains($normalized, 'toko tempat')) {
+                    return $this->dataQueryService->getCourierStoreResponse($user);
+                }
+                if (str_contains($normalized, 'riwayat') || str_contains($normalized, 'selesai') || str_contains($normalized, 'history')) {
+                    return $this->dataQueryService->getCourierTaskHistoryResponse($user);
+                }
                 if (str_contains($normalized, 'berapa') || str_contains($normalized, 'total') || str_contains($normalized, 'jumlah') || str_contains($normalized, 'statistik')) {
                     return $this->orderStatsService->getStatsResponse($user, $normalized);
                 }
@@ -666,21 +699,21 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         }
 
         // Cancel order mutation
-        if (str_contains($lowerMsg, 'batalkan pesanan') || str_contains($lowerMsg, 'tolong batalkan') || str_contains($lowerMsg, 'cancel pesanan') || str_contains($lowerMsg, 'bisa batalkan') || str_contains($lowerMsg, 'batalin pesanan') || str_contains($lowerMsg, 'batalin order')) {
+        if (str_contains($lowerMsg, 'batalkan pesanan') || str_contains($lowerMsg, 'tolong batalkan') || str_contains($lowerMsg, 'cancel pesanan') || str_contains($lowerMsg, 'cancel order') || str_contains($lowerMsg, 'batalkan order') || str_contains($lowerMsg, 'bisa batalkan') || str_contains($lowerMsg, 'batalin pesanan') || str_contains($lowerMsg, 'batalin order') || (str_contains($lowerMsg, 'batal') && (str_contains($lowerMsg, 'pesanan') || str_contains($lowerMsg, 'order')))) {
             $guide = $this->router->getKnowledgeBase()->getGuideResponse(AiIntentRouter::INTENT_GUIDE_CANCEL, $user->role);
-            return "Demi keamanan transaksi, asisten AI tidak dapat membatalkan pesanan secara langsung dari ruang chat. Pembatalan hanya dapat dilakukan oleh Anda melalui aplikasi selama status pesanan masih 'Menunggu Penjemputan'.\n\n{$guide}";
+            return "Demi keamanan transaksi, asisten AI tidak dapat membatalkan pesanan secara langsung dari ruang chat. Pembatalan pesanan hanya dapat dilakukan oleh Anda melalui aplikasi di halaman Pesanan (/orders) selama status pesanan masih 'Menunggu Penjemputan'. Silakan buka halaman Pesanan (/orders) untuk membatalkan pesanan Anda.\n\n{$guide}";
         }
 
         // Refund mutation
         if (str_contains($lowerMsg, 'refund order') || str_contains($lowerMsg, 'minta refund') || str_contains($lowerMsg, 'tolong refund') || str_contains($lowerMsg, 'ajukan refund') || str_contains($lowerMsg, 'kembalikan uang')) {
             $guide = $this->router->getKnowledgeBase()->getGuideResponse(AiIntentRouter::INTENT_GUIDE_COMPLAINT, $user->role);
-            return "Demi keamanan transaksi dan kepatuhan finansial, asisten AI tidak dapat memproses atau mencairkan refund secara langsung dari chat. Pengajuan komplain/refund dilakukan melalui menu detail pesanan aplikasi.\n\n{$guide}";
+            return "Demi keamanan transaksi dan kepatuhan finansial, asisten AI tidak dapat memproses atau mencairkan refund secara langsung dari chat. Pengajuan komplain/refund dilakukan melalui menu detail pesanan pada halaman Pesanan (/orders) di aplikasi.\n\n{$guide}";
         }
 
         // Address mutation
-        if (str_contains($lowerMsg, 'ubah alamat') || str_contains($lowerMsg, 'ganti alamat') || str_contains($lowerMsg, 'edit alamat') || str_contains($lowerMsg, 'tambahkan alamat')) {
+        if (str_contains($lowerMsg, 'ubah alamat') || str_contains($lowerMsg, 'ganti alamat') || str_contains($lowerMsg, 'edit alamat') || str_contains($lowerMsg, 'tambahkan alamat') || (str_contains($lowerMsg, 'alamat') && (str_contains($lowerMsg, 'ubah') || str_contains($lowerMsg, 'ganti') || str_contains($lowerMsg, 'edit')))) {
             $guide = $this->router->getKnowledgeBase()->getGuideResponse(AiIntentRouter::INTENT_GUIDE_ADDRESS, $user->role);
-            return "Demi privasi dan keakuratan data pengantaran, asisten AI tidak dapat mengubah alamat pesanan atau menambahkan alamat baru secara langsung dari percakapan ini. Silakan kelola alamat melalui menu Profil Anda.\n\n{$guide}";
+            return "Demi privasi dan keakuratan data pengantaran, asisten AI tidak dapat mengubah alamat pesanan atau menambahkan alamat baru secara langsung dari percakapan ini. Perubahan alamat dilakukan melalui aplikasi pada halaman Pesanan (/orders) atau menu Profil (/profile). Silakan buka halaman Pesanan (/orders) untuk memperbarui alamat pengiriman Anda.\n\n{$guide}";
         }
 
         // Profile / Phone number mutation
@@ -688,9 +721,29 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             return "Demi keamanan akun, perubahan data pribadi seperti nomor telepon atau email tidak dapat dilakukan langsung melalui chat. Silakan perbarui data akun Anda secara mandiri melalui menu 'Profil Saya' (/profile) di aplikasi.";
         }
 
+        // Courier mutations (task status, pickup, delivery, COD confirmation, task claiming)
+        if (str_contains($lowerMsg, 'selesaikan tugas') || str_contains($lowerMsg, 'antar pesanan') || str_contains($lowerMsg, 'ambil pesanan') || str_contains($lowerMsg, 'konfirmasi cod') || str_contains($lowerMsg, 'terima cod') || str_contains($lowerMsg, 'klaim tugas')) {
+            return "Demi kepatuhan operasional dan validasi real-time, perubahan status tugas pengantaran, penerimaan dana COD, maupun klaim tugas kurir tidak dapat dilakukan melalui chat. Silakan gunakan tombol aksi pada aplikasi Kurir (/courier).";
+        }
+
+        // Store manager mutations (services, pricing, hours, applicants/couriers)
+        if (str_contains($lowerMsg, 'tambah layanan') || str_contains($lowerMsg, 'ubah harga') || str_contains($lowerMsg, 'ganti harga') || str_contains($lowerMsg, 'ubah jam') || str_contains($lowerMsg, 'rekrut kurir') || str_contains($lowerMsg, 'terima pelamar') || str_contains($lowerMsg, 'tolak pelamar') || str_contains($lowerMsg, 'terima kandidat') || str_contains($lowerMsg, 'tolak kandidat')) {
+            return "Demi akurasi konfigurasi operasional toko, penambahan atau perubahan layanan, harga, jam operasional, serta penerimaan/penolakan pelamar kurir tidak dapat dilakukan melalui chat. Silakan kelola langsung melalui Dashboard Mitra (/store).";
+        }
+
+        // Super admin mutations (approve store, reject store, block user, delete store)
+        if (str_contains($lowerMsg, 'setujui toko') || str_contains($lowerMsg, 'approve toko') || str_contains($lowerMsg, 'tolak toko') || str_contains($lowerMsg, 'blokir user') || str_contains($lowerMsg, 'blokir pengguna') || str_contains($lowerMsg, 'hapus toko') || str_contains($lowerMsg, 'reset password')) {
+            return "Demi keamanan sistem dan audit kepatuhan platform, tindakan administratif seperti persetujuan toko, pemblokiran akun, atau pengaturan kredensial tidak dapat dilakukan melalui chat. Silakan gunakan menu aksi pada Admin Panel (/admin).";
+        }
+
         // Delete order or historical data mutation
-        if (str_contains($lowerMsg, 'hapus data') || str_contains($lowerMsg, 'hapus pesanan') || str_contains($lowerMsg, 'delete pesanan') || str_contains($lowerMsg, 'delete order') || str_contains($lowerMsg, 'hapus riwayat')) {
-            return "Demi integritas data dan audit sistem, penghapusan data transaksi atau pesanan tidak dapat dilakukan melalui chat maupun aplikasi.";
+        if (str_contains($lowerMsg, 'hapus data') || str_contains($lowerMsg, 'hapus pesanan') || str_contains($lowerMsg, 'delete pesanan') || str_contains($lowerMsg, 'delete order') || str_contains($lowerMsg, 'hapus riwayat') || str_contains($lowerMsg, 'drop table') || str_contains($lowerMsg, 'truncate table')) {
+            return "Demi integritas data dan audit sistem, penghapusan data transaksi, pesanan, atau sistem tidak dapat dilakukan melalui chat maupun aplikasi.";
+        }
+
+        // General mutation / write refusal
+        if (str_contains($lowerMsg, 'ubah status') || str_contains($lowerMsg, 'update status') || str_contains($lowerMsg, 'ubah data') || str_contains($lowerMsg, 'update data') || str_contains($lowerMsg, 'edit data')) {
+            return "Asisten LaundryKu hanya dapat membaca informasi (read-only) dan tidak dapat melakukan perubahan atau pembaruan data secara langsung melalui ruang percakapan. Silakan gunakan menu aksi pada portal aplikasi yang sesuai.";
         }
 
         return null;
@@ -814,6 +867,15 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             try {
                 $staffStores = $user->storeStaff()->with('store')->get()->pluck('store.name')->filter()->all();
                 $stores = array_merge($stores, $staffStores);
+            } catch (\Throwable $e) {
+            }
+        }
+        if (in_array('courier', $roles, true)) {
+            try {
+                $courierRec = \App\Models\Courier::where('user_id', $user->id)->with('store')->first();
+                if ($courierRec?->store) {
+                    $stores[] = $courierRec->store->name;
+                }
             } catch (\Throwable $e) {
             }
         }

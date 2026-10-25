@@ -179,6 +179,7 @@ class AiKnowledgeBaseService
                 . "3. Menambah Layanan & Mengatur Harga (tanyakan: \"cara tambah layanan\")\n"
                 . "4. Mengatur Jam Buka & Operasional (tanyakan: \"cara atur jam buka\")\n"
                 . "5. Menangani Komplain Pelanggan (tanyakan: \"cara tangani komplain\")\n"
+                . "6. Manajemen & Perekrutan Kurir (tanyakan: \"cara kelola kurir\")\n"
                 . "Silakan tanyakan salah satu panduan di atas!";
         }
 
@@ -186,6 +187,7 @@ class AiKnowledgeBaseService
             return "Berikut topik Panduan untuk Platform Admin di LaundryKu:\n"
                 . "1. Verifikasi & Approval Mitra/Kurir (tanyakan: \"cara setujui toko\")\n"
                 . "2. Monitoring Performa & Ekosistem Platform (tanyakan: \"cara lihat overview platform\")\n"
+                . "3. Manajemen Pengguna & Toko (tanyakan: \"cara kelola pengguna\")\n"
                 . "Silakan tanyakan salah satu panduan di atas!";
         }
 

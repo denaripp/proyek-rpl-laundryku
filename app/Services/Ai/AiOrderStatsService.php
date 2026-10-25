@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Courier;
 use App\Models\CourierTask;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Store;
 use App\Models\User;
 use Carbon\Carbon;
@@ -307,10 +308,35 @@ class AiOrderStatsService
             ])
             ->count();
 
-        $omzet = (clone $query)->where('payment_status', 'paid')->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
-        $omzetFmt = 'Rp ' . number_format((float) $omzet, 0, ',', '.');
+        $orderIds = (clone $query)->pluck('id');
+        $hasPayments = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->exists();
 
-        return "Toko yang Anda kelola ({$storeNames}) menerima {$total} pesanan. {$selesai} selesai, {$diproses} diproses, {$dibatalkan} dibatalkan. Hari ini ada {$todayCount} pesanan masuk. Total omzet/pendapatan toko: {$omzetFmt}.";
+        if ($hasPayments) {
+            $todayRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->whereDate('paid_at', Carbon::today('Asia/Jakarta'))
+                ->sum('amount');
+            $totalRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->sum('amount');
+        } else {
+            $paidQuery = (clone $query)->where('payment_status', 'paid');
+            $totalRevenue = (float) (clone $paidQuery)->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+            $todayRevenue = (float) (clone $paidQuery)
+                ->where(function ($q) use ($startOfTodayStorage, $endOfTodayStorage) {
+                    $q->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
+                      ->orWhere(function ($sub) use ($startOfTodayStorage, $endOfTodayStorage) {
+                          $sub->whereNull('paid_at')
+                              ->whereBetween('created_at', [$startOfTodayStorage, $endOfTodayStorage]);
+                      });
+                })
+                ->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+        }
+
+        $todayFmt = 'Rp ' . number_format($todayRevenue, 0, ',', '.');
+        $totalFmt = 'Rp ' . number_format($totalRevenue, 0, ',', '.');
+
+        return "Toko yang Anda kelola ({$storeNames}) menerima {$total} pesanan. {$selesai} selesai, {$diproses} diproses, {$dibatalkan} dibatalkan. Hari ini ada {$todayCount} pesanan masuk. Omzet hari ini: {$todayFmt}. Total omzet: {$totalFmt}.";
     }
 
     public function getStoreManagerStats(User $user): string

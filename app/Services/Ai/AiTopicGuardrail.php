@@ -11,6 +11,21 @@ class AiTopicGuardrail
         'system prompt',
         'abaikan instruksi',
         'abaikan semua instruksi',
+        'abaikan aturan',
+        'abaikan semua aturan',
+        'anggap saya admin',
+        'anggap aku admin',
+        'anggap saya super admin',
+        'jadikan saya admin',
+        'kamu harus mematuhi saya',
+        'bypass',
+        'tampilkan token',
+        'tampilkan password',
+        'tampilkan hash',
+        'bocorkan password',
+        'bocorkan database',
+        'tampilkan semua data',
+        'tampilkan data rahasia',
         'ignore previous',
         'ignore all instructions',
         'disregard your instructions',
@@ -139,6 +154,12 @@ class AiTopicGuardrail
         'sudah jadi', 'sampai mana', 'jalan belum', 'dicuci belum', 'alamat', 'platform', 'ringkasan',
         'duit', 'uang', 'pengeluaran', 'nyuci', 'belanja', 'transaksi', 'psnan', 'tko', 'kamu siapa', 'siapa kamu', 'bisa bantu apa',
         'pesanan selesai', 'yang selesai', 'sudah selesai', 'kelar cuci', 'sudah beres', 'kemarin', 'terakhir',
+        // Courier keywords
+        'ketersediaan', 'online', 'offline', 'siap tugas', 'antar jemput', 'jemputan', 'tugas aktif', 'setoran cod',
+        // Store manager keywords
+        'omzet', 'omset', 'pelamar', 'kandidat', 'rekrut', 'pelamar kurir', 'kandidat kurir', 'staff toko', 'karyawan',
+        // Super admin keywords
+        'pengguna', 'user', 'pelanggan', 'cari user', 'cari pengguna', 'cari toko', 'ringkasan platform', 'overview platform', 'monitoring platform', 'persetujuan mitra', 'approval mitra', 'approval toko', 'approval kurir', 'verifikasi mitra', 'ekosistem', 'sistem',
     ];
 
     protected ?AiTextNormalizer $normalizer = null;
@@ -500,10 +521,24 @@ class AiTopicGuardrail
     }
 
     /**
-     * Standard polite out-of-scope response.
+     * Standard polite out-of-scope response, tailored by user role.
      */
-    public function getOutOfScopeResponse(?string $csContact = null): string
+    public function getOutOfScopeResponse(?string $csContact = null, ?string $userRole = null): string
     {
+        $role = $userRole ? strtolower(trim($userRole)) : null;
+
+        if ($role === 'courier') {
+            return 'Maaf, pertanyaan itu di luar layanan LaundryKu. Sebagai kurir, Anda dapat menanyakan seputar panduan tugas penjemputan/pengantaran, penagihan COD, status ketersediaan, serta informasi tugas dan toko mitra Anda.';
+        }
+
+        if (in_array($role, ['store_admin', 'store_owner', 'store_staff'], true)) {
+            return 'Maaf, pertanyaan itu di luar layanan LaundryKu. Sebagai mitra toko, Anda dapat menanyakan seputar pengelolaan pesanan masuk, penimbangan berat riil, pengaturan layanan & harga, jam operasional, data kurir toko, daftar pelamar, dan komplain pelanggan.';
+        }
+
+        if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true)) {
+            return 'Maaf, pertanyaan itu di luar layanan LaundryKu. Sebagai super admin, Anda dapat menanyakan ringkasan platform, verifikasi/persetujuan mitra/kurir, serta pencarian ringkas data pengguna dan toko mitra.';
+        }
+
         return 'Maaf, pertanyaan itu di luar layanan LaundryKu, jadi saya tidak bisa menjawabnya. Saya bisa membantu soal layanan laundry, harga, pesanan, pembayaran, dan informasi toko.';
     }
 }

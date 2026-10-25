@@ -55,6 +55,14 @@ class AiIntentRouter
     public const INTENT_STORE_SERVICES_DATA = 'store_services_data';
     public const INTENT_STORE_COMPLAINTS_DATA = 'store_complaints_data';
     public const INTENT_STORE_HOURS_DATA = 'store_hours_data';
+    public const INTENT_STORE_COURIERS_DATA = 'store_couriers_data';
+    public const INTENT_STORE_APPLICANTS_DATA = 'store_applicants_data';
+
+    // Courier Data Capabilities
+    public const INTENT_COURIER_STORE_INFO = 'courier_store_info';
+
+    // Super Admin Data Capabilities
+    public const INTENT_SUPER_ADMIN_SEARCH = 'super_admin_search';
 
     // Deterministic Greetings, Thanks, and Goodbye
     public const INTENT_GREETING = 'greeting';
@@ -106,6 +114,10 @@ class AiIntentRouter
         self::INTENT_STORE_SERVICES_DATA,
         self::INTENT_STORE_COMPLAINTS_DATA,
         self::INTENT_STORE_HOURS_DATA,
+        self::INTENT_STORE_COURIERS_DATA,
+        self::INTENT_STORE_APPLICANTS_DATA,
+        self::INTENT_COURIER_STORE_INFO,
+        self::INTENT_SUPER_ADMIN_SEARCH,
 
         self::INTENT_GREETING,
         self::INTENT_THANKS,
@@ -252,9 +264,11 @@ class AiIntentRouter
             ];
         }
 
+        $primaryRole = $this->resolvePrimaryRole($user);
+
         // 3. Procedural guide check (per topic or menu)
         if ($orderNumber === null && ($this->isProceduralGuide($normalized) || $this->isGeneralGuideInquiry($normalized))) {
-            $guide = $this->knowledgeBase->findGuideByQuery($normalized, $user->role);
+            $guide = $this->knowledgeBase->findGuideByQuery($normalized, $primaryRole);
             if ($guide !== null) {
                 return [
                     'matched' => true,
@@ -273,7 +287,7 @@ class AiIntentRouter
 
         // 3b. Strong guide match even without prefix
         if ($orderNumber === null && !str_contains($normalized, 'berapa kali') && !str_contains($normalized, 'pengeluaran') && !str_contains($normalized, 'total belanja')) {
-            $guide = $this->knowledgeBase->findGuideByQuery($normalized, $user->role);
+            $guide = $this->knowledgeBase->findGuideByQuery($normalized, $primaryRole);
             if ($guide !== null && $this->isExplicitGuideQuery($normalized)) {
                 return [
                     'matched' => true,
@@ -338,12 +352,38 @@ class AiIntentRouter
         ];
     }
 
+    public function resolvePrimaryRole(User $user): string
+    {
+        $roles = [];
+        if (method_exists($user, 'roles')) {
+            try {
+                $roles = $user->roles()->pluck('roles.name')->all();
+            } catch (\Throwable $e) {
+            }
+        }
+        if (!empty($user->role) && !in_array($user->role, $roles, true)) {
+            $roles[] = $user->role;
+        }
+
+        if (in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true)) {
+            return 'super_admin';
+        }
+        if (in_array('store_owner', $roles, true) || in_array('store_admin', $roles, true)) {
+            return 'store_admin';
+        }
+        if (in_array('courier', $roles, true)) {
+            return 'courier';
+        }
+
+        return $user->role ?? 'customer';
+    }
+
     /**
      * Compute rule-based scores (0 - 100) for all domain intents.
      */
     protected function calculateIntentScores(User $user, string $text): array
     {
-        $role = $user->role ?? 'customer';
+        $role = $this->resolvePrimaryRole($user);
         $scores = [];
 
         // --- ORDER_WASHING_STAGE ---
@@ -654,6 +694,38 @@ class AiIntentRouter
             }
         }
         $scores[self::INTENT_SUPER_ADMIN_PLATFORM] = max(0, $adminScore);
+
+        // --- STORE_COURIERS_DATA ---
+        $stCourierScore = 0;
+        if (str_contains($text, 'kurir') && !str_contains($text, 'pelamar') && !str_contains($text, 'kandidat')) {
+            if (str_contains($text, 'toko') || in_array($role, ['store_admin', 'store_owner'], true)) {
+                $stCourierScore += 85;
+            }
+        }
+        $scores[self::INTENT_STORE_COURIERS_DATA] = max(0, $stCourierScore);
+
+        // --- STORE_APPLICANTS_DATA ---
+        $stAppScore = 0;
+        if (str_contains($text, 'pelamar') || str_contains($text, 'kandidat') || str_contains($text, 'rekrut')) {
+            $stAppScore += 90;
+        }
+        $scores[self::INTENT_STORE_APPLICANTS_DATA] = max(0, $stAppScore);
+
+        // --- COURIER_STORE_INFO ---
+        $crStoreScore = 0;
+        if ($role === 'courier' && (str_contains($text, 'toko') || str_contains($text, 'mitra') || str_contains($text, 'terikat') || str_contains($text, 'bertugas'))) {
+            $crStoreScore += 85;
+        }
+        $scores[self::INTENT_COURIER_STORE_INFO] = max(0, $crStoreScore);
+
+        // --- SUPER_ADMIN_SEARCH ---
+        $adminSearchScore = 0;
+        if (str_contains($text, 'cari user') || str_contains($text, 'cari pengguna') || str_contains($text, 'cari akun') || str_contains($text, 'cari pelanggan') || str_contains($text, 'info user') || str_contains($text, 'info pengguna')) {
+            $adminSearchScore += 95;
+        } elseif (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true) && (str_contains($text, 'cari toko') || str_contains($text, 'cari outlet') || str_contains($text, 'info toko mitra'))) {
+            $adminSearchScore += 95;
+        }
+        $scores[self::INTENT_SUPER_ADMIN_SEARCH] = max(0, $adminSearchScore);
 
         return $scores;
     }

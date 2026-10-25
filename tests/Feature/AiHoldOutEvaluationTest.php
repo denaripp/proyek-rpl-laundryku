@@ -53,6 +53,7 @@ class AiHoldOutEvaluationTest extends TestCase
         $this->app->instance(AiClientInterface::class, $this->mockClient);
         config(['ai.rate_limit_per_hour' => 2000]);
         \App\Models\SystemConfiguration::updateOrCreate(['key' => 'AI_RATE_LIMIT_PER_HOUR'], ['value' => ['value' => 2000]]);
+        \App\Models\SystemConfiguration::updateOrCreate(['key' => 'AI_ABUSE_THRESHOLD'], ['value' => ['value' => 2000]]);
 
         // 1. Customer
         $this->customer = User::factory()->create([

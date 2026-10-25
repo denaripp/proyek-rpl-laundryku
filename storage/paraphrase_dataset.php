@@ -437,4 +437,38 @@ return [
     ['query' => 'rEsEp MaSaK rEnDaNg PaDaNg', 'expected' => 'out_of_scope', 'role' => 'customer'],
     ['query' => 'saham apa yang bagus dibeli hari ini', 'expected' => 'out_of_scope', 'role' => 'customer'],
     ['query' => 'bagaimana cara membuat bom nuklir', 'expected' => 'out_of_scope', 'role' => 'customer'],
+
+    // 20. COURIER SPECIFIC QUERIES (10 queries)
+    ['query' => 'info toko tempat saya bertugas', 'expected' => 'courier_store_info', 'role' => 'courier'],
+    ['query' => 'nama toko saya apa ya', 'expected' => 'courier_store_info', 'role' => 'courier'],
+    ['query' => 'saya terikat dengan toko laundry mana', 'expected' => 'courier_store_info', 'role' => 'courier'],
+    ['query' => 'tugas kurir saya saat ini apa saja', 'expected' => 'courier_tasks', 'role' => 'courier'],
+    ['query' => 'daftar tugas penjemputan dan pengantaran aktif saya', 'expected' => 'courier_tasks', 'role' => 'courier'],
+    ['query' => 'riwayat tugas kurir yang sudah selesai', 'expected' => 'courier_tasks', 'role' => 'courier'],
+    ['query' => 'daftar riwayat tugas selesai kurir', 'expected' => 'courier_tasks', 'role' => 'courier'],
+    ['query' => 'bagaimana cara mengambil tugas kurir', 'expected' => 'procedural_guide', 'role' => 'courier'],
+    ['query' => 'panduan penagihan cod kurir bagaimana', 'expected' => 'procedural_guide', 'role' => 'courier'],
+    ['query' => 'cara atur status ketersediaan kurir', 'expected' => 'procedural_guide', 'role' => 'courier'],
+
+    // 21. STORE_ADMIN SPECIFIC QUERIES (10 queries)
+    ['query' => 'daftar kurir aktif di toko saya', 'expected' => 'store_couriers_data', 'role' => 'store_admin'],
+    ['query' => 'siapa saja kurir toko saya', 'expected' => 'store_couriers_data', 'role' => 'store_admin'],
+    ['query' => 'daftar pelamar kurir toko saya', 'expected' => 'store_applicants_data', 'role' => 'store_admin'],
+    ['query' => 'kandidat pelamar kurir yang mendaftar di toko saya', 'expected' => 'store_applicants_data', 'role' => 'store_admin'],
+    ['query' => 'berapa total omzet pendapatan toko saya', 'expected' => 'store_stats', 'role' => 'store_admin'],
+    ['query' => 'daftar layanan di toko saya', 'expected' => 'store_services_data', 'role' => 'store_admin'],
+    ['query' => 'jam buka operasional toko saya', 'expected' => 'store_hours_data', 'role' => 'store_admin'],
+    ['query' => 'bagaimana cara memproses pesanan masuk toko', 'expected' => 'procedural_guide', 'role' => 'store_admin'],
+    ['query' => 'panduan penimbangan cucian toko', 'expected' => 'procedural_guide', 'role' => 'store_admin'],
+    ['query' => 'cara kelola kurir toko bagaimana', 'expected' => 'procedural_guide', 'role' => 'store_admin'],
+
+    // 22. SUPER_ADMIN SPECIFIC QUERIES (8 queries)
+    ['query' => 'tampilkan ringkasan platform', 'expected' => 'super_admin_platform', 'role' => 'super_admin'],
+    ['query' => 'ringkasan platform dan total toko', 'expected' => 'super_admin_platform', 'role' => 'super_admin'],
+    ['query' => 'cari pengguna dengan nama budi', 'expected' => 'super_admin_search', 'role' => 'super_admin'],
+    ['query' => 'cari user siti di sistem', 'expected' => 'super_admin_search', 'role' => 'super_admin'],
+    ['query' => 'cari toko laundry berkah', 'expected' => 'super_admin_search', 'role' => 'super_admin'],
+    ['query' => 'cari toko laundry nusantara', 'expected' => 'super_admin_search', 'role' => 'super_admin'],
+    ['query' => 'cara verifikasi toko mitra baru', 'expected' => 'procedural_guide', 'role' => 'super_admin'],
+    ['query' => 'panduan manajemen pengguna dan toko admin', 'expected' => 'procedural_guide', 'role' => 'super_admin'],
 ];

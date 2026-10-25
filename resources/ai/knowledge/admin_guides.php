@@ -35,4 +35,22 @@ return [
         ],
         'note' => 'Platform admin memiliki wewenang penuh menjaga stabilitas, keamanan, dan keadilan transaksi di seluruh ekosistem.',
     ],
+
+    'guide_admin_users_and_stores' => [
+        'id' => 'guide_admin_users_and_stores',
+        'role' => 'super_admin',
+        'title' => 'Panduan Manajemen Pengguna & Toko di Platform Admin',
+        'keywords' => [
+            'kelola pengguna', 'kelola user', 'kelola toko', 'cari pengguna',
+            'cari user', 'cari toko', 'manajemen user', 'manajemen toko',
+            'daftar pengguna', 'daftar user', 'daftar toko platform',
+        ],
+        'steps' => [
+            'Buka "Portal Platform Admin" (/admin).',
+            'Pilih menu "Manajemen Pengguna" (/admin/users) untuk melihat atau mencari data akun pelanggan, mitra, dan kurir terdaftar.',
+            'Pilih menu "Manajemen Toko" (/admin/stores) untuk melihat profil gerai, status operasional, dan riwayat pesanan toko.',
+            'Gunakan kolom pencarian dengan memasukkan nama, email, atau kata kunci pencarian.',
+        ],
+        'note' => 'Platform admin dapat meninjau aktivitas akun namun wajib menjaga kerahasiaan data pribadi sesuai kebijakan privasi platform.',
+    ],
 ];
