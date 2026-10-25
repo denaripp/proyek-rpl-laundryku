@@ -59,6 +59,40 @@ export interface DashboardLayoutProps {
   onLogout?: () => void;
 }
 
+const isUserEqual = (a: AuthUser | null, b: AuthUser | null): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.email === b.email &&
+    a.avatar_url === b.avatar_url
+  );
+};
+
+const isStoreEqual = (a: OwnedStoreItem | null, b: OwnedStoreItem | null): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.operational_status === b.operational_status &&
+    a.approval_status === b.approval_status
+  );
+};
+
+const areStoresEqual = (a: OwnedStoreItem[], b: OwnedStoreItem[]): boolean => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every(
+    (item, idx) =>
+      item.id === b[idx]?.id &&
+      item.name === b[idx]?.name &&
+      item.operational_status === b[idx]?.operational_status &&
+      item.approval_status === b[idx]?.approval_status
+  );
+};
+
 export const DashboardLayout = ({
   children,
   userRole = 'customer',
@@ -95,7 +129,20 @@ export const DashboardLayout = ({
     if (userRole !== 'store_admin') return;
     try {
       const counts = await getStoreSidebarCounts(storeId);
-      setSidebarCounts(counts);
+      setSidebarCounts((prev) => {
+        if (!prev && !counts) return prev;
+        if (
+          prev &&
+          counts &&
+          prev.pelamar_kurir_pending === counts.pelamar_kurir_pending &&
+          prev.pesanan_baru === counts.pesanan_baru &&
+          prev.unread_chat === counts.unread_chat &&
+          prev.store_id === counts.store_id
+        ) {
+          return prev;
+        }
+        return counts;
+      });
     } catch {
       // ignore
     }
@@ -119,74 +166,76 @@ export const DashboardLayout = ({
     };
   }, [fetchSidebarCounts]);
 
-  const syncStores = useCallback((overrideUser?: AuthUser | null) => {
-    const user = overrideUser !== undefined
-      ? overrideUser
-      : (isStorePortal ? (getStoredUser('mitra') || portalUser) : isCourierPortal ? (getStoredUser('courier') || portalUser) : getStoredUser('customer'));
+  const syncStores = useCallback((targetUser?: AuthUser | null) => {
+    const userToSync = targetUser || getStoredUser(targetPortal);
+    if (userToSync) {
+      const newAvatar = userToSync.avatar_url || null;
+      setActiveAvatar((prev) => (prev === newAvatar ? prev : newAvatar));
 
-    if (user) {
-      setActiveAvatar(user.avatar_url || null);
-      const approved = getApprovedStores(user);
-      setOwnedStores(approved);
-      const currentActiveId = getActiveStoreId(user);
+      const approved = getApprovedStores(userToSync);
+      setOwnedStores((prev) => (areStoresEqual(prev, approved) ? prev : approved));
+
+      const currentActiveId = getActiveStoreId(userToSync);
       const current = approved.find((s) => s.id === currentActiveId) || approved[0] || null;
-      setActiveStore(current);
+      setActiveStore((prev) => (isStoreEqual(prev, current) ? prev : current));
     }
-  }, [isStorePortal, isCourierPortal, portalUser]);
+  }, [targetPortal]);
 
   useEffect(() => {
+    let cancelled = false;
     setMounted(true);
+
     const stored = getStoredUser(targetPortal);
-    if (stored) {
-      setPortalUser(stored);
+    if (stored && !cancelled) {
+      setPortalUser((prev) => (isUserEqual(prev, stored) ? prev : stored));
       syncStores(stored);
     }
 
     if (isStorePortal || isCourierPortal) {
       fetchPortalSession(targetPortal).then((freshUser) => {
-        if (freshUser) {
-          setPortalUser(freshUser);
+        if (!cancelled && freshUser) {
+          setPortalUser((prev) => (isUserEqual(prev, freshUser) ? prev : freshUser));
           syncStores(freshUser);
         }
       });
     }
-  }, [isStorePortal, isCourierPortal, targetPortal, syncStores]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [targetPortal, isStorePortal, isCourierPortal, syncStores]);
 
   useEffect(() => {
-    syncStores();
+    if (isStorePortal || isCourierPortal) {
+      const handleStoreChange = () => {
+        const u = getStoredUser(targetPortal);
+        if (u) syncStores(u);
+      };
+
+      window.addEventListener('laundryku_active_store_change', handleStoreChange);
+      return () => {
+        window.removeEventListener('laundryku_active_store_change', handleStoreChange);
+      };
+    }
 
     const handleUserUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<AuthUser | null>;
-      if (customEvent.detail) {
-        if (isStorePortal && (hasRole(customEvent.detail, 'store_owner') || hasRole(customEvent.detail, 'store_admin') || (customEvent.detail.stores && customEvent.detail.stores.length > 0))) {
-          setPortalUser(customEvent.detail);
-          setActiveAvatar(customEvent.detail.avatar_url || null);
-          syncStores(customEvent.detail);
-          return;
-        }
-        if (!isStorePortal && !isCourierPortal) {
-          setActiveAvatar(customEvent.detail.avatar_url || null);
-          syncStores(customEvent.detail);
-        }
-      } else {
-        syncStores();
+      const nextUser = customEvent.detail;
+      if (nextUser) {
+        setPortalUser((prev) => (isUserEqual(prev, nextUser) ? prev : nextUser));
+        setActiveAvatar((prev) => (prev === (nextUser.avatar_url || null) ? prev : (nextUser.avatar_url || null)));
+        syncStores(nextUser);
       }
-    };
-
-    const handleStoreChange = () => {
-      syncStores();
     };
 
     window.addEventListener('auth:user-updated', handleUserUpdate);
     window.addEventListener('laundryku_auth_change', handleUserUpdate);
-    window.addEventListener('laundryku_active_store_change', handleStoreChange);
 
     return () => {
       window.removeEventListener('auth:user-updated', handleUserUpdate);
       window.removeEventListener('laundryku_auth_change', handleUserUpdate);
-      window.removeEventListener('laundryku_active_store_change', handleStoreChange);
     };
-  }, [syncStores, isStorePortal, isCourierPortal]);
+  }, [isStorePortal, isCourierPortal, targetPortal, syncStores]);
 
   // Click outside listener for store switcher dropdown
   useEffect(() => {

@@ -463,7 +463,9 @@ export async function fetchPortalSession(
     const user = json.user || null;
     if (typeof window !== 'undefined' && user) {
       localStorage.setItem(key, JSON.stringify(user));
-      window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
+      if (portal === 'customer') {
+        window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
+      }
     }
     return user;
   } catch {
