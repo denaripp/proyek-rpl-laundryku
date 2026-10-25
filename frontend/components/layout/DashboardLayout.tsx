@@ -42,6 +42,8 @@ import {
   OwnedStoreItem,
   logout,
   switchUserMode,
+  fetchPortalSession,
+  hasRole,
 } from '@/lib/auth';
 import { toggleStoreOperationalStatus, getStoreSidebarCounts, StoreSidebarCounts } from '@/lib/store';
 import { useAuth } from '@/lib/AuthContext';
@@ -72,6 +74,14 @@ export const DashboardLayout = ({
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const [activeAvatar, setActiveAvatar] = useState<string | null | undefined>(userAvatar);
   const [sidebarCounts, setSidebarCounts] = useState<StoreSidebarCounts | null>(null);
+  const isStorePortal = userRole === 'store_admin' || pathname.startsWith('/store');
+  const isCourierPortal = userRole === 'courier' || pathname.startsWith('/courier');
+  const targetPortal = isStorePortal ? 'mitra' : isCourierPortal ? 'courier' : 'customer';
+
+  const [portalUser, setPortalUser] = useState<AuthUser | null>(() => {
+    return getStoredUser(targetPortal);
+  });
+
   const { user } = useAuth();
   const availableModes = (user?.available_modes || (userRole === 'store_admin' ? ['customer', 'store'] : userRole === 'courier' ? ['customer', 'courier'] : ['customer'])) as string[];
 
@@ -110,8 +120,11 @@ export const DashboardLayout = ({
     };
   }, [fetchSidebarCounts]);
 
-  const syncStores = useCallback(() => {
-    const user = getStoredUser();
+  const syncStores = useCallback((overrideUser?: AuthUser | null) => {
+    const user = overrideUser !== undefined
+      ? overrideUser
+      : (isStorePortal ? (getStoredUser('mitra') || portalUser) : isCourierPortal ? (getStoredUser('courier') || portalUser) : getStoredUser('customer'));
+
     if (user) {
       setActiveAvatar(user.avatar_url || null);
       const approved = getApprovedStores(user);
@@ -120,7 +133,18 @@ export const DashboardLayout = ({
       const current = approved.find((s) => s.id === currentActiveId) || approved[0] || null;
       setActiveStore(current);
     }
-  }, []);
+  }, [isStorePortal, isCourierPortal, portalUser]);
+
+  useEffect(() => {
+    if (isStorePortal || isCourierPortal) {
+      fetchPortalSession(targetPortal).then((freshUser) => {
+        if (freshUser) {
+          setPortalUser(freshUser);
+          syncStores(freshUser);
+        }
+      });
+    }
+  }, [isStorePortal, isCourierPortal, targetPortal, syncStores]);
 
   useEffect(() => {
     syncStores();
@@ -128,9 +152,19 @@ export const DashboardLayout = ({
     const handleUserUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<AuthUser | null>;
       if (customEvent.detail) {
-        setActiveAvatar(customEvent.detail.avatar_url || null);
+        if (isStorePortal && (hasRole(customEvent.detail, 'store_owner') || hasRole(customEvent.detail, 'store_admin') || (customEvent.detail.stores && customEvent.detail.stores.length > 0))) {
+          setPortalUser(customEvent.detail);
+          setActiveAvatar(customEvent.detail.avatar_url || null);
+          syncStores(customEvent.detail);
+          return;
+        }
+        if (!isStorePortal && !isCourierPortal) {
+          setActiveAvatar(customEvent.detail.avatar_url || null);
+          syncStores(customEvent.detail);
+        }
+      } else {
+        syncStores();
       }
-      syncStores();
     };
 
     const handleStoreChange = () => {
@@ -146,7 +180,7 @@ export const DashboardLayout = ({
       window.removeEventListener('laundryku_auth_change', handleUserUpdate);
       window.removeEventListener('laundryku_active_store_change', handleStoreChange);
     };
-  }, [syncStores]);
+  }, [syncStores, isStorePortal, isCourierPortal]);
 
   // Click outside listener for store switcher dropdown
   useEffect(() => {
@@ -203,14 +237,16 @@ export const DashboardLayout = ({
       setActiveStore((prev) => (prev ? { ...prev, operational_status: res.operational_status } : null));
 
       // Update stored user store status in localStorage
-      const user = getStoredUser();
-      if (user && user.stores) {
-        const updatedStores = user.stores.map((s) =>
+      const storageKey = isStorePortal ? 'laundryku_mitra_user' : 'laundryku_user';
+      const currentUserData = getStoredUser(targetPortal);
+      if (currentUserData && currentUserData.stores) {
+        const updatedStores = currentUserData.stores.map((s) =>
           s.id === activeStore.id ? { ...s, operational_status: res.operational_status } : s
         );
-        user.stores = updatedStores;
-        localStorage.setItem('laundryku_user', JSON.stringify(user));
-        window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
+        currentUserData.stores = updatedStores;
+        localStorage.setItem(storageKey, JSON.stringify(currentUserData));
+        setPortalUser(currentUserData);
+        window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: currentUserData }));
       }
     } catch {
       // Revert if error
@@ -220,14 +256,17 @@ export const DashboardLayout = ({
   };
 
   const handleLogout = onLogout || (async () => {
-    if (userRole === 'store_admin') {
+    if (isStorePortal) {
       await fetch('/api/auth/mitra/logout', { method: 'POST' }).catch(() => null);
+      if (typeof window !== 'undefined') localStorage.removeItem('laundryku_mitra_user');
       router.push('/mitra/login');
-    } else if (userRole === 'courier') {
+    } else if (isCourierPortal) {
       await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
+      if (typeof window !== 'undefined') localStorage.removeItem('laundryku_courier_user');
       router.push('/courier/login');
     } else if (userRole === 'super_admin') {
       await fetch('/api/auth/admin/logout', { method: 'POST' }).catch(() => null);
+      if (typeof window !== 'undefined') localStorage.removeItem('laundryku_admin_user');
       router.push('/admin/login');
     } else {
       await logout();
@@ -264,6 +303,16 @@ export const DashboardLayout = ({
   const currentNav = roleNavItems[userRole] || roleNavItems.customer;
   const isSuspended = activeStore?.operational_status === 'suspended';
   const isOpen = activeStore?.operational_status === 'active';
+
+  const displayUser = isStorePortal
+    ? (portalUser || getStoredUser('mitra'))
+    : isCourierPortal
+    ? (portalUser || getStoredUser('courier'))
+    : null;
+
+  const resolvedUserName = displayUser?.name || (userName !== 'Pelanggan LaundryKu' && userName !== 'Admin Toko' ? userName : null) || (isStorePortal ? 'Admin Toko' : isCourierPortal ? 'Kurir LaundryKu' : userName);
+  const resolvedUserEmail = displayUser?.email || displayUser?.phone || (userEmail !== 'customer@laundryku.id' && userEmail !== 'admin@toko.id' ? userEmail : null) || (isStorePortal ? 'admin@toko.id' : isCourierPortal ? 'kurir@laundryku.id' : userEmail);
+  const resolvedAvatar = displayUser?.avatar_url || activeAvatar || userAvatar;
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
@@ -617,29 +666,35 @@ export const DashboardLayout = ({
             <Dropdown
               trigger={
                 <div className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer text-xs">
-                  <Avatar src={activeAvatar} name={userName} size="sm" className="w-6 h-6" />
+                  <Avatar src={resolvedAvatar} name={resolvedUserName} size="sm" className="w-6 h-6" />
                   <span className="font-medium text-slate-800 max-w-[100px] truncate hidden sm:inline-block">
-                    {userName}
+                    {resolvedUserName}
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </div>
               }
               items={[
-                ...(userRole !== 'courier'
+                ...(isStorePortal
+                  ? [{ id: 'profile', label: 'Pengaturan Toko', onClick: () => router.push('/store/settings') }]
+                  : userRole !== 'courier'
                   ? [{ id: 'profile', label: 'Profil Saya', onClick: () => router.push('/profile') }]
                   : []),
-                {
-                  id: 'marketplace',
-                  label: 'Cari Toko',
-                  onClick: async () => {
-                    try {
-                      await switchUserMode('customer');
-                    } catch {
-                      // ignore
-                    }
-                    router.push('/stores');
-                  },
-                },
+                ...(isStorePortal
+                  ? [{ id: 'marketplace', label: 'Mode Pelanggan', onClick: () => router.push('/stores') }]
+                  : [
+                      {
+                        id: 'marketplace',
+                        label: 'Cari Toko',
+                        onClick: async () => {
+                          try {
+                            await switchUserMode('customer');
+                          } catch {
+                            // ignore
+                          }
+                          router.push('/stores');
+                        },
+                      },
+                    ]),
                 { id: 'div-1', label: '', divider: true },
                 { id: 'logout', label: 'Keluar', danger: true, onClick: handleLogout },
               ]}

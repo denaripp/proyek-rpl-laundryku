@@ -141,6 +141,9 @@ export function getLoginRedirectUrl(redirectPath?: string): string {
 }
 
 const USER_KEY = 'laundryku_user';
+const MITRA_USER_KEY = 'laundryku_mitra_user';
+const COURIER_USER_KEY = 'laundryku_courier_user';
+const ADMIN_USER_KEY = 'laundryku_admin_user';
 
 export function getStoredToken(): string | null {
   // Tokens are stored strictly in httpOnly cookies (laundryku_customer_token)
@@ -153,9 +156,27 @@ export function isAuthenticated(): boolean {
   return Boolean(localStorage.getItem(USER_KEY));
 }
 
-export function getStoredUser(): AuthUser | null {
+export function getStoredUser(portal?: string): AuthUser | null {
   if (typeof window === 'undefined') return null;
-  const user = localStorage.getItem(USER_KEY);
+  let key = USER_KEY;
+  if (portal) {
+    if (portal === 'mitra' || portal === 'store' || portal === 'store_admin') {
+      key = MITRA_USER_KEY;
+    } else if (portal === 'courier' || portal === 'kurir') {
+      key = COURIER_USER_KEY;
+    } else if (portal === 'admin' || portal === 'super_admin') {
+      key = ADMIN_USER_KEY;
+    }
+  } else if (typeof window !== 'undefined' && window.location) {
+    const pathname = window.location.pathname;
+    if (pathname.startsWith('/store') || pathname.startsWith('/mitra')) {
+      key = MITRA_USER_KEY;
+    } else if (pathname.startsWith('/courier')) {
+      key = COURIER_USER_KEY;
+    }
+  }
+
+  const user = localStorage.getItem(key);
   if (!user) return null;
   try {
     return JSON.parse(user);
@@ -409,30 +430,49 @@ export async function logout(): Promise<void> {
   clearAuthSession();
 }
 
-export async function fetchMe(): Promise<AuthUser | null> {
+export async function fetchPortalSession(
+  portal: 'customer' | 'mitra' | 'courier' | 'admin' = 'customer'
+): Promise<AuthUser | null> {
   try {
-    const res = await fetch('/api/auth/customer/session', {
+    const res = await fetch(`/api/auth/${portal}/session`, {
       headers: {
         'Accept': 'application/json',
       },
       cache: 'no-store',
     });
 
+    const key =
+      portal === 'mitra'
+        ? MITRA_USER_KEY
+        : portal === 'courier'
+        ? COURIER_USER_KEY
+        : portal === 'admin'
+        ? ADMIN_USER_KEY
+        : USER_KEY;
+
     if (!res.ok) {
-      clearAuthSession();
+      if (portal === 'customer') {
+        clearAuthSession();
+      } else if (typeof window !== 'undefined') {
+        localStorage.removeItem(key);
+      }
       return null;
     }
 
     const json = await res.json();
     const user = json.user || null;
     if (typeof window !== 'undefined' && user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      localStorage.setItem(key, JSON.stringify(user));
       window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: user }));
     }
     return user;
   } catch {
     return null;
   }
+}
+
+export async function fetchMe(): Promise<AuthUser | null> {
+  return fetchPortalSession('customer');
 }
 
 export function hasRole(user: AuthUser | null, roleCode: string): boolean {

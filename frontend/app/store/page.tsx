@@ -30,7 +30,23 @@ export default function StoreDashboardOverviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const user = getStoredUser();
+      let user = getStoredUser('mitra');
+      if (!user) {
+        try {
+          const res = await fetch('/api/auth/mitra/session');
+          if (res.ok) {
+            const json = await res.json();
+            if (json.user) {
+              user = json.user;
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('laundryku_mitra_user', JSON.stringify(json.user));
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
       setCurrentUser(user);
       const activeStoreId = getActiveStoreId(user);
       const data = await getStoreMetrics(activeStoreId || undefined);

@@ -169,7 +169,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
     const handleUserUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<AuthUser | null>;
-      if (customEvent.detail) {
+      if (customEvent.detail && hasRole(customEvent.detail, 'super_admin')) {
         setUserAvatar(customEvent.detail.avatar_url || null);
         setUserName(customEvent.detail.name);
       }

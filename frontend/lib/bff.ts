@@ -120,6 +120,18 @@ export function detectPortalFromRequest(request: NextRequest, targetPath: string
   if (normalized.startsWith('/store') || normalized.startsWith('/mitra')) return 'mitra';
   if (normalized.startsWith('/courier') || normalized.startsWith('/kurir')) return 'courier';
 
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      const pathname = new URL(referer).pathname;
+      if (pathname.startsWith('/admin')) return 'admin';
+      if (pathname.startsWith('/store') || pathname.startsWith('/mitra')) return 'mitra';
+      if (pathname.startsWith('/courier') || pathname.startsWith('/kurir')) return 'courier';
+    } catch {
+      // ignore
+    }
+  }
+
   if (request.cookies.has(PORTAL_COOKIE_NAMES.customer)) return 'customer';
   if (request.cookies.has(PORTAL_COOKIE_NAMES.mitra)) return 'mitra';
   if (request.cookies.has(PORTAL_COOKIE_NAMES.courier)) return 'courier';

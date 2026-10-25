@@ -100,8 +100,9 @@ export default function CourierDashboardPage() {
   }, [activeTab]);
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
+    if (typeof window !== 'undefined') localStorage.removeItem('laundryku_courier_user');
+    router.push('/courier/login');
   };
 
   // Claim Task Handler (Atomic)
