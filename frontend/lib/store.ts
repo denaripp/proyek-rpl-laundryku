@@ -463,3 +463,15 @@ export async function getStoreSidebarCounts(storeId?: string): Promise<StoreSide
   return res.data;
 }
 
+export {
+  getStoreCouriers,
+  recruitStoreCourier,
+  terminateStoreCourier,
+  rejectStoreCourier,
+} from './courier';
+export type {
+  StoreCouriersData,
+  AssignedCourierItem,
+  AvailableCandidateItem,
+} from './courier';
+

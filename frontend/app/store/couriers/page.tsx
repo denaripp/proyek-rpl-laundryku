@@ -114,16 +114,18 @@ export default function StoreAdminCouriersPage() {
     setActionSuccessMsg(null);
     try {
       await rejectStoreCourier(rejectingCandidate.courier_profile_id, rejectReason.trim() || undefined);
+      const rejectedName = rejectingCandidate.name;
       setRejectingCandidate(null);
       setRejectReason('');
-      setActionSuccessMsg(`Lamaran kurir ${rejectingCandidate.name} telah ditolak.`);
+      setActionSuccessMsg(`Lamaran kurir ${rejectedName} telah ditolak.`);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('laundryku_sidebar_count_refresh'));
       }
-      loadCouriers();
+      await loadCouriers();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal menolak lamaran kurir.');
+      const errObj = err as { responseData?: { message?: string; error?: { message?: string } }; message?: string };
+      const msg = errObj.responseData?.error?.message || errObj.responseData?.message || errObj.message || 'Gagal menolak lamaran kurir.';
+      setActionErrorMsg(msg);
     } finally {
       setActionLoadingId(null);
     }
@@ -413,6 +415,7 @@ export default function StoreAdminCouriersPage() {
                           onClick={() => {
                             setRejectingCandidate(candidate);
                             setRejectReason('');
+                            setActionErrorMsg(null);
                           }}
                           disabled={isActionLoading}
                           className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl min-h-[40px]"
@@ -441,13 +444,24 @@ export default function StoreAdminCouriersPage() {
         {/* Modal: Confirm Reject */}
         <Modal
           isOpen={!!rejectingCandidate}
-          onClose={() => setRejectingCandidate(null)}
+          onClose={() => {
+            if (actionLoadingId !== rejectingCandidate?.courier_profile_id) {
+              setRejectingCandidate(null);
+            }
+          }}
           title="Tolak Pengajuan Kurir"
         >
           <div className="space-y-4 text-xs">
             <p className="text-slate-600">
               Apakah Anda yakin ingin menolak pengajuan kurir dari <b>{rejectingCandidate?.name}</b> untuk toko ini?
             </p>
+
+            {actionErrorMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-900 text-xs font-medium">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{actionErrorMsg}</span>
+              </div>
+            )}
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
@@ -458,7 +472,8 @@ export default function StoreAdminCouriersPage() {
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Contoh: Kuota kurir untuk outlet ini sudah penuh..."
                 rows={3}
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none"
+                disabled={actionLoadingId === rejectingCandidate?.courier_profile_id}
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none disabled:opacity-50"
               />
             </div>
 
@@ -466,6 +481,7 @@ export default function StoreAdminCouriersPage() {
               <Button
                 variant="outline"
                 onClick={() => setRejectingCandidate(null)}
+                disabled={actionLoadingId === rejectingCandidate?.courier_profile_id}
                 className="rounded-xl text-xs min-h-[40px]"
               >
                 Batal
@@ -473,6 +489,7 @@ export default function StoreAdminCouriersPage() {
               <Button
                 variant="danger"
                 onClick={handleRejectConfirm}
+                isLoading={actionLoadingId === rejectingCandidate?.courier_profile_id}
                 disabled={actionLoadingId === rejectingCandidate?.courier_profile_id}
                 className="rounded-xl text-xs min-h-[40px]"
               >

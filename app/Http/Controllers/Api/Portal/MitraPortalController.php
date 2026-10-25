@@ -293,7 +293,22 @@ class MitraPortalController extends Controller
             ], 404);
         }
 
-        $pelamarKurirPending = Courier::whereNull('store_id')->where('is_verified', true)->count();
+        $rejectedIds = AuditLog::where('action', 'STORE_COURIER_REJECT')
+            ->where('resource_type', 'courier')
+            ->where(function ($q) use ($user, $store) {
+                $q->where('actor_id', $user->id)
+                  ->orWhere('after_value', 'like', '%"store_id":' . $store->id . '%')
+                  ->orWhere('after_value', 'like', '%"store_id":"' . $store->id . '"%');
+            })
+            ->pluck('resource_id')
+            ->toArray();
+
+        $pelamarQuery = Courier::whereNull('store_id')->where('is_verified', true);
+        if (! empty($rejectedIds)) {
+            $pelamarQuery->whereNotIn('id', $rejectedIds);
+        }
+        $pelamarKurirPending = $pelamarQuery->count();
+
         $pesananBaru = Order::where('store_id', $store->id)
             ->whereIn('status', ['created', 'pending_pickup'])
             ->count();
@@ -810,8 +825,24 @@ class MitraPortalController extends Controller
                 ];
             });
 
-        $candidates = Courier::whereNull('store_id')
-            ->where('is_verified', true)
+        $rejectedIds = AuditLog::where('action', 'STORE_COURIER_REJECT')
+            ->where('resource_type', 'courier')
+            ->where(function ($q) use ($user, $store) {
+                $q->where('actor_id', $user->id)
+                  ->orWhere('after_value', 'like', '%"store_id":' . $store->id . '%')
+                  ->orWhere('after_value', 'like', '%"store_id":"' . $store->id . '"%');
+            })
+            ->pluck('resource_id')
+            ->toArray();
+
+        $candidatesQuery = Courier::whereNull('store_id')
+            ->where('is_verified', true);
+
+        if (! empty($rejectedIds)) {
+            $candidatesQuery->whereNotIn('id', $rejectedIds);
+        }
+
+        $candidates = $candidatesQuery
             ->with('user')
             ->get()
             ->map(function ($c) {
@@ -946,7 +977,22 @@ class MitraPortalController extends Controller
             ], 404);
         }
 
-        $courier = Courier::whereNull('store_id')->findOrFail($courierProfileId);
+        $courier = Courier::find($courierProfileId);
+        if (! $courier) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kandidat kurir tidak ditemukan.',
+            ], 404);
+        }
+
+        if ($courier->store_id !== null && (int) $courier->store_id !== (int) $store->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki izin untuk menolak pelamar kurir dari toko lain.',
+            ], 403);
+        }
+
+        $reason = $request->input('reason', 'Lamaran tidak memenuhi kualifikasi toko.');
 
         AuditLog::create([
             'actor_id' => $user->id,
@@ -956,12 +1002,19 @@ class MitraPortalController extends Controller
             'resource_id' => $courier->id,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'after_value' => json_encode(['reason' => $request->input('reason', 'Lamaran tidak memenuhi kualifikasi toko.')]),
+            'after_value' => json_encode([
+                'store_id' => $store->id,
+                'reason' => $reason,
+            ]),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Lamaran kurir ditolak.',
+            'data' => [
+                'courier_profile_id' => (string) $courier->id,
+                'rejection_reason' => $reason,
+            ],
         ]);
     }
 

@@ -646,4 +646,94 @@ class MitraCourierPortalApiTest extends TestCase
             ->assertJsonPath('success', true);
         $this->assertEquals('at_store', $order->fresh()->status);
     }
+
+    public function test_mitra_can_reject_candidate_writes_audit_log_and_removes_from_available(): void
+    {
+        $candidateUser = User::factory()->create(['role' => User::ROLE_COURIER]);
+        $candidate = Courier::factory()->create([
+            'user_id' => $candidateUser->id,
+            'store_id' => null,
+            'is_verified' => true,
+            'is_available' => true,
+        ]);
+
+        Sanctum::actingAs($this->mitraUserA, ['role:store_admin']);
+
+        // Verify candidate appears in available list before reject
+        $listBefore = $this->getJson('/api/v1/store-admin/couriers');
+        $listBefore->assertStatus(200);
+        $candidatesBefore = collect($listBefore->json('data.available_candidates'))->pluck('courier_profile_id');
+        $this->assertTrue($candidatesBefore->contains((string) $candidate->id));
+
+        // Mitra A rejects candidate
+        $res = $this->postJson("/api/v1/store-admin/couriers/reject/{$candidate->id}", [
+            'reason' => 'Kuota kurir untuk gerai ini sudah mencukupi.',
+        ]);
+
+        $res->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Lamaran kurir ditolak.')
+            ->assertJsonPath('data.courier_profile_id', (string) $candidate->id);
+
+        // (b) Verify candidate status UNCHANGED in DB (still verified & available)
+        $freshCandidate = $candidate->fresh();
+        $this->assertTrue((bool) $freshCandidate->is_verified);
+        $this->assertTrue((bool) $freshCandidate->is_available);
+        $this->assertNull($freshCandidate->store_id);
+
+        // (c) Verify audit log recorded with actor_id and store_id in after_value
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $this->mitraUserA->id,
+            'action' => 'STORE_COURIER_REJECT',
+            'resource_type' => 'courier',
+            'resource_id' => $candidate->id,
+        ]);
+
+        // (a) Verify candidate no longer appears in available candidates list of Store A
+        $listAfterA = $this->getJson('/api/v1/store-admin/couriers');
+        $listAfterA->assertStatus(200);
+        $candidatesAfterA = collect($listAfterA->json('data.available_candidates'))->pluck('courier_profile_id');
+        $this->assertFalse($candidatesAfterA->contains((string) $candidate->id));
+
+        // (b) Verify candidate STILL appears in available candidates list of Store B
+        Sanctum::actingAs($this->mitraUserB, ['role:store_admin']);
+        $listAfterB = $this->getJson('/api/v1/store-admin/couriers');
+        $listAfterB->assertStatus(200);
+        $candidatesAfterB = collect($listAfterB->json('data.available_candidates'))->pluck('courier_profile_id');
+        $this->assertTrue($candidatesAfterB->contains((string) $candidate->id));
+    }
+
+    public function test_mitra_cannot_reject_courier_belonging_to_another_store(): void
+    {
+        $courierBUser = User::factory()->create(['role' => User::ROLE_COURIER]);
+        $courierB = Courier::factory()->create([
+            'user_id' => $courierBUser->id,
+            'store_id' => $this->storeB->id,
+            'is_verified' => true,
+            'is_available' => true,
+        ]);
+
+        Sanctum::actingAs($this->mitraUserA, ['role:store_admin']);
+
+        $res = $this->postJson("/api/v1/store-admin/couriers/reject/{$courierB->id}", [
+            'reason' => 'Bukan kurir toko saya',
+        ]);
+
+        $res->assertStatus(403)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Anda tidak memiliki izin untuk menolak pelamar kurir dari toko lain.');
+    }
+
+    public function test_reject_courier_with_invalid_id_returns_404(): void
+    {
+        Sanctum::actingAs($this->mitraUserA, ['role:store_admin']);
+
+        $res = $this->postJson('/api/v1/store-admin/couriers/reject/999999', [
+            'reason' => 'ID tidak ada',
+        ]);
+
+        $res->assertStatus(404)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Kandidat kurir tidak ditemukan.');
+    }
 }
