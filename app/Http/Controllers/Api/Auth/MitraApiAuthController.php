@@ -7,8 +7,10 @@ use App\Http\Requests\Api\Auth\LoginApiRequest;
 use App\Http\Requests\Api\Auth\MitraRegisterRequest;
 use App\Http\Requests\Api\Auth\TwoFactorVerifyRequest;
 use App\Models\AuditLog;
+use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
+use App\Notifications\NotificationTrigger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,24 @@ class MitraApiAuthController extends Controller
      */
     public function register(MitraRegisterRequest $request): JsonResponse
     {
+        // 1. Check if email or phone already exists in users table (any role, including customer)
+        $existing = User::where('email', $request->validated('email'))
+            ->orWhere(function ($q) use ($request) {
+                if ($request->filled('phone')) {
+                    $q->where('phone', $request->validated('phone'));
+                }
+            })
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
+                'errors' => [
+                    'email' => ['Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.'],
+                ],
+            ], 422);
+        }
+
         return DB::transaction(function () use ($request) {
             $user = User::create([
                 'name' => $request->validated('name'),
@@ -41,30 +61,63 @@ class MitraApiAuthController extends Controller
                 'name' => $storeName,
                 'slug' => $slug,
                 'phone' => $user->phone ?? '081234567890',
-                'address' => $request->validated('store_address') ?? 'Alamat toko baru',
-                'city' => $request->validated('city') ?? 'Jakarta',
-                'province' => $request->validated('province') ?? 'DKI Jakarta',
+                'address' => $request->validated('store_address'),
+                'city' => $request->validated('city') ?: 'Kota Bandung',
+                'province' => $request->validated('province') ?: 'Jawa Barat',
                 'postal_code' => '10110',
-                'latitude' => -6.2088,
-                'longitude' => 106.8456,
+                'latitude' => (float) $request->validated('latitude'),
+                'longitude' => (float) $request->validated('longitude'),
                 'status' => 'submitted', // pending review
                 'is_active' => false,
             ]);
+
+            // Attach role pivot in user_roles with store_id following StoreService pattern
+            $role = Role::where('name', 'store_owner')->first() ?? Role::where('name', 'store_admin')->first();
+            if ($role) {
+                $user->roles()->attach($role->id, [
+                    'store_id' => $store->id,
+                    'assigned_at' => now(),
+                ]);
+            }
 
             // Revoke any old tokens
             $user->tokens()->where('name', 'mitra_token')->delete();
 
             $token = $user->createToken('mitra_token', ['role:store_admin'])->plainTextToken;
 
+            // Audit Log: STORE_REGISTER
             AuditLog::create([
                 'actor_id' => $user->id,
                 'actor_role' => User::ROLE_STORE_ADMIN,
-                'action' => 'MITRA_API_REGISTER',
-                'resource_type' => 'user',
-                'resource_id' => $user->id,
+                'action' => 'STORE_REGISTER',
+                'resource_type' => 'store',
+                'resource_id' => $store->id,
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
+                'after_value' => json_encode([
+                    'store_id' => $store->id,
+                    'name' => $store->name,
+                    'status' => $store->status,
+                ]),
             ]);
+
+            // Send notification to applicant and platform admins
+            NotificationTrigger::storeSubmitted($user, $store);
+
+            $adminRoles = Role::whereIn('name', ['super_admin', 'platform_owner', 'platform_admin'])->pluck('id');
+            $admins = User::whereIn('role', [User::ROLE_SUPER_ADMIN, 'platform_owner', 'platform_admin'])
+                ->orWhereHas('roles', fn ($q) => $q->whereIn('roles.id', $adminRoles))
+                ->get();
+
+            foreach ($admins as $admin) {
+                NotificationTrigger::toUser(
+                    $admin,
+                    'store_verification_queue',
+                    'Antrean Verifikasi Mitra Baru',
+                    "Toko '{$store->name}' baru saja didaftarkan dan menunggu peninjauan Anda.",
+                    ['store_id' => $store->id, 'owner_id' => $user->id]
+                );
+            }
 
             return response()->json([
                 'message' => 'Registrasi mitra berhasil. Toko Anda sedang menunggu persetujuan.',

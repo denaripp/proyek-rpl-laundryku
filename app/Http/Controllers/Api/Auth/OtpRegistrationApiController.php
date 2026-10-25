@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Role;
+use App\Models\Store;
 use App\Models\User;
 use App\Services\OtpService;
 use App\Services\WhatsAppGateway\FonnteService;
@@ -679,6 +680,21 @@ class OtpRegistrationApiController extends Controller
             $roles = [$user->role];
         }
 
+        $stores = Store::where('owner_user_id', $user->id)
+            ->with('application')
+            ->get()
+            ->map(function ($s) {
+                return [
+                    'id' => (string) $s->id,
+                    'name' => $s->name,
+                    'status' => $s->status,
+                    'address' => $s->address,
+                    'rejection_reason' => $s->application?->rejection_reason,
+                ];
+            })
+            ->values()
+            ->all();
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -694,6 +710,7 @@ class OtpRegistrationApiController extends Controller
                 'roles' => $roles,
                 'active_mode' => $user->role,
                 'available_modes' => [$user->role],
+                'stores' => $stores,
             ],
         ]);
     }

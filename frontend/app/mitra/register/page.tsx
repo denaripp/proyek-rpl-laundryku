@@ -28,9 +28,32 @@ export default function MitraRegisterPage() {
   const [storeAddress, setStoreAddress] = useState('');
   const [city, setCity] = useState('Jakarta');
   const [province, setProvince] = useState('DKI Jakarta');
+  const [latitude, setLatitude] = useState('-6.2088');
+  const [longitude, setLongitude] = useState('106.8456');
+  const [isLocating, setIsLocating] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDetectLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setErrorMessage('Browser Anda tidak mendukung deteksi lokasi otomatis.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude.toFixed(6));
+        setLongitude(pos.coords.longitude.toFixed(6));
+        setIsLocating(false);
+      },
+      () => {
+        setIsLocating(false);
+        setErrorMessage('Gagal mendeteksi lokasi GPS. Masukkan koordinat gerai secara manual.');
+      },
+      { timeout: 10000 }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +66,17 @@ export default function MitraRegisterPage() {
 
     if (password !== passwordConfirmation) {
       setErrorMessage('Konfirmasi kata sandi tidak cocok.');
+      return;
+    }
+
+    const latNum = parseFloat(latitude);
+    const lngNum = parseFloat(longitude);
+    if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+      setErrorMessage('Koordinat latitude tidak valid (harus antara -90 dan 90).');
+      return;
+    }
+    if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+      setErrorMessage('Koordinat longitude tidak valid (harus antara -180 dan 180).');
       return;
     }
 
@@ -62,6 +96,8 @@ export default function MitraRegisterPage() {
           store_address: storeAddress.trim(),
           city: city.trim(),
           province: province.trim(),
+          latitude: latNum,
+          longitude: lngNum,
         }),
       });
 
@@ -259,6 +295,50 @@ export default function MitraRegisterPage() {
                     placeholder="Jl. Merdeka No. 123, RT 01/RW 02"
                     className="block w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
                   />
+                </div>
+              </div>
+
+              {/* Koordinat Titik Gerai */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-blue-400" />
+                    Titik Koordinat Gerai (Peta / GPS)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleDetectLocation}
+                    disabled={isLocating}
+                    className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    {isLocating ? 'Mendeteksi...' : 'Deteksi Lokasi GPS'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      placeholder="-6.2088"
+                      className="block w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-200 text-xs focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      placeholder="106.8456"
+                      className="block w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-200 text-xs focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 

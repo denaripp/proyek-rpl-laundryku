@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Truck,
@@ -11,6 +12,7 @@ import {
   RotateCcw,
   AlertCircle,
   ExternalLink,
+  ArrowRight,
 } from 'lucide-react';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import {
@@ -619,60 +621,36 @@ export default function UpgradePage() {
                 </div>
               )}
             </div>
-          ) : activeTab === 'store' && storeStatus?.applied ? (
+          ) : activeTab === 'store' ? (
             /* ============================================================ */
-            /* POST-SUBMIT STATUS VIEW (STORE PARTNER)                      */
+            /* SEPARATE MITRA ACCOUNT NOTICE                                */
             /* ============================================================ */
-            <div className="max-w-2xl mx-auto border border-slate-200 rounded-lg p-6 bg-slate-50/50 space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Pendaftaran dikirim</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Status: {storeStatus.store?.approval_status === 'approved' ? 'Disetujui' : storeStatus.store?.approval_status === 'rejected' ? 'Ditolak' : 'Menunggu review'}
-                  </p>
-                </div>
-                <span
-                  className={`text-xs px-2.5 py-1 rounded font-medium ${
-                    storeStatus.store?.approval_status === 'approved'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : storeStatus.store?.approval_status === 'rejected'
-                      ? 'bg-rose-100 text-rose-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
+            <div className="max-w-2xl mx-auto border border-slate-200 rounded-2xl p-8 bg-slate-50 text-center space-y-4 my-8">
+              <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto shadow-sm">
+                <StoreIcon className="w-7 h-7" strokeWidth={1.5} />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Pendaftaran Mitra Toko Terpisah
+                </h2>
+                <p className="text-sm text-slate-600 max-w-md mx-auto">
+                  Untuk membuka toko, daftar akun mitra terpisah.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Link
+                  href="/mitra/register"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md cursor-pointer"
                 >
-                  {storeStatus.store?.approval_status === 'approved'
-                    ? 'Disetujui'
-                    : storeStatus.store?.approval_status === 'rejected'
-                    ? 'Ditolak'
-                    : 'Menunggu review'}
-                </span>
+                  <span>Daftar Akun Mitra</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
 
-              <div className="space-y-2.5 text-xs text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Nama Toko:</span>
-                  <span className="font-semibold text-slate-900">{storeStatus.store?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Alamat Gerai:</span>
-                  <span className="text-slate-900 text-right max-w-xs truncate">
-                    {storeStatus.store?.address_text}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Radius Jangkauan:</span>
-                  <span className="text-slate-900">{storeStatus.store?.service_radius_km} km</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Tanggal Pendaftaran:</span>
-                  <span className="tabular-nums font-mono text-slate-700">
-                    {storeStatus.store?.created_at ? formatTanggal(storeStatus.store.created_at) : '-'}
-                  </span>
-                </div>
-              </div>
-
-              {storeStatus.store?.approval_status === 'approved' && (
-                <div className="pt-3 border-t border-slate-200">
+              {/* Preserved Store Partner UI (Hidden, code preserved) */}
+              {false && (
+                <div className="hidden">
+                  <h2>Pendaftaran dikirim</h2>
                   <Button
                     variant="primary"
                     size="sm"
@@ -903,7 +881,7 @@ export default function UpgradePage() {
                 {/* -------------------------------------------------------- */}
                 {/* FORM: STORE PARTNER APPLICATION                          */}
                 {/* -------------------------------------------------------- */}
-                {activeTab === 'store' && (
+                {((activeTab as string) === 'store') && (
                   <form onSubmit={handleStoreSubmit} className="space-y-8">
                     {/* Section 1: Data Laundry */}
                     <div id="sec-store-profile" className="scroll-mt-24 space-y-4">
