@@ -106,6 +106,11 @@ class ApiAuthAndPortalTest extends TestCase
 
     public function test_mitra_can_register_and_creates_pending_store(): void
     {
+        $customer = User::factory()->create([
+            'role' => User::ROLE_CUSTOMER,
+        ]);
+        \Laravel\Sanctum\Sanctum::actingAs($customer, ['role:customer']);
+
         $email = 'mitra_reg_' . uniqid() . '@example.com';
         $response = $this->postJson('/api/v1/auth/mitra/register', [
             'name' => 'Pak Joko',

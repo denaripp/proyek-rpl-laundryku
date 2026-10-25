@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   ArrowRight,
   MapPin,
+  User as UserIcon,
 } from 'lucide-react';
 
 export default function MitraStatusPage() {
@@ -218,6 +219,14 @@ export default function MitraStatusPage() {
                 <span>Lihat Pratinjau Dashboard Toko</span>
               </Link>
             )}
+
+            <Link
+              href="/"
+              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 border border-slate-700 transition-colors cursor-pointer"
+            >
+              <UserIcon className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+              <span>Kembali ke Akun Customer</span>
+            </Link>
 
             <button
               onClick={handleLogout}

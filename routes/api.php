@@ -190,7 +190,7 @@ Route::prefix('v1')->group(function () {
 
         // Mitra Auth
         Route::post('/mitra/register', [MitraApiAuthController::class, 'register'])
-            ->middleware('throttle:login');
+            ->middleware(['auth:sanctum', 'throttle:login']);
         Route::post('/mitra/login', [MitraApiAuthController::class, 'login'])
             ->middleware('throttle:login');
         Route::post('/mitra/2fa', [MitraApiAuthController::class, 'verify2fa'])

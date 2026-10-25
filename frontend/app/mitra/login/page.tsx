@@ -251,7 +251,17 @@ function MitraLoginForm() {
             </form>
           )}
 
-          <div className="mt-6 pt-4 border-t border-slate-700/60 flex items-center justify-center gap-1.5 text-center">
+          <div className="mt-5 pt-3 border-t border-slate-700/60 text-center">
+            <Link
+              href="/auth"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
+            >
+              <span>Bukan akun mitra?</span>
+              <span className="text-blue-400 underline underline-offset-2">Masuk sebagai customer</span>
+            </Link>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-center gap-1.5 text-center">
             <ShieldCheck className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.5} />
             <span className="text-[11px] text-slate-500">
               Autentikasi terisolasi multi-tenant dengan proteksi httpOnly session.

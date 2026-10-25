@@ -25,13 +25,51 @@ class MitraApiAuthController extends Controller
      */
     public function register(MitraRegisterRequest $request): JsonResponse
     {
-        // 1. Check if email or phone already exists in users table (any role, including customer)
-        $existing = User::where('email', $request->validated('email'))
-            ->orWhere(function ($q) use ($request) {
-                if ($request->filled('phone')) {
-                    $q->where('phone', $request->validated('phone'));
-                }
-            })
+        $customerUser = $request->user();
+        if (! $customerUser) {
+            return response()->json([
+                'message' => 'Unauthenticated. Silakan login sebagai customer terlebih dahulu.',
+            ], 401);
+        }
+
+        $isCustomer = $customerUser->role === User::ROLE_CUSTOMER
+            || (method_exists($customerUser, 'hasRole') && $customerUser->hasRole('customer'));
+
+        if (! $isCustomer) {
+            return response()->json([
+                'message' => 'Forbidden. Hanya pengguna dengan akun customer yang dapat mendaftar sebagai mitra.',
+            ], 403);
+        }
+
+        // Check against current customer credentials
+        $normalizedInputEmail = strtolower(trim((string) $request->input('email')));
+        $normalizedCustomerEmail = strtolower(trim((string) $customerUser->email));
+
+        if ($normalizedInputEmail !== '' && $normalizedInputEmail === $normalizedCustomerEmail) {
+            return response()->json([
+                'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
+                'errors' => [
+                    'email' => ['Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.'],
+                ],
+            ], 422);
+        }
+
+        $phoneInput = (string) $request->validated('phone');
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phoneInput);
+        $custPhoneClean = preg_replace('/[^0-9]/', '', (string) $customerUser->phone);
+
+        if ($cleanPhone !== '' && $custPhoneClean !== '' && $cleanPhone === $custPhoneClean) {
+            return response()->json([
+                'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
+                'errors' => [
+                    'phone' => ['Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.'],
+                ],
+            ], 422);
+        }
+
+        // Check if email or phone already exists in users table (any role)
+        $existing = User::whereRaw('LOWER(TRIM(email)) = ?', [$normalizedInputEmail])
+            ->orWhere('phone', $phoneInput)
             ->first();
 
         if ($existing) {

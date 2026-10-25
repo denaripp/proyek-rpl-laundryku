@@ -140,9 +140,24 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   // -------------------------------------------------------------
   if (portal === 'mitra') {
     if (action === 'register') {
+      const customerToken =
+        request.cookies.get(PORTAL_COOKIE_NAMES.customer)?.value ||
+        request.cookies.get('auth_token')?.value;
+
+      if (!customerToken) {
+        return NextResponse.json(
+          { success: false, message: 'Unauthenticated. Silakan login sebagai customer terlebih dahulu.' },
+          { status: 401 }
+        );
+      }
+
       const res = await fetch(`${LARAVEL_API_BASE_URL}/auth/mitra/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${customerToken}`,
+        },
         body: JSON.stringify(bodyData),
       });
       const data = await res.json().catch(() => ({}));
@@ -163,6 +178,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       if (token) {
         response.cookies.set(PORTAL_COOKIE_NAMES.mitra, token, getCookieOptions());
       }
+      // Hapus flag entri segera setelah pendaftaran sukses
+      response.cookies.set('mitra_entry_flag', '', { path: '/', maxAge: 0 });
       return response;
     }
 

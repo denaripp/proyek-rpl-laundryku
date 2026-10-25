@@ -13,6 +13,24 @@ class MitraRegisterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $mergeData = [];
+
+        if ($this->has('email') && $this->input('email') !== null) {
+            $mergeData['email'] = strtolower(trim((string) $this->input('email')));
+        }
+
+        if ($this->has('phone') && $this->input('phone') !== null) {
+            $rawPhone = trim((string) $this->input('phone'));
+            // Remove spacing, hyphens, and parenthesis
+            $cleaned = preg_replace('/[\s\-\(\)]+/', '', $rawPhone);
+            if (str_starts_with($cleaned, '+62')) {
+                $cleaned = '0' . substr($cleaned, 3);
+            } elseif (str_starts_with($cleaned, '62')) {
+                $cleaned = '0' . substr($cleaned, 2);
+            }
+            $mergeData['phone'] = $cleaned;
+        }
+
         // If coordinate fields are omitted (legacy callers / API clients without GPS), attempt geocoding or fallback
         if (! $this->has('latitude') && ! $this->has('longitude')) {
             $coords = null;
@@ -27,17 +45,17 @@ class MitraRegisterRequest extends FormRequest
             }
 
             if ($coords && isset($coords['lat'], $coords['lng'])) {
-                $this->merge([
-                    'latitude' => $coords['lat'],
-                    'longitude' => $coords['lng'],
-                ]);
+                $mergeData['latitude'] = $coords['lat'];
+                $mergeData['longitude'] = $coords['lng'];
             } elseif ($this->filled('store_name') || $this->filled('store_address')) {
                 // Sensible default coordinates for backward compatibility with existing tests
-                $this->merge([
-                    'latitude' => -6.91474400,
-                    'longitude' => 107.60981000,
-                ]);
+                $mergeData['latitude'] = -6.91474400;
+                $mergeData['longitude'] = 107.60981000;
             }
+        }
+
+        if (! empty($mergeData)) {
+            $this->merge($mergeData);
         }
     }
 
@@ -85,6 +103,53 @@ class MitraRegisterRequest extends FormRequest
                     $validator->errors()->add(
                         'latitude',
                         'Koordinat lokasi tidak boleh titik default (0, 0). Tentukan titik lokasi toko yang valid.'
+                    );
+                }
+            }
+
+            // Customer check: Account mitra must be separate from customer
+            $customer = $this->user();
+            if ($customer) {
+                $inputEmail = strtolower(trim((string) $this->input('email')));
+                $custEmail = strtolower(trim((string) $customer->email));
+                if ($inputEmail !== '' && $inputEmail === $custEmail) {
+                    $validator->errors()->add(
+                        'email',
+                        'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.'
+                    );
+                }
+
+                $inputPhone = (string) $this->input('phone');
+                $custPhone = (string) $customer->phone;
+                $cleanInput = preg_replace('/[^0-9]/', '', $inputPhone);
+                $cleanCust = preg_replace('/[^0-9]/', '', $custPhone);
+
+                if ($cleanInput !== '' && $cleanCust !== '' && $cleanInput === $cleanCust) {
+                    $validator->errors()->add(
+                        'phone',
+                        'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.'
+                    );
+                }
+            }
+
+            // Also check alternate phone formats in users table (e.g. +62 vs 08)
+            $phoneInput = (string) $this->input('phone');
+            $cleanDigits = preg_replace('/[^0-9]/', '', $phoneInput);
+            if ($cleanDigits !== '' && ! $validator->errors()->has('phone')) {
+                // If starts with 08, alternate is 628 or +628
+                $variants = [$phoneInput];
+                if (str_starts_with($cleanDigits, '08')) {
+                    $variants[] = '628' . substr($cleanDigits, 2);
+                    $variants[] = '+628' . substr($cleanDigits, 2);
+                } elseif (str_starts_with($cleanDigits, '628')) {
+                    $variants[] = '08' . substr($cleanDigits, 3);
+                    $variants[] = '+628' . substr($cleanDigits, 3);
+                }
+                $exists = \App\Models\User::whereIn('phone', $variants)->exists();
+                if ($exists) {
+                    $validator->errors()->add(
+                        'phone',
+                        'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.'
                     );
                 }
             }

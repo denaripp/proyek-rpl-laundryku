@@ -616,6 +616,16 @@ function AuthContent() {
                 Akun lama belum memiliki kata sandi? <strong className="text-teal-600 underline">Atur di sini</strong>
               </button>
             </div>
+
+            <div className="pt-2 text-center border-t border-slate-100">
+              <Link
+                href="/mitra/login"
+                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-blue-700 font-medium transition-colors"
+              >
+                <span>Pemilik gerai laundry?</span>
+                <span className="text-blue-600 font-semibold underline">Masuk sebagai mitra &rarr;</span>
+              </Link>
+            </div>
           </form>
         )}
 

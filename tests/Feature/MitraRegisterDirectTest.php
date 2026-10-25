@@ -25,12 +25,13 @@ class MitraRegisterDirectTest extends TestCase
     }
 
     /**
-     * 1. Register valid:
+     * 1. Register valid oleh customer terautentikasi:
      * - user created
      * - toko berstatus submitted
      * - pivot role terisi dengan store_id
      * - audit log STORE_REGISTER tercatat
      * - notifikasi terbuat untuk user dan admin
+     * - sesi customer tetap aktif
      */
     public function test_valid_mitra_registration_creates_user_store_pivot_audit_and_notifications(): void
     {
@@ -44,6 +45,14 @@ class MitraRegisterDirectTest extends TestCase
         if ($adminRole) {
             $admin->roles()->attach($adminRole->id);
         }
+
+        // Pendaftar login sebagai customer
+        $customer = User::factory()->create([
+            'email' => 'customer_applicant_' . uniqid() . '@example.com',
+            'phone' => '0877' . rand(10000000, 99999999),
+            'role' => User::ROLE_CUSTOMER,
+        ]);
+        Sanctum::actingAs($customer, ['role:customer']);
 
         $uniqueEmail = 'budimitra_' . uniqid() . '@example.com';
         $uniquePhone = '0888' . rand(10000000, 99999999);
@@ -72,13 +81,14 @@ class MitraRegisterDirectTest extends TestCase
             'store' => ['id', 'name', 'status', 'is_active'],
         ]);
 
-        // Verifikasi User dibuat
-        $user = User::where('email', $uniqueEmail)->first();
-        $this->assertNotNull($user);
-        $this->assertSame(User::ROLE_STORE_ADMIN, $user->role);
+        // Verifikasi User mitra dibuat terpisah
+        $mitraUser = User::where('email', $uniqueEmail)->first();
+        $this->assertNotNull($mitraUser);
+        $this->assertNotEquals($customer->id, $mitraUser->id);
+        $this->assertSame(User::ROLE_STORE_ADMIN, $mitraUser->role);
 
         // Verifikasi Store dibuat dengan status submitted
-        $store = Store::where('owner_user_id', $user->id)->first();
+        $store = Store::where('owner_user_id', $mitraUser->id)->first();
         $this->assertNotNull($store);
         $this->assertSame('Laundry Berkah Kilat', $store->name);
         $this->assertSame('submitted', $store->status);
@@ -89,7 +99,7 @@ class MitraRegisterDirectTest extends TestCase
         $mitraRole = Role::whereIn('name', ['store_owner', 'store_admin'])->first();
         $this->assertNotNull($mitraRole);
         $pivot = DB::table('user_roles')
-            ->where('user_id', $user->id)
+            ->where('user_id', $mitraUser->id)
             ->where('role_id', $mitraRole->id)
             ->where('store_id', $store->id)
             ->first();
@@ -97,28 +107,84 @@ class MitraRegisterDirectTest extends TestCase
 
         // Verifikasi audit log tercatat
         $audit = AuditLog::where('action', 'STORE_REGISTER')
-            ->where('actor_id', $user->id)
+            ->where('actor_id', $mitraUser->id)
             ->first();
         $this->assertNotNull($audit, 'Audit log STORE_REGISTER must be created.');
 
         // Verifikasi notifikasi terbuat untuk user pemohon
-        $userNotif = Notification::where('user_id', $user->id)->first();
+        $userNotif = Notification::where('user_id', $mitraUser->id)->first();
         $this->assertNotNull($userNotif, 'Applicant notification must exist.');
 
         // Verifikasi notifikasi terbuat untuk admin antrean verifikasi
         $adminNotif = Notification::where('user_id', $admin->id)->first();
         $this->assertNotNull($adminNotif, 'Admin verification queue notification must exist.');
+
+        // Sesi customer tetap aktif
+        $meRes = $this->getJson('/api/v1/me');
+        $meRes->assertStatus(200);
+        $meRes->assertJsonPath('data.id', (string) $customer->id);
     }
 
     /**
-     * 2. Validasi gagal: koordinat di luar rentang, nomor telepon tidak valid.
+     * 2. Register tanpa login ditolak 401
+     */
+    public function test_register_without_login_is_rejected_401(): void
+    {
+        $payload = [
+            'name' => 'Guest Mitra',
+            'email' => 'guest_mitra_' . uniqid() . '@example.com',
+            'phone' => '0877' . rand(10000000, 99999999),
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'store_name' => 'Laundry Guest',
+            'store_address' => 'Jl. Guest No. 1',
+            'latitude' => -6.9,
+            'longitude' => 107.6,
+        ];
+
+        $response = $this->postJson('/api/v1/auth/mitra/register', $payload);
+        $response->assertStatus(401);
+    }
+
+    /**
+     * 3. Register oleh non-customer ditolak 403
+     */
+    public function test_register_by_non_customer_is_rejected_403(): void
+    {
+        // Login sebagai courier
+        $courier = User::factory()->create([
+            'role' => User::ROLE_COURIER,
+        ]);
+        Sanctum::actingAs($courier, ['role:courier']);
+
+        $payload = [
+            'name' => 'Kurir Jadi Mitra',
+            'email' => 'kurir_mitra_' . uniqid() . '@example.com',
+            'phone' => '0877' . rand(10000000, 99999999),
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'store_name' => 'Laundry Kurir',
+            'store_address' => 'Jl. Kurir No. 1',
+            'latitude' => -6.9,
+            'longitude' => 107.6,
+        ];
+
+        $response = $this->postJson('/api/v1/auth/mitra/register', $payload);
+        $response->assertStatus(403);
+    }
+
+    /**
+     * 4. Validasi gagal: koordinat di luar rentang, nomor telepon tidak valid.
      */
     public function test_mitra_registration_validation_fails_on_invalid_coordinates_and_phone(): void
     {
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        Sanctum::actingAs($customer, ['role:customer']);
+
         $payloadInvalidCoords = [
             'name' => 'Calon Mitra',
-            'email' => 'calonmitra@example.com',
-            'phone' => '081234567890',
+            'email' => 'calonmitra_' . uniqid() . '@example.com',
+            'phone' => '0877' . rand(10000000, 99999999),
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'store_name' => 'Laundry Angin',
@@ -133,7 +199,7 @@ class MitraRegisterDirectTest extends TestCase
 
         $payloadInvalidPhone = [
             'name' => 'Calon Mitra 2',
-            'email' => 'calonmitra2@example.com',
+            'email' => 'calonmitra2_' . uniqid() . '@example.com',
             'phone' => 'abc-123-bukan-hp',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
@@ -149,10 +215,13 @@ class MitraRegisterDirectTest extends TestCase
     }
 
     /**
-     * Penolakan koordinat default (0, 0) atau koordinat kosong
+     * 5. Penolakan koordinat default (0, 0) atau koordinat kosong
      */
     public function test_mitra_registration_rejected_when_coordinates_are_zero_zero_or_empty(): void
     {
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        Sanctum::actingAs($customer, ['role:customer']);
+
         $payloadZeroCoords = [
             'name' => 'Calon Mitra Nol',
             'email' => 'calonmitranol_' . uniqid() . '@example.com',
@@ -188,28 +257,25 @@ class MitraRegisterDirectTest extends TestCase
     }
 
     /**
-     * 3. Register dengan email atau nomor telepon milik customer ditolak 422:
-     * "Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra."
+     * 6. Register dengan email atau nomor telepon sama dengan customer yang sedang login ditolak 422
      */
-    public function test_mitra_registration_rejected_when_email_or_phone_belongs_to_customer(): void
+    public function test_mitra_registration_rejected_when_email_or_phone_belongs_to_logged_in_customer(): void
     {
-        $custEmail = 'cust_exist_' . uniqid() . '@example.com';
-        $custPhone = '0877' . rand(10000000, 99999999);
-        $otherEmail = 'other_' . uniqid() . '@example.com';
-        $otherPhone = '0878' . rand(10000000, 99999999);
+        $custEmail = 'customer_saya_' . uniqid() . '@example.com';
+        $custPhone = '08129999' . rand(1000, 9999);
 
-        // Buat customer yang sudah ada
         $customer = User::factory()->create([
             'email' => $custEmail,
             'phone' => $custPhone,
             'role' => User::ROLE_CUSTOMER,
         ]);
+        Sanctum::actingAs($customer, ['role:customer']);
 
-        // Coba daftar mitra dengan email yang sama
-        $responseDuplicateEmail = $this->postJson('/api/v1/auth/mitra/register', [
+        // Coba daftar mitra dengan email yang sama dengan customer yang login
+        $responseSameEmail = $this->postJson('/api/v1/auth/mitra/register', [
             'name' => 'Mitra Baru',
             'email' => $custEmail,
-            'phone' => $otherPhone,
+            'phone' => '088811112222',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'store_name' => 'Laundry Beda',
@@ -218,16 +284,16 @@ class MitraRegisterDirectTest extends TestCase
             'longitude' => 107.62,
         ]);
 
-        $responseDuplicateEmail->assertStatus(422);
-        $responseDuplicateEmail->assertJsonFragment([
+        $responseSameEmail->assertStatus(422);
+        $responseSameEmail->assertJsonFragment([
             'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
         ]);
 
-        // Coba daftar mitra dengan nomor hp yang sama
-        $responseDuplicatePhone = $this->postJson('/api/v1/auth/mitra/register', [
+        // Coba daftar mitra dengan nomor telepon yang sama dengan customer yang login
+        $responseSamePhone = $this->postJson('/api/v1/auth/mitra/register', [
             'name' => 'Mitra Baru',
-            'email' => $otherEmail,
-            'phone' => $custPhone, // nomor milik customer
+            'email' => 'email_lain_' . uniqid() . '@example.com',
+            'phone' => $custPhone,
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'store_name' => 'Laundry Beda 2',
@@ -236,19 +302,70 @@ class MitraRegisterDirectTest extends TestCase
             'longitude' => 107.62,
         ]);
 
-        $responseDuplicatePhone->assertStatus(422);
-        $responseDuplicatePhone->assertJsonFragment([
+        $responseSamePhone->assertStatus(422);
+        $responseSamePhone->assertJsonFragment([
             'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
         ]);
     }
 
     /**
-     * 4. /me hanya mengembalikan toko milik sendiri
+     * 7. Varian huruf besar dan spasi pada email serta varian format telepon ditolak 422
+     */
+    public function test_mitra_registration_normalizes_and_rejects_uppercase_spaces_and_phone_variants(): void
+    {
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        Sanctum::actingAs($customer, ['role:customer']);
+
+        // Buat user yang sudah ada di database
+        $existingEmail = 'pemilik_toko@example.com';
+        $existingPhone = '081234567890';
+        User::factory()->create([
+            'email' => $existingEmail,
+            'phone' => $existingPhone,
+        ]);
+
+        // Kirim email dengan huruf besar dan spasi di awal/akhir
+        $resVariantEmail = $this->postJson('/api/v1/auth/mitra/register', [
+            'name' => 'Mitra Varian',
+            'email' => '   PeMiLiK_ToKo@ExAmPlE.CoM   ',
+            'phone' => '087799887766',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'store_name' => 'Laundry Varian 1',
+            'store_address' => 'Jl. Varian No. 1',
+            'latitude' => -6.9,
+            'longitude' => 107.6,
+        ]);
+        $resVariantEmail->assertStatus(422);
+        $resVariantEmail->assertJsonFragment([
+            'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
+        ]);
+
+        // Kirim nomor telepon dengan format +62 dan strip/spasi yang setara dengan 081234567890
+        $resVariantPhone = $this->postJson('/api/v1/auth/mitra/register', [
+            'name' => 'Mitra Varian Phone',
+            'email' => 'varian_email_' . uniqid() . '@example.com',
+            'phone' => '+62 812-3456-7890',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'store_name' => 'Laundry Varian 2',
+            'store_address' => 'Jl. Varian No. 2',
+            'latitude' => -6.9,
+            'longitude' => 107.6,
+        ]);
+        $resVariantPhone->assertStatus(422);
+        $resVariantPhone->assertJsonFragment([
+            'message' => 'Email/nomor sudah terdaftar. Gunakan email/nomor lain untuk akun mitra.',
+        ]);
+    }
+
+    /**
+     * 8. /me hanya mengembalikan toko milik sendiri
      */
     public function test_me_endpoint_returns_only_owned_stores(): void
     {
         $userA = User::factory()->create([
-            'email' => 'user_a@example.com',
+            'email' => 'user_a_' . uniqid() . '@example.com',
             'role' => User::ROLE_STORE_ADMIN,
         ]);
         $storeA = Store::factory()->create([
@@ -259,7 +376,7 @@ class MitraRegisterDirectTest extends TestCase
         ]);
 
         $userB = User::factory()->create([
-            'email' => 'user_b@example.com',
+            'email' => 'user_b_' . uniqid() . '@example.com',
             'role' => User::ROLE_STORE_ADMIN,
         ]);
         $storeB = Store::factory()->create([
@@ -285,12 +402,12 @@ class MitraRegisterDirectTest extends TestCase
     }
 
     /**
-     * 5. Status di /me berubah setelah admin approve dan setelah reject (beserta alasan)
+     * 9. Status di /me berubah setelah admin approve dan setelah reject (beserta alasan)
      */
     public function test_me_reflects_status_changes_after_admin_approve_and_reject(): void
     {
         $user = User::factory()->create([
-            'email' => 'mitra_status_track@example.com',
+            'email' => 'mitra_status_track_' . uniqid() . '@example.com',
             'role' => User::ROLE_STORE_ADMIN,
         ]);
 
