@@ -32,7 +32,10 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string | null;
+  display_email?: string | null;
+  has_real_email?: boolean;
   phone: string | null;
+  display_phone?: string | null;
   status: string;
   verified_at: string | null;
   avatar_url?: string | null;
@@ -42,6 +45,48 @@ export interface AuthUser {
   active_mode?: 'customer' | 'store' | 'courier' | string;
   available_modes?: ('customer' | 'store' | 'courier' | string)[];
 }
+
+export function isPlaceholderEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.toLowerCase().trim();
+  return /^wa_\d+@laundryku\.test$/i.test(normalized);
+}
+
+export function formatPhone(phone?: string | null): string {
+  if (!phone) return '-';
+  const cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('0')) {
+    return '+62' + cleaned.substring(1);
+  }
+  if (cleaned.startsWith('8')) {
+    return '+62' + cleaned;
+  }
+  if (cleaned.startsWith('62')) {
+    return '+' + cleaned;
+  }
+  return '+' + cleaned;
+}
+
+export function getUserDisplayContact(user?: { email?: string | null; phone?: string | null; has_real_email?: boolean; display_email?: string | null; display_phone?: string | null } | null): string {
+  if (!user) return '';
+  if (user.has_real_email && user.email && !isPlaceholderEmail(user.email)) {
+    return user.email;
+  }
+  if (user.display_email && !isPlaceholderEmail(user.display_email)) {
+    return user.display_email;
+  }
+  if (user.display_phone) {
+    return user.display_phone;
+  }
+  if (user.phone) {
+    return formatPhone(user.phone);
+  }
+  if (user.email && !isPlaceholderEmail(user.email)) {
+    return user.email;
+  }
+  return '-';
+}
+
 
 export interface RegisterResult {
   user_id: string;
@@ -391,10 +436,28 @@ export async function fetchMe(): Promise<AuthUser | null> {
 }
 
 export function hasRole(user: AuthUser | null, roleCode: string): boolean {
-  if (!user || !user.roles) return false;
+  if (!user) return false;
+
+  const isRoleMatch = (code: string) => {
+    if (code === roleCode) return true;
+    if (roleCode === 'super_admin' && code === 'platform_owner') return true;
+    if (roleCode === 'platform_owner' && code === 'super_admin') return true;
+    return false;
+  };
+
+  if (user.active_mode && isRoleMatch(user.active_mode)) {
+    return true;
+  }
+
+  const anyUser = user as unknown as { role?: string };
+  if (anyUser.role && isRoleMatch(anyUser.role)) {
+    return true;
+  }
+
+  if (!user.roles) return false;
   return user.roles.some((r) => {
-    if (typeof r === 'string') return r === roleCode;
-    return r.code === roleCode;
+    const code = typeof r === 'string' ? r : r.code;
+    return isRoleMatch(code);
   });
 }
 

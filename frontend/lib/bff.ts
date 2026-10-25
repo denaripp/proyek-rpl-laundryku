@@ -95,6 +95,9 @@ export const ALLOWED_PROXY_PREFIXES = [
   '/reviews',
   '/me',
   '/health',
+  '/upgrades',
+  '/conversations',
+  '/chatbot',
 ];
 
 export function isPathAllowedInProxy(path: string): boolean {
@@ -115,6 +118,11 @@ export function detectPortalFromRequest(request: NextRequest, targetPath: string
   if (normalized.startsWith('/admin')) return 'admin';
   if (normalized.startsWith('/store') || normalized.startsWith('/mitra')) return 'mitra';
   if (normalized.startsWith('/courier') || normalized.startsWith('/kurir')) return 'courier';
+
+  if (request.cookies.has(PORTAL_COOKIE_NAMES.customer)) return 'customer';
+  if (request.cookies.has(PORTAL_COOKIE_NAMES.mitra)) return 'mitra';
+  if (request.cookies.has(PORTAL_COOKIE_NAMES.courier)) return 'courier';
+  if (request.cookies.has(PORTAL_COOKIE_NAMES.admin)) return 'admin';
 
   return 'customer';
 }

@@ -22,7 +22,7 @@ import { cn } from '@/lib/format';
 import { useAuth } from '@/lib/AuthContext';
 import { getUnreadChatCount } from '@/lib/chat';
 import { notificationApi } from '@/lib/notification';
-import { hasRole, hasApprovedStore, switchUserMode } from '@/lib/auth';
+import { hasRole, hasApprovedStore, switchUserMode, getUserDisplayContact } from '@/lib/auth';
 
 export interface PublicLayoutProps {
   children: React.ReactNode;
@@ -420,7 +420,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                               {user.name}
                             </div>
                             <div className="text-[11px] text-slate-300 truncate mt-0.5">
-                              {user.email || user.phone}
+                              {getUserDisplayContact(user)}
                             </div>
                             <div className="mt-1.5">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white border border-white/20 tracking-wide">
@@ -604,7 +604,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
             {isAuthenticated && user && (
               <div className="p-3 rounded-md bg-slate-50 border border-slate-200 mb-3">
                 <div className="font-semibold text-xs text-slate-900 truncate">{user.name}</div>
-                <div className="text-[11px] text-slate-500 truncate">{user.email || user.phone}</div>
+                <div className="text-[11px] text-slate-500 truncate">{getUserDisplayContact(user)}</div>
               </div>
             )}
 

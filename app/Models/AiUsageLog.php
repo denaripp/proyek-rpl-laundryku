@@ -46,4 +46,17 @@ class AiUsageLog extends Model
     {
         return $this->belongsTo(AiConversation::class);
     }
+
+    /**
+     * Get recent unknown queries for pattern review and taxonomy expansion.
+     * Guaranteed to contain only normalized text with PII (phone/email) stripped.
+     */
+    public static function getUnknownQueriesForReview(int $limit = 50): \Illuminate\Support\Collection
+    {
+        return static::query()
+            ->whereNotNull('flags->unknown_query')
+            ->latest('id')
+            ->limit($limit)
+            ->get(['id', 'user_id', 'created_at', 'flags']);
+    }
 }

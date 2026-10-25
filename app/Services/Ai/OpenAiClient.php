@@ -6,56 +6,93 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Thin HTTP client for the OpenAI Chat Completions API with function calling.
+ * HTTP client for OpenAI-compatible Chat Completions API (OpenRouter, OpenAI).
  *
- * No business logic here — pure transport. Any failure (network, non-200,
- * malformed payload) is converted into AiProviderException so the service
- * layer can fall back to human CS without disturbing the marketplace.
+ * Any failure (network, non-200, malformed payload) is converted into
+ * AiProviderException so the service layer can fall back safely to CS contact
+ * info without disturbing core marketplace transactions.
  */
 class OpenAiClient implements AiClientInterface
 {
     public function chat(array $messages, array $tools): array
     {
-        $apiKey = config('ai.openai_api_key');
+        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
 
         if (empty($apiKey)) {
-            if (app()->isLocal() && config('ai.mock_in_local', true)) {
-                Log::info('[AI Assistant] OPENAI_API_KEY is not set; using local development simulated response.');
+            if (app()->isLocal() && config('ai.mock_in_local', false)) {
+                Log::info('[AI Assistant] API key is not configured; using local simulated response.');
                 return $this->simulateLocalResponse($messages, $tools);
             }
 
-            Log::error('[AI Assistant] OpenAI API key is missing. Please configure OPENAI_API_KEY in .env.');
-            throw new AiProviderException('OpenAI API key is not configured.');
+            Log::error('[AI Assistant] AI API key is not configured.');
+            throw new AiProviderException('AI API key is not configured.');
+        }
+
+        $baseUrl = rtrim((string) config('ai.base_url', 'https://openrouter.ai/api/v1'), '/');
+        $endpoint = "{$baseUrl}/chat/completions";
+        $model = config('ai.model', 'liquid/lfm-2.5-2.6b:free');
+
+        $headers = [
+            'HTTP-Referer' => config('ai.http_referer', 'http://localhost:3000'),
+            'X-Title' => config('ai.x_title', 'LaundryKu'),
+        ];
+
+        $payload = [
+            'model' => $model,
+            'messages' => $messages,
+            'temperature' => 0.2,
+        ];
+
+        if (!empty($tools)) {
+            $payload['tools'] = $tools;
+            $payload['tool_choice'] = 'auto';
         }
 
         try {
             $response = Http::withToken($apiKey)
+                ->withHeaders($headers)
                 ->timeout((int) config('ai.timeout', 30))
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => config('ai.model', 'gpt-4o-mini'),
-                    'messages' => $messages,
-                    'tools' => $tools,
-                    'tool_choice' => 'auto',
-                    'temperature' => 0.2,
-                ]);
+                ->post($endpoint, $payload);
         } catch (\Throwable $e) {
-            Log::warning('[AI Assistant] OpenAI network request failed: ' . $e->getMessage(), ['exception' => $e]);
-            throw new AiProviderException('OpenAI request failed: ' . $e->getMessage(), 0, $e);
+            Log::warning('[AI Assistant] Network request failed: ' . $e->getMessage(), ['exception' => $e]);
+            throw new AiProviderException('Network connection to AI provider failed: ' . $e->getMessage(), 0, $e);
         }
 
         if (!$response->successful()) {
             $status = $response->status();
             $body = $response->body();
-            Log::warning("[AI Assistant] OpenAI returned HTTP {$status}: {$body}");
-            throw new AiProviderException("OpenAI returned HTTP {$status}");
+            Log::warning("[AI Assistant] Provider returned HTTP {$status}: {$body}");
+
+            // If provider rejects due to tool incompatibility, retry once without tools
+            $lowerBody = strtolower($body);
+            if ($status === 400 && !empty($payload['tools']) && (str_contains($lowerBody, 'tool') || str_contains($lowerBody, 'function'))) {
+                Log::info('[AI Assistant] Model rejected function calling tools; retrying without tools payload.');
+                unset($payload['tools'], $payload['tool_choice']);
+                try {
+                    $retryRes = Http::withToken($apiKey)
+                        ->withHeaders($headers)
+                        ->timeout((int) config('ai.timeout', 30))
+                        ->post($endpoint, $payload);
+
+                    if ($retryRes->successful()) {
+                        $response = $retryRes;
+                    } else {
+                        throw new AiProviderException("AI provider error (HTTP {$retryRes->status()}): " . $this->sanitizeErrorBody($retryRes->body()));
+                    }
+                } catch (\Throwable $retryErr) {
+                    throw new AiProviderException("AI provider error (HTTP {$status}): " . $this->sanitizeErrorBody($body), 0, $retryErr);
+                }
+            } else {
+                throw new AiProviderException("AI provider error (HTTP {$status}): " . $this->sanitizeErrorBody($body));
+            }
         }
 
         $body = $response->json();
         $message = $body['choices'][0]['message'] ?? null;
 
         if (!is_array($message)) {
-            Log::error('[AI Assistant] OpenAI returned invalid payload: ' . json_encode($body));
-            throw new AiProviderException('OpenAI returned an invalid payload.');
+            Log::error('[AI Assistant] Provider returned invalid response structure.');
+            throw new AiProviderException('AI provider returned an invalid response structure.');
         }
 
         $toolCalls = [];
@@ -76,6 +113,18 @@ class OpenAiClient implements AiClientInterface
                 'completion_tokens' => (int) ($body['usage']['completion_tokens'] ?? 0),
             ],
         ];
+    }
+
+    /**
+     * Sanitize error response body before displaying to avoid leaking sensitive internal details.
+     */
+    protected function sanitizeErrorBody(string $raw): string
+    {
+        $json = json_decode($raw, true);
+        if (is_array($json) && isset($json['error']['message'])) {
+            return (string) $json['error']['message'];
+        }
+        return mb_substr($raw, 0, 200);
     }
 
     protected function simulateLocalResponse(array $messages, array $tools): array
@@ -100,7 +149,7 @@ class OpenAiClient implements AiClientInterface
         } elseif (str_contains($lower, 'status') || str_contains($lower, 'order') || str_contains($lower, 'pesanan') || str_contains($lower, 'lacak')) {
             $reply = "Untuk memeriksa status pesanan Anda secara rinci, silakan kunjungi menu Dashboard Pelanggan atau tab Riwayat Pesanan.";
         } else {
-            $reply = "Halo! Pertanyaan Anda: \"{$lastUserMsg}\". (Catatan: Ini adalah respon simulasi lokal. Masukkan `OPENAI_API_KEY` di file `.env` untuk mengaktifkan AI live GPT-4o-mini).";
+            $reply = "Halo! Pertanyaan Anda: \"{$lastUserMsg}\". (Catatan: Ini adalah respon simulasi lokal. Masukkan `OPENROUTER_API_KEY` di file `.env` untuk mengaktifkan AI live OpenRouter).";
         }
 
         return [

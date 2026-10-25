@@ -26,6 +26,7 @@ import {
   AuthApiError,
   getSafeRedirectPath,
   getHomePathForRole,
+  getUserDisplayContact,
 } from '@/lib/auth';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -125,8 +126,10 @@ function AuthContent() {
 
       if (res.otp_sent && res.delivery_status === 'sent') {
         success('Pendaftaran Berhasil', 'Silakan masukkan kode OTP yang telah dikirimkan untuk verifikasi.');
-      } else {
+      } else if (res.debug_otp) {
         success('Pendaftaran Berhasil', 'Mode pengujian: OTP tidak dikirim ke email/WhatsApp.');
+      } else {
+        success('Pendaftaran Berhasil', 'Silakan periksa kode OTP yang telah dikirimkan.');
       }
       setActiveTab('otp');
     } catch (err: unknown) {
@@ -274,8 +277,10 @@ function AuthContent() {
 
       if (res.otp_sent && res.delivery_status === 'sent') {
         success('OTP Dikirim Ulang', 'Kode OTP baru telah dikirimkan ke kontak Anda.');
-      } else {
+      } else if (res.debug_otp) {
         success('OTP Dibuat Ulang', 'Mode pengujian: OTP tidak dikirim ke email/WhatsApp.');
+      } else {
+        success('OTP Dikirim Ulang', 'Silakan periksa kode OTP yang telah dikirimkan.');
       }
     } catch (err: unknown) {
       if (err instanceof AuthApiError) {
@@ -402,7 +407,7 @@ function AuthContent() {
             </div>
             <div className="space-y-1">
               <h4 className="font-heading font-bold text-base text-navy-900">{currentUser.name}</h4>
-              <p className="text-xs text-slate-500">{currentUser.email || currentUser.phone}</p>
+              <p className="text-xs text-slate-500">{getUserDisplayContact(currentUser)}</p>
               <StatusBadge status={currentUser.status} />
             </div>
           </div>
@@ -414,7 +419,9 @@ function AuthContent() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Kanal Verifikasi:</span>
-              <span className="font-semibold text-navy-900 capitalize">{currentUser.email ? 'Email' : 'WhatsApp'}</span>
+              <span className="font-semibold text-navy-900 capitalize">
+                {currentUser.has_real_email && currentUser.email ? 'Email' : 'WhatsApp'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Role:</span>
@@ -758,7 +765,7 @@ function AuthContent() {
         {activeTab === 'otp' && (
           <div className="space-y-5">
             {/* Mode Dummy Notice */}
-            {(!otpSent || deliveryStatus === 'simulated') && (
+            {Boolean(debugOtp) && (!otpSent || deliveryStatus === 'simulated') && (
               <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs font-medium leading-relaxed">
                 Mode pengujian: OTP tidak dikirim ke email/WhatsApp.
               </div>

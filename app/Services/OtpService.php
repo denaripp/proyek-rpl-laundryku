@@ -7,7 +7,7 @@ use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\LogOtpSender;
 use App\Services\Otp\OtpSender;
-use App\Services\WhatsAppGateway\FontneService;
+use App\Services\WhatsAppGateway\FonnteService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -15,6 +15,7 @@ class OtpService
 {
     public const VALIDITY_MINUTES = 5;
     public const MAX_ATTEMPTS = 5;
+    public const RESEND_COOLDOWN_SECONDS = 60;
 
     public function __construct(
         protected ?OtpSender $otpSender = null
@@ -60,23 +61,13 @@ class OtpService
 
     public static function normalizePhone(string $phone): string
     {
-        $phone = preg_replace('/[^\d]/', '', (string) $phone);
-
-        if (str_starts_with($phone, '0')) {
-            return '62' . substr($phone, 1);
-        }
-
-        if (str_starts_with($phone, '8')) {
-            return '62' . $phone;
-        }
-
-        return $phone;
+        return FonnteService::normalizePhone($phone);
     }
 
     public static function isValidPhone(string $phone): bool
     {
         $normalized = self::normalizePhone($phone);
-        return (bool) preg_match('/^62[0-9]{8,13}$/', $normalized);
+        return (bool) preg_match('/^62[0-9]{8,14}$/', $normalized);
     }
 
     public function normalizeDestination(string $channel, string $destination): string
@@ -91,15 +82,37 @@ class OtpService
     }
 
     /**
+     * Get remaining cooldown seconds before a new OTP can be requested for this user.
+     */
+    public function getResendCooldownRemaining(User $user, int $cooldownSeconds = self::RESEND_COOLDOWN_SECONDS): int
+    {
+        $lastChallenge = OtpChallenge::where('user_id', $user->id)
+            ->latest('created_at')
+            ->first();
+
+        if (!$lastChallenge) {
+            return 0;
+        }
+
+        $elapsedSeconds = (int) abs(now()->diffInSeconds($lastChallenge->created_at, false));
+        if ($elapsedSeconds < $cooldownSeconds) {
+            return $cooldownSeconds - $elapsedSeconds;
+        }
+
+        return 0;
+    }
+
+    /**
      * Generate a new OTP challenge and dispatch via selected channel.
      *
      * @return array{challenge: OtpChallenge, otp_sent: bool, delivery_status: string, debug_otp: ?string}
+     * @throws \RuntimeException
      */
     public function generateOtp(User $user, string $channel, string $destination, string $purpose = 'registration', array $metadata = []): array
     {
         $normalizedDestination = $this->normalizeDestination($channel, $destination);
         $maskedDestination = $channel === 'whatsapp'
-            ? FontneService::maskPhone($normalizedDestination)
+            ? FonnteService::maskPhone($normalizedDestination)
             : (substr($normalizedDestination, 0, 2) . '***@' . (explode('@', $normalizedDestination)[1] ?? 'domain'));
 
         // Invalidate previous unconsumed challenges for this user
@@ -108,7 +121,7 @@ class OtpService
             ->update(['consumed_at' => now()]);
 
         // Generate 6-digit numeric OTP code
-        $plainOtp = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        $plainOtp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         $challenge = OtpChallenge::create([
             'user_id' => $user->id,
@@ -131,28 +144,30 @@ class OtpService
 
             if ($hasConfiguredToken) {
                 try {
-                    $fonnte = new FontneService();
-                    $fonnte->sendOtp($normalizedDestination, $plainOtp);
+                    $fonnte = new FonnteService();
+                    $fonnte->sendOtp($normalizedDestination, $plainOtp, self::VALIDITY_MINUTES);
                     $otpSent = true;
                     $deliveryStatus = 'sent';
                     Log::info('Fonnte sendOtp success', ['target' => $maskedDestination]);
                 } catch (\Throwable $e) {
                     Log::error('Fonnte sendOtp failed: ' . $e->getMessage(), ['target' => $maskedDestination]);
-                    // Fall back to simulation on dev/test
-                    if (!app()->environment('production')) {
-                        $otpSent = false;
-                        $deliveryStatus = 'simulated';
-                    } else {
-                        throw new \Exception('Gagal mengirim OTP via WhatsApp: ' . $e->getMessage());
-                    }
+                    // NO FALLBACK TO SIMULATION OR OTP EXPOSURE
+                    throw new \RuntimeException('Gagal mengirim OTP via WhatsApp: ' . $e->getMessage(), 0, $e);
                 }
             } else {
+                if (app()->environment('production')) {
+                    throw new \RuntimeException('Gateway WhatsApp (Fonnte) belum dikonfigurasi di server produksi.');
+                }
                 $this->otpSender?->send($channel, $normalizedDestination, $plainOtp);
                 $otpSent = false;
                 $deliveryStatus = 'simulated';
             }
         } else {
             // Email channel
+            if (User::isPlaceholderEmail($normalizedDestination)) {
+                throw new \RuntimeException('Alamat email placeholder tidak dapat digunakan untuk pengiriman OTP.');
+            }
+
             if (self::isSmtpConfigured()) {
                 try {
                     Mail::to($normalizedDestination)->send(new OtpMail($plainOtp, self::VALIDITY_MINUTES));
@@ -161,23 +176,25 @@ class OtpService
                     Log::info('Email OTP sent successfully', ['target' => $maskedDestination]);
                 } catch (\Throwable $e) {
                     Log::error('Failed to send OTP via Email: ' . $e->getMessage(), ['target' => $maskedDestination]);
-                    if (!app()->environment('production')) {
-                        $otpSent = false;
-                        $deliveryStatus = 'simulated';
-                    } else {
-                        throw new \Exception('Gagal mengirim OTP via Email: ' . $e->getMessage());
-                    }
+                    // NO FALLBACK TO SIMULATION OR OTP EXPOSURE
+                    throw new \RuntimeException('Gagal mengirim OTP via Email: ' . $e->getMessage(), 0, $e);
                 }
             } else {
-                // SMTP not configured - simulate in local / testing
+                // SMTP not configured
+                if (app()->environment('production')) {
+                    throw new \RuntimeException('Layanan pengiriman email (SMTP) belum dikonfigurasi di server produksi.');
+                }
                 Log::info('SMTP not configured; simulating OTP delivery in local/test', ['target' => $maskedDestination]);
                 $otpSent = false;
                 $deliveryStatus = 'simulated';
             }
         }
 
-        // debug_otp provided in simulated mode on local/testing environment
-        $debugOtp = ($deliveryStatus === 'simulated' && app()->environment('local', 'testing')) ? $plainOtp : null;
+        // debug_otp is ONLY permitted if OTP_DEBUG_RESPONSE is explicitly true AND environment is local or testing
+        $allowDebugOtp = (bool) config('services.otp.debug_response', false)
+            && app()->environment('local', 'testing');
+
+        $debugOtp = $allowDebugOtp ? $plainOtp : null;
 
         return [
             'challenge' => $challenge,
@@ -186,6 +203,7 @@ class OtpService
             'debug_otp' => $debugOtp,
         ];
     }
+
 
     /**
      * Verify an OTP challenge.

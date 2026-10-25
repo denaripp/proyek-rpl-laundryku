@@ -21,9 +21,10 @@ class EmailChannel implements NotificationChannel
     {
         $user = $notification->user;
 
-        if (!$user || !$user->email) {
-            Log::warning('Notification email skipped: user has no email', [
+        if (!$user || !$user->has_real_email) {
+            Log::info('Notification email skipped: user has placeholder or no real email', [
                 'notification_id' => $notification->id,
+                'user_id' => $user?->id,
             ]);
             return false;
         }

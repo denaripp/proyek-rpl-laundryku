@@ -98,7 +98,8 @@ class AiAssistantTest extends TestCase
 
         // Guardrail harus menyaring kebocoran system prompt.
         $this->assertStringNotContainsString(AiAssistantService::SYSTEM_PROMPT_MARKER, $result['reply']);
-        $this->assertStringContainsString('tidak dapat ditampilkan', $result['reply']);
+        $this->assertStringContainsString('di luar layanan LaundryKu', $result['reply']);
+        $this->assertStringNotContainsString('tidak dapat ditampilkan', $result['reply']);
     }
 
     public function test_model_cannot_execute_function_outside_whitelist()

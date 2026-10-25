@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { getStoredUser, hasRole, isAuthenticated, getSafeRedirectPath } from '@/lib/auth';
+import { hasRole, getSafeRedirectPath } from '@/lib/auth';
 import { adminApi, ADMIN_LOGIN_PATH } from '@/lib/admin';
 import {
   LayoutDashboard,
@@ -130,20 +130,42 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       return;
     }
 
-    if (!isAuthenticated()) {
-      const safeRedirect = getSafeRedirectPath(pathname, '/admin');
-      router.push(`${ADMIN_LOGIN_PATH}?redirect=${encodeURIComponent(safeRedirect)}`);
-      return;
+    let isMounted = true;
+
+    async function checkAdminSession() {
+      try {
+        const res = await fetch('/api/auth/admin/session', {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+        });
+
+        if (!isMounted) return;
+
+        if (!res.ok) {
+          const safeRedirect = getSafeRedirectPath(pathname, '/admin');
+          router.push(`${ADMIN_LOGIN_PATH}?redirect=${encodeURIComponent(safeRedirect)}`);
+          return;
+        }
+
+        const json = await res.json().catch(() => ({}));
+        const user: AuthUser | null = json.user || null;
+
+        if (!user || !hasRole(user, 'super_admin')) {
+          setAuthorized(false);
+          return;
+        }
+
+        setAuthorized(true);
+        setUserName(user.name);
+        setUserAvatar(user.avatar_url || null);
+      } catch {
+        if (isMounted) {
+          setAuthorized(false);
+        }
+      }
     }
 
-    const user = getStoredUser();
-    if (!user || !hasRole(user, 'super_admin')) {
-      setAuthorized(false);
-    } else {
-      setAuthorized(true);
-      setUserName(user.name);
-      setUserAvatar(user.avatar_url || null);
-    }
+    checkAdminSession();
 
     const handleUserUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<AuthUser | null>;
@@ -154,7 +176,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     };
 
     window.addEventListener('auth:user-updated', handleUserUpdate);
-    return () => window.removeEventListener('auth:user-updated', handleUserUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('auth:user-updated', handleUserUpdate);
+    };
   }, [pathname, isLoginPage, router]);
 
   // Close mobile drawer on route change

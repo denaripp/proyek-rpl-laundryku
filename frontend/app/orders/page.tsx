@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { useToast } from '@/components/ui';
+import { useAuth } from '@/lib/AuthContext';
 import {
   getOrders,
   OrderDetail,
@@ -26,7 +28,9 @@ import { RotateCw, WifiOff } from 'lucide-react';
 const POLLING_INTERVAL_MS = 20000; // 20 seconds
 
 export default function CustomerOrdersPage() {
+  const router = useRouter();
   const { toast } = useToast();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
@@ -173,6 +177,12 @@ export default function CustomerOrdersPage() {
   useEffect(() => {
     let active = true;
 
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.push('/auth');
+      return;
+    }
+
     async function init() {
       try {
         const freshOrders = await getOrders({ role: 'customer' });
@@ -204,7 +214,7 @@ export default function CustomerOrdersPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authLoading, isAuthenticated, router]);
 
   // Relative time counter effect (updates "Diperbarui X detik lalu" every 1s)
   useEffect(() => {
@@ -229,6 +239,7 @@ export default function CustomerOrdersPage() {
 
   // Real-time silent polling & Visibility / Focus listeners
   useEffect(() => {
+    if (!isAuthenticated) return;
     let pollingInterval: NodeJS.Timeout | null = null;
 
     const startPolling = () => {

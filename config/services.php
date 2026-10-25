@@ -46,4 +46,21 @@ return [
         'cache_ttl' => env('GOOGLE_MAPS_CACHE_TTL', 86400),
     ],
 
+    'fonnte' => [
+        'api_token' => env('FONNTE_API_TOKEN'),
+        'base_url' => env('FONNTE_BASE_URL', 'https://api.fonnte.com'),
+        'webhook_token' => env('FONNTE_WEBHOOK_TOKEN'),
+    ],
+
+    'otp' => [
+        'debug_response' => filter_var(env('OTP_DEBUG_RESPONSE', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    'nominatim' => [
+        'base_url' => env('NOMINATIM_BASE_URL', 'https://nominatim.openstreetmap.org'),
+        'user_agent' => env('NOMINATIM_USER_AGENT', 'LaundryKu/1.0 (contact@laundryku.test)'),
+        'timeout' => (int) env('NOMINATIM_TIMEOUT', 5),
+        'cache_ttl' => (int) env('NOMINATIM_CACHE_TTL', 86400),
+    ],
+
 ];

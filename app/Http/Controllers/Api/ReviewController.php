@@ -36,21 +36,63 @@ class ReviewController extends Controller
     /**
      * Create a review for a completed order (1 review per order).
      */
-    public function store(\App\Http\Requests\Review\CreateReviewRequest $request, Order $order)
+     public function store(\App\Http\Requests\Review\CreateReviewRequest $request, Order $order)
+     {
+         $user = $request->user();
+
+         Gate::forUser($user)->authorize('create', [Review::class, $order]);
+
+         $validated = $request->validated();
+
+         $review = $this->reviewService->createReview(
+             $order,
+             $user,
+             (int) $validated['rating'],
+             $validated['comment'] ?? null
+         );
+
+         return response()->json(array_merge($review->toArray(), [
+             'success' => true,
+             'data' => $review,
+         ]), 201);
+     }
+
+    /**
+     * GET /api/v1/orders/{order}/rating — get rating for an order.
+     */
+    public function orderRating(Request $request, Order $order)
     {
-        $user = $request->user();
+        $review = $order->review;
+        if (!$review) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+            ]);
+        }
 
-        Gate::forUser($user)->authorize('create', [Review::class, $order]);
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => (string) $review->id,
+                'order_id' => (string) $review->order_id,
+                'order_number' => $order->order_number,
+                'customer_id' => (string) ($review->customer_user_id ?? $review->customer_id ?? ''),
+                'customer_name' => $review->customer?->name ?? 'Pelanggan',
+                'store_id' => (string) $order->store_id,
+                'store_name' => $order->store?->name ?? 'Toko',
+                'score' => (int) $review->rating,
+                'review' => $review->comment,
+                'created_at' => $review->created_at?->toISOString() ?? now()->toISOString(),
+                'updated_at' => $review->updated_at?->toISOString() ?? now()->toISOString(),
+            ],
+        ]);
+    }
 
-        $validated = $request->validated();
-
-        $review = $this->reviewService->createReview(
-            $order,
-            $user,
-            (int) $validated['rating'],
-            $validated['comment'] ?? null
-        );
-
-        return response()->json($review, 201);
+    /**
+     * POST /api/v1/orders/{order}/rating — submit rating for an order.
+     */
+    public function storeRating(\App\Http\Requests\Review\CreateReviewRequest $request, Order $order)
+    {
+        return $this->store($request, $order);
     }
 }

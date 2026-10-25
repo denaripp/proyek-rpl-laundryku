@@ -20,8 +20,11 @@ class CustomerPortalController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'email' => $user->display_email,
+                'display_email' => $user->display_email,
+                'has_real_email' => $user->has_real_email,
                 'phone' => $user->phone,
+                'display_phone' => $user->display_phone,
                 'role' => $user->role,
                 'created_at' => $user->created_at,
             ],

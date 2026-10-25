@@ -88,7 +88,8 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
 
   if (!response.ok || (data as ApiErrorResponse).success === false) {
     const errObj = (data as ApiErrorResponse).error;
-    const errorMsg = errObj?.message || 'Terjadi kesalahan pada sistem.';
+    const rawData = data as unknown as { message?: string; error?: { message?: string } };
+    const errorMsg = errObj?.message || rawData?.message || 'Terjadi kesalahan pada sistem.';
     const error = new Error(errorMsg);
     (error as unknown as { responseData: unknown; status: number; code?: string }).responseData = data;
     (error as unknown as { status: number }).status = response.status;

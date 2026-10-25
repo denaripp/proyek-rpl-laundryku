@@ -19,6 +19,7 @@ class UpdateProfileRequest extends FormRequest
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|max:255|unique:users,email,' . $userId,
             'phone' => 'sometimes|nullable|string|max:20|regex:/^[+0-9\-\s()]+$/',
+            'date_of_birth' => 'nullable|string|max:50',
         ];
     }
 

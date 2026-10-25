@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { adminApi, AdminUser } from '@/lib/admin';
+import { getUserDisplayContact } from '@/lib/auth';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { StatusText } from '@/components/admin/StatusText';
@@ -92,7 +93,7 @@ export default function AdminUsersPage() {
       accessor: (item) => (
         <div>
           <div className="font-semibold text-slate-900">{item.name}</div>
-          <div className="text-[11px] text-slate-500">{item.email || item.phone || '-'}</div>
+          <div className="text-[11px] text-slate-500">{getUserDisplayContact(item)}</div>
         </div>
       ),
     },
@@ -264,7 +265,7 @@ export default function AdminUsersPage() {
 
             <form onSubmit={handleStatusSubmit} className="space-y-3">
               <div className="text-xs text-slate-600">
-                Pengguna: <strong className="text-slate-900">{selectedUser.name}</strong> ({selectedUser.email || selectedUser.phone})
+                Pengguna: <strong className="text-slate-900">{selectedUser.name}</strong> ({getUserDisplayContact(selectedUser)})
               </div>
 
               <div>

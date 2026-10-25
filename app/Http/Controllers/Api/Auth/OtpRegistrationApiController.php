@@ -7,12 +7,13 @@ use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OtpService;
-use App\Services\WhatsAppGateway\FontneService;
+use App\Services\WhatsAppGateway\FonnteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 
 class OtpRegistrationApiController extends Controller
 {
@@ -26,8 +27,10 @@ class OtpRegistrationApiController extends Controller
     public function register(Request $request): JsonResponse
     {
         try {
-            $channel = $request->input('channel', 'email');
-            $rawDestination = $request->input('destination', $request->input('phone_number', $request->input('phone', $request->input('email'))));
+            $channel = $request->input('channel');
+            $emailInput = $request->input('email');
+            $phoneInput = $request->input('phone', $request->input('phone_number'));
+            $destinationInput = $request->input('destination');
             $name = $request->input('name', $request->input('full_name'));
             $password = $request->input('password');
 
@@ -37,6 +40,24 @@ class OtpRegistrationApiController extends Controller
                     'message' => 'Nama lengkap wajib diisi.',
                     'errors' => ['name' => ['Nama lengkap wajib diisi.']],
                 ], 422);
+            }
+
+            if (empty($channel)) {
+                if (!empty($emailInput)) {
+                    $channel = 'email';
+                } elseif (!empty($phoneInput)) {
+                    $channel = 'whatsapp';
+                } elseif (!empty($destinationInput)) {
+                    $channel = filter_var($destinationInput, FILTER_VALIDATE_EMAIL) ? 'email' : 'whatsapp';
+                } else {
+                    $channel = 'email';
+                }
+            }
+
+            if ($channel === 'whatsapp') {
+                $rawDestination = $destinationInput ?: $phoneInput;
+            } else {
+                $rawDestination = $destinationInput ?: ($emailInput ?: $phoneInput);
             }
 
             if (empty($rawDestination)) {
@@ -74,8 +95,36 @@ class OtpRegistrationApiController extends Controller
             }
 
             $maskedDestination = $channel === 'whatsapp'
-                ? FontneService::maskPhone($normalizedDestination)
+                ? FonnteService::maskPhone($normalizedDestination)
                 : (substr($normalizedDestination, 0, 2) . '***@' . (explode('@', $normalizedDestination)[1] ?? 'domain'));
+
+            // 1. Rate limiting per IP (max 15/hour)
+            $ipKey = 'otp-reg-ip:' . $request->ip();
+            if (RateLimiter::tooManyAttempts($ipKey, 15)) {
+                $seconds = RateLimiter::availableIn($ipKey);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Terlalu banyak permintaan dari alamat IP ini. Silakan coba lagi dalam {$seconds} detik.",
+                    'error' => [
+                        'code' => 'RATE_LIMIT_EXCEEDED',
+                        'message' => 'Terlalu banyak permintaan OTP.',
+                    ],
+                ], 429);
+            }
+
+            // 2. Rate limiting per destination contact (max 5/hour)
+            $destKey = 'otp-reg-dest:' . hash('sha256', $normalizedDestination);
+            if (RateLimiter::tooManyAttempts($destKey, 5)) {
+                $seconds = RateLimiter::availableIn($destKey);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Batas pengiriman OTP untuk kontak ini telah tercapai. Silakan coba lagi dalam {$seconds} detik.",
+                    'error' => [
+                        'code' => 'RATE_LIMIT_EXCEEDED',
+                        'message' => 'Batas pengiriman OTP untuk kontak ini telah tercapai.',
+                    ],
+                ], 429);
+            }
 
             Log::info('Registration attempt initiated', [
                 'channel' => $channel,
@@ -83,11 +132,17 @@ class OtpRegistrationApiController extends Controller
             ]);
 
             // Check if existing user with destination exists
-            $existingUser = User::where(function ($query) use ($channel, $normalizedDestination) {
+            $existingUser = User::where(function ($query) use ($channel, $normalizedDestination, $emailInput, $phoneInput) {
                 if ($channel === 'email') {
                     $query->where('email', $normalizedDestination);
+                    if (!empty($phoneInput)) {
+                        $query->orWhere('phone', $phoneInput);
+                    }
                 } else {
                     $query->where('phone', $normalizedDestination);
+                    if (!empty($emailInput)) {
+                        $query->orWhere('email', $emailInput);
+                    }
                 }
             })->first();
 
@@ -108,13 +163,37 @@ class OtpRegistrationApiController extends Controller
                     ], 422);
                 }
 
-                $user = $existingUser;
-            } else {
-                $user = DB::transaction(function () use ($name, $channel, $normalizedDestination, $password) {
-                    $createdUser = User::create([
+                // Check resend cooldown for existing pending user
+                $cooldownRemaining = $this->otpService->getResendCooldownRemaining($existingUser, 60);
+                if ($cooldownRemaining > 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Silakan tunggu {$cooldownRemaining} detik sebelum meminta kode OTP kembali.",
+                        'error' => [
+                            'code' => 'OTP_COOLDOWN',
+                            'message' => "Silakan tunggu {$cooldownRemaining} detik sebelum meminta kode OTP kembali.",
+                            'cooldown_remaining' => $cooldownRemaining,
+                        ],
+                    ], 429);
+                }
+            }
+
+            // ATOMIC TRANSACTION:
+            // Create user (if new) and dispatch OTP challenge inside the same transaction.
+            // If OTP dispatch fails (gateway error/timeout), user creation is rolled back completely.
+            [$user, $otpResult] = DB::transaction(function () use (
+                $existingUser, $name, $channel, $normalizedDestination, $password, $emailInput, $phoneInput
+            ) {
+                if ($existingUser) {
+                    $user = $existingUser;
+                } else {
+                    $email = $channel === 'email' ? $normalizedDestination : ($emailInput ?: "wa_{$normalizedDestination}@laundryku.test");
+                    $phone = $channel === 'whatsapp' ? $normalizedDestination : ($phoneInput ?: null);
+
+                    $user = User::create([
                         'name' => $name,
-                        'email' => $channel === 'email' ? $normalizedDestination : null,
-                        'phone' => $channel === 'whatsapp' ? $normalizedDestination : null,
+                        'email' => $email,
+                        'phone' => $phone ? trim($phone) : null,
                         'password' => Hash::make($password),
                         'role' => User::ROLE_CUSTOMER,
                         'is_active' => false,
@@ -123,31 +202,36 @@ class OtpRegistrationApiController extends Controller
 
                     $customerRole = Role::where('name', 'customer')->first();
                     if ($customerRole) {
-                        $createdUser->roles()->syncWithoutDetaching([$customerRole->id => ['assigned_at' => now()]]);
+                        $user->roles()->syncWithoutDetaching([$customerRole->id => ['assigned_at' => now()]]);
                     }
+                }
 
-                    return $createdUser;
-                });
-            }
+                $result = $this->otpService->generateOtp(
+                    user: $user,
+                    channel: $channel,
+                    destination: $normalizedDestination,
+                    purpose: 'registration',
+                    metadata: [
+                        'pending_name' => $name,
+                        'pending_password_hash' => Hash::make($password),
+                    ]
+                );
 
-            // Generate and dispatch OTP challenge
-            $otpResult = $this->otpService->generateOtp(
-                user: $user,
-                channel: $channel,
-                destination: $normalizedDestination,
-                purpose: 'registration',
-                metadata: [
-                    'pending_name' => $name,
-                    'pending_password_hash' => Hash::make($password),
-                ]
-            );
+                return [$user, $result];
+            });
+
+            // Increment rate limiter hits only after successful dispatch
+            RateLimiter::hit($ipKey, 3600);
+            RateLimiter::hit($destKey, 3600);
 
             $deliveryStatus = $otpResult['delivery_status'];
             $otpSent = $otpResult['otp_sent'];
 
             $message = ($deliveryStatus === 'sent')
                 ? ($channel === 'whatsapp' ? 'Kode OTP telah dikirimkan ke WhatsApp Anda.' : 'Kode OTP telah dikirimkan ke Email Anda.')
-                : 'Mode pengujian: OTP tidak dikirim ke email/WhatsApp.';
+                : (app()->environment('local', 'testing') && $otpResult['debug_otp'] !== null
+                    ? 'Mode pengujian: OTP tidak dikirim ke email/WhatsApp.'
+                    : ($channel === 'whatsapp' ? 'Kode OTP sedang dikirimkan ke WhatsApp Anda.' : 'Kode OTP sedang dikirimkan ke Email Anda.'));
 
             AuditLog::create([
                 'actor_id' => $user->id,
@@ -174,6 +258,20 @@ class OtpRegistrationApiController extends Controller
                     'debug_otp' => $otpResult['debug_otp'],
                 ],
             ], 201);
+        } catch (\RuntimeException $e) {
+            Log::error('Registration OTP delivery failed', [
+                'error' => $e->getMessage(),
+                'target' => $maskedDestination ?? 'unknown',
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => [
+                    'code' => 'OTP_DELIVERY_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 502);
         } catch (\Throwable $e) {
             Log::error('Registration failed with exception', [
                 'error' => $e->getMessage(),
@@ -183,7 +281,7 @@ class OtpRegistrationApiController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Registrasi gagal diproses. Silakan coba lagi.',
+                'message' => 'Registrasi gagal diproses: ' . $e->getMessage(),
                 'error' => [
                     'code' => 'REGISTRATION_FAILED',
                     'message' => 'Registrasi gagal diproses. Silakan coba lagi.',
@@ -210,8 +308,29 @@ class OtpRegistrationApiController extends Controller
             ], 404);
         }
 
-        $channel = $request->input('channel', $user->email ? 'email' : 'whatsapp');
-        $destination = $channel === 'email' ? $user->email : $user->phone;
+        $defaultChannel = $user->has_real_email ? 'email' : 'whatsapp';
+        $channel = $request->input('channel', $defaultChannel);
+
+        if ($channel === 'email') {
+            $destination = $user->display_email;
+            if (!$destination) {
+                if ($user->phone) {
+                    $channel = 'whatsapp';
+                    $destination = $user->phone;
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Akun ini belum memiliki alamat email yang valid. Silakan gunakan WhatsApp.',
+                        'error' => [
+                            'code' => 'EMAIL_UNAVAILABLE',
+                            'message' => 'Akun ini belum memiliki alamat email yang valid.',
+                        ],
+                    ], 422);
+                }
+            }
+        } else {
+            $destination = $user->phone;
+        }
 
         if (!$destination) {
             return response()->json([
@@ -224,13 +343,73 @@ class OtpRegistrationApiController extends Controller
             ], 422);
         }
 
-        $otpResult = $this->otpService->generateOtp($user, $channel, $destination);
+        $normalizedDestination = $this->otpService->normalizeDestination($channel, $destination);
+
+        // Cooldown check (60 seconds)
+        $cooldownRemaining = $this->otpService->getResendCooldownRemaining($user, 60);
+        if ($cooldownRemaining > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Silakan tunggu {$cooldownRemaining} detik sebelum meminta kode OTP kembali.",
+                'error' => [
+                    'code' => 'OTP_COOLDOWN',
+                    'message' => "Silakan tunggu {$cooldownRemaining} detik sebelum meminta kode OTP kembali.",
+                    'cooldown_remaining' => $cooldownRemaining,
+                ],
+            ], 429);
+        }
+
+        // Rate limiter per IP and per destination
+        $ipKey = 'otp-resend-ip:' . $request->ip();
+        if (RateLimiter::tooManyAttempts($ipKey, 15)) {
+            $seconds = RateLimiter::availableIn($ipKey);
+            return response()->json([
+                'success' => false,
+                'message' => "Terlalu banyak permintaan dari alamat IP ini. Silakan coba lagi dalam {$seconds} detik.",
+                'error' => [
+                    'code' => 'RATE_LIMIT_EXCEEDED',
+                    'message' => 'Terlalu banyak permintaan kirim ulang OTP.',
+                ],
+            ], 429);
+        }
+
+        $destKey = 'otp-resend-dest:' . hash('sha256', $normalizedDestination);
+        if (RateLimiter::tooManyAttempts($destKey, 5)) {
+            $seconds = RateLimiter::availableIn($destKey);
+            return response()->json([
+                'success' => false,
+                'message' => "Batas pengiriman OTP untuk kontak ini telah tercapai. Silakan coba lagi dalam {$seconds} detik.",
+                'error' => [
+                    'code' => 'RATE_LIMIT_EXCEEDED',
+                    'message' => 'Batas pengiriman OTP untuk kontak ini telah tercapai.',
+                ],
+            ], 429);
+        }
+
+        try {
+            $otpResult = $this->otpService->generateOtp($user, $channel, $normalizedDestination);
+        } catch (\RuntimeException $e) {
+            Log::error('Resend OTP failed: ' . $e->getMessage(), ['user_id' => $user->id]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => [
+                    'code' => 'OTP_DELIVERY_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 502);
+        }
+
+        RateLimiter::hit($ipKey, 3600);
+        RateLimiter::hit($destKey, 3600);
 
         $deliveryStatus = $otpResult['delivery_status'];
         $otpSent = $otpResult['otp_sent'];
         $message = ($deliveryStatus === 'sent')
             ? 'Kode OTP baru berhasil dikirimkan.'
-            : 'Mode pengujian: OTP tidak dikirim ke email/WhatsApp.';
+            : (app()->environment('local', 'testing') && $otpResult['debug_otp'] !== null
+                ? 'Mode pengujian: OTP tidak dikirim ke email/WhatsApp.'
+                : 'Kode OTP baru sedang dikirimkan ke kontak Anda.');
 
         return response()->json([
             'success' => true,
@@ -238,7 +417,7 @@ class OtpRegistrationApiController extends Controller
             'data' => [
                 'user_id' => (string) $user->id,
                 'channel' => $channel,
-                'destination' => $destination,
+                'destination' => $normalizedDestination,
                 'otp_sent' => $otpSent,
                 'delivery_status' => $deliveryStatus,
                 'debug_otp' => $otpResult['debug_otp'],
@@ -251,71 +430,91 @@ class OtpRegistrationApiController extends Controller
      */
     public function verifyOtp(Request $request): JsonResponse
     {
-        $user = $this->resolveUser($request);
+        try {
+            $user = $this->resolveUser($request);
 
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Pengguna tidak ditemukan.',
-                'error' => [
-                    'code' => 'USER_NOT_FOUND',
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
                     'message' => 'Pengguna tidak ditemukan.',
+                    'error' => [
+                        'code' => 'USER_NOT_FOUND',
+                        'message' => 'Pengguna tidak ditemukan.',
+                    ],
+                ], 404);
+            }
+
+            $otp = (string) $request->input('otp', $request->input('otp_code'));
+            $result = $this->otpService->verifyOtp($user, $otp, $request->input('channel'));
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'],
+                    'error' => [
+                        'code' => $result['code'] ?? 'OTP_INVALID',
+                        'message' => $result['message'],
+                    ],
+                ], 400);
+            }
+
+            // Generate Sanctum token
+            $user->tokens()->where('name', 'customer_token')->delete();
+            $token = $user->createToken('customer_token', ['role:' . $user->role])->plainTextToken;
+
+            AuditLog::create([
+                'actor_id' => $user->id,
+                'actor_role' => $user->role,
+                'action' => 'CUSTOMER_OTP_VERIFIED_SUCCESS',
+                'resource_type' => 'user',
+                'resource_id' => $user->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            $roles = $user->roles->pluck('name')->all();
+            if (empty($roles)) {
+                $roles = [$user->role];
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Verifikasi OTP berhasil. Akun Anda telah aktif.',
+                'data' => [
+                    'user' => [
+                        'id' => (string) $user->id,
+                        'name' => $user->name,
+                        'email' => $user->display_email,
+                        'display_email' => $user->display_email,
+                        'has_real_email' => $user->has_real_email,
+                        'phone' => $user->phone,
+                        'display_phone' => $user->display_phone,
+                        'status' => 'active',
+                        'verified_at' => $user->email_verified_at?->toIso8601String(),
+                        'roles' => $roles,
+                        'active_mode' => $user->role,
+                        'available_modes' => [$user->role],
+                    ],
+                    'token' => $token,
+                    'token_type' => 'Bearer',
                 ],
-            ], 404);
-        }
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('OTP verification failed with exception', [
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'class' => get_class($e),
+            ]);
 
-        $otp = (string) $request->input('otp', $request->input('otp_code'));
-        $result = $this->otpService->verifyOtp($user, $otp, $request->input('channel'));
-
-        if (!$result['success']) {
             return response()->json([
                 'success' => false,
-                'message' => $result['message'],
+                'message' => 'Verifikasi OTP gagal diproses. Silakan coba lagi.',
                 'error' => [
-                    'code' => $result['code'] ?? 'OTP_INVALID',
-                    'message' => $result['message'],
+                    'code' => 'OTP_VERIFICATION_FAILED',
+                    'message' => 'Verifikasi OTP gagal diproses. Silakan coba lagi.',
                 ],
-            ], 400);
+            ], 500);
         }
-
-        // Generate Sanctum token
-        $user->tokens()->where('name', 'customer_token')->delete();
-        $token = $user->createToken('customer_token', ['role:' . $user->role])->plainTextToken;
-
-        AuditLog::create([
-            'actor_id' => $user->id,
-            'actor_role' => $user->role,
-            'action' => 'CUSTOMER_OTP_VERIFIED_SUCCESS',
-            'resource_type' => 'user',
-            'resource_id' => $user->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        $roles = $user->roles->pluck('name')->all();
-        if (empty($roles)) {
-            $roles = [$user->role];
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Verifikasi OTP berhasil. Akun Anda telah aktif.',
-            'data' => [
-                'user' => [
-                    'id' => (string) $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'phone' => $user->phone,
-                    'status' => 'active',
-                    'verified_at' => $user->email_verified_at?->toIso8601String(),
-                    'roles' => $roles,
-                    'active_mode' => $user->role,
-                    'available_modes' => [$user->role],
-                ],
-                'token' => $token,
-                'token_type' => 'Bearer',
-            ],
-        ]);
     }
 
     /**
@@ -323,115 +522,149 @@ class OtpRegistrationApiController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
-        $channel = $request->input('channel', 'email');
-        $rawDestination = $request->input('destination', $request->input('email', $request->input('phone')));
-        $password = (string) $request->input('password');
+        try {
+            $channel = $request->input('channel');
+            $emailInput = $request->input('email');
+            $phoneInput = $request->input('phone', $request->input('phone_number'));
+            $destinationInput = $request->input('destination');
+            $password = (string) $request->input('password');
 
-        if (empty($rawDestination) || empty($password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Kontak atau password wajib diisi.',
-                'error' => [
-                    'code' => 'INVALID_CREDENTIALS',
-                    'message' => 'Kontak atau password salah.',
-                ],
-            ], 422);
-        }
-
-        $normalizedDestination = $this->otpService->normalizeDestination($channel, $rawDestination);
-
-        $user = User::where(function ($query) use ($channel, $normalizedDestination) {
-            if ($channel === 'email') {
-                $query->where('email', $normalizedDestination);
-            } else {
-                $query->where('phone', $normalizedDestination);
+            if (empty($channel)) {
+                if (!empty($emailInput)) {
+                    $channel = 'email';
+                } elseif (!empty($phoneInput)) {
+                    $channel = 'whatsapp';
+                } elseif (!empty($destinationInput)) {
+                    $channel = filter_var($destinationInput, FILTER_VALIDATE_EMAIL) ? 'email' : 'whatsapp';
+                } else {
+                    $channel = 'email';
+                }
             }
-        })->first();
 
-        if (!$user || !Hash::check($password, $user->password)) {
-            AuditLog::create([
-                'actor_id' => $user?->id,
-                'actor_role' => $user?->role ?? 'customer',
-                'action' => 'LOGIN_FAILED',
-                'resource_type' => 'auth',
-                'resource_id' => null,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'after_value' => json_encode(['destination' => $normalizedDestination]),
-            ]);
+            $rawDestination = $destinationInput ?: ($channel === 'whatsapp' ? $phoneInput : ($emailInput ?: $phoneInput));
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Kontak atau password salah.',
-                'error' => [
-                    'code' => 'INVALID_CREDENTIALS',
-                    'message' => 'Kontak atau password salah.',
-                ],
-            ], 401);
-        }
-
-        if (!$user->is_active) {
-            if (is_null($user->email_verified_at) && is_null($user->phone_verified_at)) {
+            if (empty($rawDestination) || empty($password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Akun belum diverifikasi. Silakan lakukan verifikasi OTP registrasi terlebih dahulu.',
+                    'message' => 'Kontak atau password wajib diisi.',
                     'error' => [
-                        'code' => 'ACCOUNT_PENDING_VERIFICATION',
-                        'message' => 'Akun belum diverifikasi.',
+                        'code' => 'INVALID_CREDENTIALS',
+                        'message' => 'Kontak atau password salah.',
                     ],
-                    'errors' => [
-                        'user_id' => (string) $user->id,
+                ], 422);
+            }
+
+            $normalizedDestination = $this->otpService->normalizeDestination($channel, $rawDestination);
+
+            $user = User::where(function ($query) use ($normalizedDestination, $rawDestination) {
+                $query->where('email', $normalizedDestination)
+                    ->orWhere('phone', $normalizedDestination)
+                    ->orWhere('email', $rawDestination)
+                    ->orWhere('phone', $rawDestination);
+            })->first();
+
+            if (!$user || !Hash::check($password, $user->password)) {
+                AuditLog::create([
+                    'actor_id' => $user?->id,
+                    'actor_role' => $user?->role ?? 'customer',
+                    'action' => 'LOGIN_FAILED',
+                    'resource_type' => 'auth',
+                    'resource_id' => null,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'after_value' => json_encode(['destination' => $normalizedDestination]),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kontak atau password salah.',
+                    'error' => [
+                        'code' => 'INVALID_CREDENTIALS',
+                        'message' => 'Kontak atau password salah.',
+                    ],
+                ], 401);
+            }
+
+            if (!$user->is_active) {
+                if (is_null($user->email_verified_at) && is_null($user->phone_verified_at)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Akun belum diverifikasi. Silakan lakukan verifikasi OTP registrasi terlebih dahulu.',
+                        'error' => [
+                            'code' => 'ACCOUNT_PENDING_VERIFICATION',
+                            'message' => 'Akun belum diverifikasi.',
+                        ],
+                        'errors' => [
+                            'user_id' => (string) $user->id,
+                        ],
+                    ], 403);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akun Anda dinonaktifkan. Silakan hubungi pusat bantuan.',
+                    'error' => [
+                        'code' => 'ACCOUNT_INACTIVE',
+                        'message' => 'Akun Anda dinonaktifkan.',
                     ],
                 ], 403);
             }
 
+            $token = $user->createToken('auth_token', ['role:' . $user->role])->plainTextToken;
+
+            AuditLog::create([
+                'actor_id' => $user->id,
+                'actor_role' => $user->role,
+                'action' => 'LOGIN_SUCCESS',
+                'resource_type' => 'user',
+                'resource_id' => $user->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            $roles = $user->roles->pluck('name')->all();
+            if (empty($roles)) {
+                $roles = [$user->role];
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Login berhasil.',
+                'data' => [
+                    'user' => [
+                        'id' => (string) $user->id,
+                        'name' => $user->name,
+                        'email' => $user->display_email,
+                        'display_email' => $user->display_email,
+                        'has_real_email' => $user->has_real_email,
+                        'phone' => $user->phone,
+                        'display_phone' => $user->display_phone,
+                        'status' => 'active',
+                        'verified_at' => $user->email_verified_at?->toIso8601String(),
+                        'roles' => $roles,
+                        'active_mode' => $user->role,
+                        'available_modes' => [$user->role],
+                    ],
+                    'token' => $token,
+                    'token_type' => 'Bearer',
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Login failed with exception', [
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'class' => get_class($e),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Akun Anda dinonaktifkan. Silakan hubungi pusat bantuan.',
+                'message' => 'Login gagal diproses. Silakan coba lagi.',
                 'error' => [
-                    'code' => 'ACCOUNT_INACTIVE',
-                    'message' => 'Akun Anda dinonaktifkan.',
+                    'code' => 'LOGIN_FAILED',
+                    'message' => 'Login gagal diproses. Silakan coba lagi.',
                 ],
-            ], 403);
+            ], 500);
         }
-
-        $token = $user->createToken('auth_token', ['role:' . $user->role])->plainTextToken;
-        $user->update(['last_login_at' => now()]);
-
-        AuditLog::create([
-            'actor_id' => $user->id,
-            'actor_role' => $user->role,
-            'action' => 'LOGIN_SUCCESS',
-            'resource_type' => 'user',
-            'resource_id' => $user->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        $roles = $user->roles->pluck('name')->all();
-        if (empty($roles)) {
-            $roles = [$user->role];
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Login berhasil.',
-            'data' => [
-                'user' => [
-                    'id' => (string) $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'phone' => $user->phone,
-                    'status' => 'active',
-                    'verified_at' => $user->email_verified_at?->toIso8601String(),
-                    'roles' => $roles,
-                    'active_mode' => $user->role,
-                    'available_modes' => [$user->role],
-                ],
-                'token' => $token,
-                'token_type' => 'Bearer',
-            ],
-        ]);
     }
 
     /**
@@ -451,8 +684,11 @@ class OtpRegistrationApiController extends Controller
             'data' => [
                 'id' => (string) $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'email' => $user->display_email,
+                'display_email' => $user->display_email,
+                'has_real_email' => $user->has_real_email,
                 'phone' => $user->phone,
+                'display_phone' => $user->display_phone,
                 'status' => $user->is_active ? 'active' : 'inactive',
                 'verified_at' => $user->email_verified_at?->toIso8601String(),
                 'roles' => $roles,

@@ -15,8 +15,13 @@ class StorePolicy
      * Determine whether the user can view the store.
      * Platform admin with 'view_store' permission, owner, or staff.
      */
-    public function view(User $user, Store $store): bool
+    public function view(?User $user, Store $store): bool
     {
+        // Unauthenticated guest browsing marketplace
+        if ($user === null) {
+            return $store->status === 'approved' && $store->is_active;
+        }
+
         // Platform admin with global permission can view any store.
         if ($user->hasPermissionTo('view_any_store')) {
             return true;

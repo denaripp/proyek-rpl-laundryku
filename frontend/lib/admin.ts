@@ -223,6 +223,9 @@ export const adminApi = {
       // ignore network error
     }
     clearAuthSession();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('laundryku_admin_user');
+    }
   },
 
   // 1. Dashboard Metrics

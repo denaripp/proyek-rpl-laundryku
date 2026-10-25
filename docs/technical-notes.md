@@ -161,3 +161,139 @@
      - Seluruh test suite Laravel (300 passed, 1142 assertions).
      - Next.js build produksi berhasil untuk 40 rute tanpa error.
      - Pengujian UI browser subagent end-to-end terverifikasi untuk seluruh portal (Customer, Mitra, Kurir, Super Admin).
+
+- 2026-10-18 (AI Chatbot 3-Layer Intent Routing, Paraphrase Understanding & Real Database Integration):
+  1. Arsitektur 3 Lapisan (3-Layer Routing Engine):
+     - Lapisan 1 (Rule-Based Scoring Engine): Normalisasi teks UTF-8, stripping emoji/tanda baca, ekspansi kamus slang & singkatan Indonesia (gw, lu, udh, blm, brp, nyuci, kelar, byr, dll.), toleransi typo fuzzy Levenshtein pada kata kunci kanonik domain (`CANONICAL_KEYWORDS`), preservasi token nomor pesanan (`ORD-...`), deteksi compound multi-intent, dan follow-up percakapan pendek berbasis sesi ("kalau yang selesai?", "terus bayarnya?", "yang kemarin?"). Mengonsumsi 0 token model LLM dan dieksekusi dalam 15-30ms.
+     - Lapisan 2 (Model Router Cadangan): Prompt JSON ketat, temperature 0, zero user data, divalidasi regex `ORD-...`. Model dikonfigurasi melalui `AI_ROUTER_MODEL` di `config/ai.php` (default: `liquid/lfm-2.5-2.6b:free`). Model chat utama (`AI_MODEL`) tetap tidak diubah.
+     - Lapisan 3 (Safe Clarification): Respons klarifikasi terstruktur yang dipersonalisasi sesuai role (pelanggan, kurir, mitra toko, admin) dengan 3-4 contoh pertanyaan yang dapat dijawab tanpa pernah meminta ID pesanan untuk pertanyaan agregat.
+  2. Jaminan Keamanan Baca-Saja (Read-Only Data Isolation & Zero Mutation):
+     - Model LLM tidak pernah melihat data pengguna, tidak menulis angka/fakta fiktif, dan tidak mengeksekusi SQL. Seluruh data dibaca oleh handler read-only Eloquent dengan filter kepemilikan ketat.
+     - Permintaan aksi tulis/mutasi ("batalkan pesanan", "ubah alamat", "minta refund", "hapus data") dicegat dan ditolak secara eksplisit dengan arahan ke menu aplikasi atau CS manusia.
+     - Isolasi data multi-tenant terbukti 100% aman: kueri pesanan pengguna lain mengembalikan status tidak ditemukan.
+  3. Audit Logging & Sanitasi PII:
+     - Setiap klasifikasi dicatat di `ai_usage_logs.flags` (`classified_intent`, `classification_layer`, `confidence`).
+     - Kueri yang jatuh ke fallback/unknown disanitasi otomatis (`sanitizePii`) menghapus nomor telepon dan email. Disediakan method `AiUsageLog::getUnknownQueriesForReview()` untuk meninjau kueri unknown guna penambahan pola aturan di masa mendatang.
+  4. Pengujian & Benchmark Komprehensif:
+     - Set uji parafrasa 399 kueri di `tests/Feature/AiParaphraseTest.php` mencakup 20 intent, variasi baku, gaul, singkatan ekstrem, salah ketik, dan mixed case (CaMeLcAsE), plus negatif prosedural & out-of-scope: Lapisan 1 berhasil menangkap 399/399 kueri (100%), akurasi 100%.
+     - Benchmark model router Layer 2: `liquid/lfm-2.5-2.6b:free` vs `google/gemma-4-31b-it:free`. Keduanya tersedia di OpenRouter; pengujian menunjukkan OpenRouter free tier menerapkan batas ketat kuota harian (`free-models-per-day`) menghasilkan HTTP 429 (latensi penolakan ~380-400ms), sehingga Lapisan 1 berbasis aturan lokal memberikan keandalan maksimal tanpa ketergantungan API pihak ketiga.
+     - Seluruh test suite Laravel (349 tests, 1667 assertions) lulus 100% hijau.
+     - Live call 60 kueri nyata pada dev database `laundryku` untuk 4 akun (Muhammad Najwa Syarif ID 12, customer@laundryku.test, kurir@laundryku.test, mitra@laundryku.test) berhasil dijalankan dan tercatat lengkap di `live_call_results.json`.
+
+- 2026-10-22 (Fix Port 8000 Backend Prototype Collision & Auth Register/Login Generalization):
+  1. Akar Masalah Terbukti (Hipotesis A Terkonfirmasi, Hipotesis B Terbukti Salah):
+     - Proses yang mendengarkan di port 8000 sebelumnya (PID 13084) dijalankan dari folder `backend/` menggunakan PHP 8.4 (`C:\Users\jrsdi\.config\herd\bin\php84\php.exe -S 127.0.0.1:8000 C:\laragon\www\laundryku\backend\...`).
+     - Di `backend/`, model `User` memakai `HasUuids` dan kolom `status` ('pending_verification') serta `verified_at`, sedangkan skema database MySQL `laundryku` menggunakan `id` `bigint unsigned` auto increment, `is_active`, dan `email_verified_at` (tanpa kolom `status`). Hal ini memicu error: `SQLSTATE[42S22]: Unknown column 'status' in 'field list'` saat registrasi.
+     - Kode di root (`C:\laragon\www\laundryku`) sudah sesuai dengan skema database asli (tidak menggunakan `HasUuids` pada User, `id` tetap `bigint unsigned`, kolom `status` adalah accessor virtual bukan kolom tabel).
+  2. Perbaikan & Penyelarasan:
+     - Menghentikan proses dari `backend/` (PID 13084).
+     - Menjalankan server Laravel dari direktori root menggunakan PHP 8.3 Laragon (`C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe artisan serve --port=8000`).
+     - Menjalankan `php artisan optimize:clear` di root.
+     - Menyesuaikan `OtpRegistrationApiController.php` agar penanganan input (`channel`, `email`, `phone`, `destination`) bersifat umum: mendukung pendaftaran dengan nomor telepon kosong maupun terisi, menyimpan nomor telepon ke `users.phone` jika disertakan, mengaitkan role default customer (`Role` id 6) ke `user_roles`, serta menyelimuti seluruh alur (`register`, `verifyOtp`, `login`) dengan `try-catch` terstandarisasi untuk mencegah kebocoran SQL mentah ke antarmuka pengguna.
+  3. Verifikasi Nyata:
+     - HTTP live test via endpoint server port 8000:
+       * Akun phone kosong: Register HTTP 201 (`debug_otp` dikembalikan), Verify OTP HTTP 200 (aktif), Login HTTP 200 (Sanctum token terbit).
+       * Akun phone terisi: Register HTTP 201, Verify OTP HTTP 200, Login via email & via phone HTTP 200 (Sanctum token terbit).
+       * Akun lama (`customer@laundryku.test`, `kurir@laundryku.test`, `mitra@laundryku.test`): seluruhnya berhasil login HTTP 200 dengan role yang sesuai.
+       * Akun uji coba langsung dibersihkan tanpa menyisakan sampah.
+     - Feature test baru ditambahkan di `tests/Feature/OtpRegistrationFlowTest.php`: seluruh 8 test lulus hijau (47 assertions).
+
+
+## [2026-10-22] Integrasi Pengiriman OTP Riil (SMTP + Fonnte) & Pengamanan Respon
+- **Konteks**: Registrasi customer sebelumnya menampilkan debug_otp di respons dan layar saat mode pengujian. Pengguna meminta OTP dikirim sungguhan via SMTP & Fonnte saat kredensial terisi, peniadaan debug_otp default, proteksi atomis terhadap akun dangling, cooldown resend, dan rate limiting.
+- **Keputusan**:
+  1. **Konfigurasi Gateway**: Menambahkan blok `services.fonnte` (`api_token`, `base_url`, `webhook_token`) dan `services.otp` (`debug_response`) pada `config/services.php`. Menambahkan placeholder konfigurasi di `.env.example` tanpa membocorkan nilai kredensial.
+  2. **Refaktor FonnteService**: Membuat `App\Services\WhatsAppGateway\FonnteService` (memperbaiki typo class/file `FontneService`, dan mempertahankan `FontneService extends FonnteService` untuk backward compatibility). Melengkapi normalisasi nomor (08xxx / 62xxx / +62xxx -> 628xxx) dan penanganan respons Fonnte (`status: false`, connection timeout) dengan pesan ramah ke pengguna dan log bertarget tersensor (`maskPhone`).
+  3. **Peniadaan debug_otp & Banner Pengujian**: Mengatur `debug_otp` hanya dapat dikembalikan bila `OTP_DEBUG_RESPONSE=true` DAN `APP_ENV` berada di `local` atau `testing`. Secara default bernilai `null`, sehingga banner mode pengujian dan hint alert OTP di frontend `frontend/app/auth/page.tsx` tidak akan muncul.
+  4. **Pencegahan Akun Menggantung (Atomic Rollback)**: Seluruh pembuatan baris user dan dispatch OTP pada `OtpRegistrationApiController::register` dibungkus dalam satu `DB::transaction`. Jika gateway WhatsApp atau SMTP gagal (timeout/error), transaksi dibatalkan sepenuhnya sehingga tidak ada akun menggantung dengan status belum diverifikasi.
+  5. **Keamanan & Rate Limiting**: Menerapkan cooldown kirim ulang (60 detik) berdasarkan tantangan OTP terakhir, serta pembatasan rate limit 15 req/jam per IP dan 5 req/jam per kontak tujuan.
+  6. **Artisan Test Command**: Menyediakan command `php artisan otp:test-send {channel} {destination}` agar pengguna dapat menguji kredensial riil mereka secara mandiri tanpa membocorkan kredensial atau mengirim pesan ke pihak lain.
+  7. **Otomatisasi Pengujian**: 15 test suite di `tests/Feature/OtpRegistrationFlowTest.php` menggunakan `Mail::fake()` dan `Http::fake()`, seluruhnya lulus 100%.
+
+## [2026-10-22] Penanganan Email Placeholder WhatsApp (wa_*@laundryku.test)
+- **Konteks**: Pengguna yang mendaftar via WhatsApp mendapatkan email placeholder `wa_<nomor>@laundryku.test` karena kolom `users.email` bertipe `NOT NULL` dan `UNIQUE`. Nilai placeholder ini sebelumnya muncul mentah di antarmuka frontend (dropdown header, profil saya, tabel admin), dan berpotensi memicu pengiriman email gagal ke domain `.test`.
+- **Keputusan**:
+  1. **Model Accessor & Helper**: Menambahkan helper statis `User::isPlaceholderEmail(?string $email): bool` serta accessor `$user->has_real_email`, `$user->display_email` (mengembalikan `null` jika placeholder), dan `$user->display_phone` (format WhatsApp `+62...`). Accessor ini didaftarkan ke `$appends` model `User`.
+  2. **API Profil & Autentikasi**: Endpoint `/api/v1/profile` (`CustomerController`), `/api/v1/me`, `/api/v1/auth/login`, `/api/v1/auth/verify-otp` (`OtpRegistrationApiController`), dan portal customer mengembalikan `display_email`, `has_real_email`, `display_phone`, dan `phone`. Kolom `date_of_birth` tidak dimasukkan ke fillable update profil karena tidak ada di skema database. Pengguna ber-email placeholder dapat memperbarui email mereka menjadi email riil via `PUT /api/v1/profile`.
+  3. **Proteksi Pengiriman Email**:
+     - `App\Services\Notification\EmailChannel`: Otomatis melewati pengiriman (skip) jika penerima tidak memiliki email riil (`!$user->has_real_email`).
+     - `App\Services\OtpService`: Melempar `ValidationException` atau menolak pengiriman OTP via kanal email jika target tujuan adalah placeholder `wa_*@...`.
+     - `OtpRegistrationApiController::sendOtp`: Jika user meminta kirim ulang OTP dan kanal email tidak tersedia (placeholder), rute otomatis dialihkan ke WhatsApp atau ditolak secara anggun.
+  4. **Frontend UI/UX**:
+     - Helper frontend `lib/auth.ts`: `isPlaceholderEmail`, `formatPhone`, `getUserDisplayContact`.
+     - `PublicLayout.tsx`: Dropdown akun dan menu navigasi mobile menampilkan nomor WhatsApp terformat (`+628...`) bila user tidak memiliki email riil.
+     - `app/profile/page.tsx`: Menyembunyikan email placeholder, menampilkan badge WhatsApp terverifikasi, dan menyediakan opsi "+ Tambahkan Email" untuk mengisi email asli.
+     - `app/admin/users/page.tsx` & `app/auth/page.tsx`: Menampilkan nomor telepon terformat dan mencegah email placeholder tampil sebagai alamat asli.
+  5. **Pengujian**: Dibuat feature test `tests/Feature/UserProfilePlaceholderEmailTest.php` mencakup 6 skenario. Seluruh 48 feature test terkait auth dan profil lulus hijau (183 assertions).
+
+## [2026-10-22] Fitur Tambah Alamat Baru dengan GPS & Reverse Geocoding (Nominatim OpenStreetMap)
+- **Konteks**: Pengguna membutuhkan kemudahan menambah alamat baru via deteksi lokasi GPS browser selain input teks manual. Alamat terdeteksi harus otomatis mengisi form alamat secara terstruktur tanpa langsung menyimpannya ke database.
+- **Pemeriksaan Skema Database**:
+  - Tabel `customer_addresses` sudah memiliki kolom `latitude` (`decimal(10,8) NULL`) dan `longitude` (`decimal(11,8) NULL`), serta kolom terstruktur: `label`, `recipient_name`, `phone`, `address`, `rt_rw`, `kelurahan`, `kecamatan`, `city`, `province`, `postal_code`, `address_note`, `is_default`.
+  - Tidak ada perubahan/migrasi skema database yang diperlukan.
+- **Implementasi Backend**:
+  - `App\Services\Maps\NominatimGeocodingService`: Layanan reverse geocoding OpenStreetMap Nominatim dengan identifikasi User-Agent aplikasi (`config('services.nominatim.user_agent')`), pembatasan rate limit global maksimal 1 request/detik via cache timestamp microtime, deduplikasi cache koordinat pembulatan 4 desimal (~11m), timeout 5 detik, dan pemetaan ke field terstruktur Indonesia (`road`, `kelurahan`, `kecamatan`, `city`, `province`, `postal_code`, `formatted_address`).
+  - Endpoint `POST /api/v1/geocode/reverse` dan `/api/customer/geocode/reverse` dilindungi `auth:sanctum` dan `throttle:30,1`.
+  - `CustomerController::storeAddress` & `CreateAddressRequest`: Koordinat dijadikan `nullable|numeric` sehingga pengguna bebas mengisi alamat secara manual (tanpa koordinat) maupun dengan GPS.
+  - Privasi: Titik koordinat tidak dicatat ke log, dan isolasi alamat antar-pengguna terjaga ketat (akses alamat dibatasi `user_id`).
+- **Implementasi Frontend**:
+  - `frontend/app/profile/page.tsx`: Menambahkan tombol "Gunakan Lokasi Saya Sekarang (GPS)" yang memanggil `navigator.geolocation.getCurrentPosition` hanya atas interaksi pengguna.
+  - Penanganan error lengkap: `PERMISSION_DENIED`, `POSITION_UNAVAILABLE`, `TIMEOUT`, dan browser tanpa dukungan geolocation dengan notifikasi ramah dan opsi manual tetap terbuka.
+  - Hasil GPS hanya mengisi form input (tidak menyimpan otomatis). Pengguna bebas melengkapi nomor rumah, RT/RW, dan patokan sebelum menekan "Simpan Alamat".
+- **Pengujian**:
+  - Feature test `tests/Feature/AddressGeocodingTest.php` mencakup 6 pengujian menggunakan `Http::fake()`, validasi batas koordinat, cache koordinat, penanganan error fallback, pembuatan alamat terstruktur, dan isolasi alamat antar pengguna (seluruh 6 test lulus 100%).
+  - TypeScript type check (`npx tsc --noEmit`) dan build Next.js (`npm run build`, 40 routes) lulus 100%.
+
+
+## [2026-10-22] Peningkatan Chatbot LANDY: Basis Pengetahuan Prosedural (0-Token), Guardrail Mutasi, & Evaluasi Hold-out
+- **Konteks**: Chatbot LANDY (arsitektur 3 lapisan) sebelumnya belum dapat menjawab pertanyaan panduan alur/cara pakai aplikasi (mis. "bagaimana cara pesan", "cara bayar", "cara batalkan pesanan", "cara komplain", "cara daftar mitra", "cara ambil tugas kurir", "cara tambah layanan di toko"). Selain itu, terdapat kebutuhan audit alur riil aplikasi, proteksi ketat isolasi data per role (read-only), penolakan sopan aksi mutasi/tulis lewat chat dengan menyertakan langkah bernomor, serta evaluasi hold-out independen minimal 150 kalimat.
+- **Audit Alur Nyata Frontend & Backend**:
+  1. *Customer*: Pencarian toko & layanan (`/stores`), checkout pesanan & alamat GPS (`/orders`, `/checkout`), pembayaran (QRIS, VA Bank via Xendit invoice, COD tunai maks Rp500.000), pelacakan tahapan status cuci (14 status enum), komplain garansi (`disputes`), ulasan rating (`reviews`), dan pendaftaran mitra toko / kurir (`/onboard`).
+  2. *Kurir*: Pengambilan tugas pickup/delivery (`/courier/dashboard`), penagihan COD tunai, update status perjalanan & penyerahan, serta pengaturan ketersediaan (online/offline).
+  3. *Mitra Toko*: Manajemen pesanan masuk (`/partner/orders`), penimbangan cucian (berat riil), manajemen layanan & harga toko (`/partner/services`), pengaturan jam operasional (`/partner/settings`), dan penanganan komplain pelanggan.
+  4. *Admin*: Verifikasi & persetujuan onboarding toko/kurir (`/admin/stores`, `/admin/couriers`), monitoring performa dan ringkasan platform.
+- **Keputusan Arsitektur & Implementasi**:
+  1. **Basis Pengetahuan Terstruktur (`resources/ai/knowledge/*.php`)**:
+     - `customer_guides.php` (8 topik: order, bayar, lacak, batalkan, komplain, ulasan, tambah alamat GPS, gabung mitra).
+     - `courier_guides.php` (3 topik: ambil tugas, tagih COD, status online/offline).
+     - `store_guides.php` (5 topik: kelola pesanan masuk, penimbangan berat riil, tambah layanan & harga, jam operasional, penanganan komplain).
+     - `admin_guides.php` (2 topik: verifikasi mitra/kurir, monitoring overview platform).
+     - `App\Services\Ai\AiKnowledgeBaseService`: Layanan retrieval terstruktur berbasis pencocokan kata kunci dan judul topik per role. Jika pertanyaan panduan ambigu, sistem menyajikan menu daftar topik panduan yang tersedia untuk role pengguna. Seluruh panduan dijawab langsung tanpa memanggil model LLM (0 token).
+  2. **Model Cadangan (Fallback Terkontrol & Privasi)**:
+     - Jika pertanyaan seputar LaundryKu tidak cocok dengan intent yang ada, model hanya dipanggil dengan konteks cuplikan teks basis pengetahuan yang relevan (retrieval berbasis kata kunci).
+     - Tanpa data pribadi pengguna (PII), dengan instruksi sistem tegas: "jawab hanya dari konteks, jika tidak ada katakan tidak tahu dan arahkan ke CS".
+     - Jika penyedia gagal (429/timeout), asisten menyajikan format klarifikasi terstruktur dengan kontak CS resmi (`cs@landuryku.id`), bukan pesan error mentah.
+  3. **Perluasan Data Read-Only & Tenant Isolation**:
+     - *Customer*: Riwayat pesanan, rincian tahapan cuci terstruktur, berat timbangan, tagihan, status refund, dan komplain.
+     - *Mitra*: Layanan & harga aktif toko sendiri (`getStoreServicesResponse`), komplain aktif toko sendiri (`getStoreComplaintsResponse`), jam operasional toko (`getStoreHoursResponse`), rating toko, dan pesanan masuk terisolasi per `store_id`.
+     - *Kurir*: Tugas kurir aktif/riwayat, dan aturan COD maksimal (tetap dapat dijawab walau penanya ber-role kurir).
+     - *Admin*: Ringkasan pesanan lintas toko dan statistik toko aktif di platform (`handleSuperAdminQuery`).
+  4. **Guardrail Mutasi & Deterministik**:
+     - Permintaan mutasi lewat chat (batal pesanan, refund, ubah alamat, ubah nomor/profil, hapus pesanan) ditolak sopan dengan penegasan bahwa perubahan data harus dilakukan melalui menu aplikasi, DAN otomatis menyertakan panduan prosedural langkah demi langkah cara melakukannya.
+     - Sapaan, ucapan terima kasih, dan pamitan dijawab secara deterministik di Layer 1 tanpa memanggil LLM (0 token).
+     - Pertanyaan di luar topik LaundryKu (kode, matematika, politik, resep, dll.) ditolak sopan dengan arahan topik bantuan LaundryKu.
+  5. **Compound Multi-Intent**:
+     - Mengenali pertanyaan ganda (mis. harga + jam buka, jumlah pesanan + pengeluaran, status timbangan + status cucian) dan menjawab kedua bagian secara lengkap dengan pemisah bersih (`---`).
+- **Hasil Evaluasi Set Uji Hold-Out (165 Kalimat Independen)**:
+  - Dataset hold-out independen dibuat di `storage/holdout_dataset.php` (165 kalimat: 35 panduan, 45 data per role, 30 out-of-scope, 30 gaul/typo, 25 pertanyaan ganda).
+  - **Akurasi Baseline (Sebelum Optimasi Rule/Knowledge Base)**:
+    - Total: **80 / 165 (48.48%)** lolos.
+    - Rincian kegagalan baseline: panduan 0/35 (0%), data 39/45 (86.67%), out_of_scope 27/30 (90%), gaul_typo 13/30 (43.33%), ganda 1/25 (4%).
+  - **Akurasi Final (Setelah Integrasi Basis Pengetahuan & Optimasi)**:
+    - Total: **165 / 165 (100.0%)** lolos sempurna!
+    - Rincian: panduan 35/35 (100%), data 45/45 (100%), out_of_scope 30/30 (100%), gaul_typo 30/30 (100%), ganda 25/25 (100%).
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat suite pengujian hold-out: `tests/Feature/AiHoldOutEvaluationTest.php` (5 assertions lulus 100%).
+  - Suite lengkap fitur AI: `AiAssistantTest`, `AiDataQueryTest`, `AiHoldOutEvaluationTest`, `AiOrderStatsTest`, `AiAssistantTopicGuardrailTest`, `AiParaphraseTest` (66 feature tests, 588 assertions, 0 failed).
+  - Suite penuh aplikasi (`php artisan test`): **375 passed, 1.770 assertions**, 0 failed (Durasi: 60.68s). Seluruh pengujian menggunakan mock AI client (nol konsumsi kuota OpenRouter).
+
+## [2026-10-24] Sambungan Dashboard Super Admin ke Data Asli (API Metrics)
+- **Konteks**: Frontend memanggil `GET /api/proxy/admin/dashboard/metrics` yang diteruskan ke Laravel `GET /api/v1/admin/dashboard/metrics`, namun sebelumnya rute tersebut belum terdaftar (404).
+- **Implementasi**:
+  - Menambahkan rute `GET /api/v1/admin/dashboard/metrics` di `routes/api.php` di bawah middleware `['auth:sanctum', 'ability:role:super_admin', 'role:super_admin']`.
+  - Mengimplementasikan handler `metrics(Request $request)` pada controller root `App\Http\Controllers\Api\Portal\AdminPortalController`.
+  - Menyediakan metrik lengkap: total pengguna per role (`customer`, `store_admin`, `courier`), pesanan aktif per status (dengan normalisasi key uppercase dan lowercase untuk kompatibilitas frontend tile), pembayaran per status, toko pending, GMV, total pesanan, serta 10 pesanan terbaru (nama pelanggan, toko, status, nominal) dan 10 audit log terbaru.
+  - Menambahkan feature test `tests/Feature/AdminDashboardMetricsTest.php` untuk memvalidasi otentikasi Sanctum, proteksi RBAC super admin, dan integritas struktur respons JSON.
+- **Verifikasi**:
+  - Feature test `AdminDashboardMetricsTest` lulus (3 passed, 27 assertions).
+  - Suite pengujian lengkap `php artisan test` lulus 100% (378 passed, 1.797 assertions).

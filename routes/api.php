@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\Portal\CustomerPortalController;
 use App\Http\Controllers\Api\Portal\MitraPortalController;
 use App\Http\Controllers\Api\Portal\CourierPortalController;
 use App\Http\Controllers\Api\Portal\AdminPortalController;
+use App\Http\Controllers\Api\ChatbotController;
 
 // ===== Public webhooks =====
 Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])
@@ -104,6 +105,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/customer/addresses', [CustomerController::class, 'listAddresses']);
     Route::post('/customer/addresses', [CustomerController::class, 'storeAddress']);
     Route::delete('/customer/addresses/{address}', [CustomerController::class, 'destroyAddress']);
+    Route::post('/customer/geocode/reverse', [CustomerController::class, 'reverseGeocode'])->middleware('throttle:30,1');
 });
 
 // ===== Tahap 16: Courier dashboard =====
@@ -210,6 +212,62 @@ Route::prefix('v1')->group(function () {
             ->middleware(['auth:sanctum', 'ability:role:super_admin', 'role:super_admin']);
     });
 
+    // ===== Public Marketplace & Stores (Guest & Customer) =====
+    Route::get('/stores', [StoreController::class, 'index']);
+    Route::get('/stores/nearby', [StoreController::class, 'index']);
+    Route::get('/stores/lookup', [StoreController::class, 'lookup']);
+    Route::get('/stores/{store}', [StoreController::class, 'show']);
+    Route::get('/stores/{store}/services', [StoreController::class, 'services']);
+    Route::get('/stores/{store}/ratings', [StoreController::class, 'ratings']);
+    Route::get('/stores/{store}/reviews', [ReviewController::class, 'index']);
+    Route::get('/service-categories', [StoreController::class, 'categories']);
+    Route::post('/pricing/estimate', [StoreController::class, 'estimatePrice']);
+
+    // ===== Public Chatbot FAQ & Guest Prompt =====
+    Route::prefix('chatbot')->group(function () {
+        Route::get('/faq', [ChatbotController::class, 'faq']);
+        Route::post('/guest/ask', [ChatbotController::class, 'guestAsk']);
+    });
+
+    // ===== Protected Customer & User Endpoints =====
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/profile', [CustomerController::class, 'profile']);
+        Route::put('/profile', [CustomerController::class, 'updateProfile']);
+        Route::patch('/profile', [CustomerController::class, 'updateProfile']);
+        Route::post('/profile/photo', [CustomerController::class, 'uploadPhoto']);
+        Route::delete('/profile/photo', [CustomerController::class, 'deletePhoto']);
+
+        Route::get('/addresses', [CustomerController::class, 'listAddresses']);
+        Route::post('/addresses', [CustomerController::class, 'storeAddress']);
+        Route::put('/addresses/{address}', [CustomerController::class, 'updateAddress']);
+        Route::delete('/addresses/{address}', [CustomerController::class, 'destroyAddress']);
+        Route::post('/addresses/{address}/set-default', [CustomerController::class, 'setDefaultAddress']);
+        Route::post('/geocode/reverse', [CustomerController::class, 'reverseGeocode'])->middleware('throttle:30,1');
+
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::post('/orders', [OrderController::class, 'store']);
+        Route::get('/orders/{order}', [OrderController::class, 'show']);
+        Route::get('/orders/{order}/tracking', [OrderController::class, 'tracking']);
+        Route::post('/orders/{order}/transition', [OrderController::class, 'transition']);
+        Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
+        Route::get('/orders/{order}/rating', [ReviewController::class, 'orderRating']);
+        Route::post('/orders/{order}/rating', [ReviewController::class, 'storeRating']);
+
+        Route::get('/upgrades/courier', [CustomerController::class, 'courierUpgradeStatus']);
+        Route::post('/upgrades/courier', [CustomerController::class, 'applyCourierUpgrade']);
+        Route::get('/upgrades/store', [CustomerController::class, 'storeUpgradeStatus']);
+        Route::post('/upgrades/store', [CustomerController::class, 'applyStoreUpgrade']);
+
+        // ===== Chatbot AI Assistant Sessions & Messages =====
+        Route::prefix('chatbot')->group(function () {
+            Route::get('/sessions', [ChatbotController::class, 'index']);
+            Route::post('/sessions', [ChatbotController::class, 'store']);
+            Route::get('/sessions/{id}', [ChatbotController::class, 'show']);
+            Route::post('/sessions/{id}/messages', [ChatbotController::class, 'sendMessage']);
+            Route::delete('/sessions/{id}', [ChatbotController::class, 'destroy']);
+        });
+    });
+
     // ===== Protected Customer Portal =====
     Route::prefix('customer')->middleware(['auth:sanctum', 'ability:role:customer', 'role:customer'])->group(function () {
         Route::get('/profile', [CustomerPortalController::class, 'profile']);
@@ -231,6 +289,40 @@ Route::prefix('v1')->group(function () {
     // ===== Protected Admin Portal =====
     Route::prefix('admin')->middleware(['auth:sanctum', 'ability:role:super_admin', 'role:super_admin'])->group(function () {
         Route::get('/overview', [AdminPortalController::class, 'overview']);
+        Route::get('/dashboard/metrics', [AdminPortalController::class, 'metrics']);
+
+        // 1. Orders
+        Route::get('/orders', [AdminPortalController::class, 'orders']);
+        Route::get('/orders/{id}', [AdminPortalController::class, 'orderDetail']);
+
+        // 2. Payments
+        Route::get('/payments', [AdminPortalController::class, 'payments']);
+        Route::get('/payments/{id}', [AdminPortalController::class, 'paymentDetail']);
+
+        // 3. Stores & Approvals
+        Route::get('/stores', [AdminPortalController::class, 'stores']);
+        Route::get('/stores/{id}', [AdminPortalController::class, 'storeDetail']);
+        Route::post('/stores/{id}/approve', [AdminPortalController::class, 'approveStore']);
+        Route::post('/stores/{id}/reject', [AdminPortalController::class, 'rejectStore']);
+
+        // 4. Users
+        Route::get('/users', [AdminPortalController::class, 'users']);
+        Route::get('/users/{id}', [AdminPortalController::class, 'userDetail']);
+        Route::patch('/users/{id}/status', [AdminPortalController::class, 'updateUserStatus']);
+
+        // 5. Categories
+        Route::get('/categories', [AdminPortalController::class, 'categories']);
+        Route::post('/categories', [AdminPortalController::class, 'createCategory']);
+        Route::put('/categories/{id}', [AdminPortalController::class, 'updateCategory']);
+        Route::delete('/categories/{id}', [AdminPortalController::class, 'deleteCategory']);
+
+        // 6. Platform Commission
+        Route::get('/platform-settings/commission', [AdminPortalController::class, 'getCommission']);
+        Route::patch('/platform-settings/commission', [AdminPortalController::class, 'updateCommission']);
+
+        // 7. Audit Logs
+        Route::get('/audit-logs', [AdminPortalController::class, 'auditLogs']);
+        Route::get('/audit-logs/{id}', [AdminPortalController::class, 'auditLogDetail']);
     });
 
     // ===== User Session Info =====

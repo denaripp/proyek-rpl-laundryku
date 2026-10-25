@@ -40,6 +40,16 @@ class Address extends Model
         'deleted_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'address_text',
+    ];
+
+    public function getAddressTextAttribute(): ?string
+    {
+        return $this->address;
+    }
+
+
     // ========== RELATIONSHIPS ==========
 
     public function user(): BelongsTo

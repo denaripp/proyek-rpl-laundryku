@@ -48,6 +48,13 @@ class User extends Authenticatable
         'google2fa_secret' => 'string',
     ];
 
+    protected $appends = [
+        'status',
+        'has_real_email',
+        'display_email',
+        'display_phone',
+    ];
+
     public function isSuperAdmin(): bool
     {
         return $this->role === self::ROLE_SUPER_ADMIN;
@@ -156,6 +163,57 @@ class User extends Authenticatable
         }
         return 'active';
     }
+
+    /**
+     * Determine if an email address is an auto-generated WhatsApp placeholder.
+     * Matches only pattern: ^wa_\d+@laundryku\.test$
+     */
+    public static function isPlaceholderEmail(?string $email): bool
+    {
+        if (empty($email)) {
+            return false;
+        }
+
+        $email = strtolower(trim($email));
+
+        return (bool) preg_match('/^wa_\d+@laundryku\.test$/i', $email);
+    }
+
+    /**
+     * Check if user has a verified/real human email (not placeholder).
+     */
+    public function getHasRealEmailAttribute(): bool
+    {
+        return !empty($this->email) && !self::isPlaceholderEmail($this->email);
+    }
+
+    /**
+     * Email suitable for UI display (null if placeholder).
+     */
+    public function getDisplayEmailAttribute(): ?string
+    {
+        return $this->has_real_email ? $this->email : null;
+    }
+
+    /**
+     * Phone formatted internationally (+62...) for UI display.
+     */
+    public function getDisplayPhoneAttribute(): ?string
+    {
+        if (empty($this->phone)) {
+            return null;
+        }
+
+        $cleaned = preg_replace('/[^0-9]/', '', (string) $this->phone);
+        if (str_starts_with($cleaned, '0')) {
+            $cleaned = '62' . substr($cleaned, 1);
+        } elseif (str_starts_with($cleaned, '8')) {
+            $cleaned = '62' . $cleaned;
+        }
+
+        return '+' . $cleaned;
+    }
+
 
     // ========== SCOPES ==========
 
