@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\Portal\CustomerPortalController;
 use App\Http\Controllers\Api\Portal\MitraPortalController;
 use App\Http\Controllers\Api\Portal\CourierPortalController;
 use App\Http\Controllers\Api\Portal\AdminPortalController;
+use App\Http\Controllers\Api\Portal\NotificationPortalController;
 use App\Http\Controllers\Api\ChatbotController;
 
 // ===== Public webhooks =====
@@ -281,9 +282,52 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders', [MitraPortalController::class, 'orders']);
     });
 
+    Route::middleware(['auth:sanctum', 'ability:role:store_admin', 'role:store_admin'])->group(function () {
+        Route::prefix('store')->group(function () {
+            Route::get('/dashboard', [MitraPortalController::class, 'dashboard']);
+            Route::get('/sidebar-counts', [MitraPortalController::class, 'sidebarCounts']);
+            Route::patch('/operational-status', [MitraPortalController::class, 'updateOperationalStatus']);
+            Route::get('/services', [MitraPortalController::class, 'services']);
+            Route::post('/services', [MitraPortalController::class, 'createService']);
+            Route::patch('/services/{id}', [MitraPortalController::class, 'updateService']);
+            Route::delete('/services/{id}', [MitraPortalController::class, 'deleteService']);
+            Route::patch('/services/{id}/status', [MitraPortalController::class, 'toggleServiceStatus']);
+            Route::post('/services/bulk-status', [MitraPortalController::class, 'bulkServiceStatus']);
+            Route::get('/ledger', [MitraPortalController::class, 'ledger']);
+        });
+
+        Route::prefix('store-admin')->group(function () {
+            Route::get('/couriers', [MitraPortalController::class, 'couriers']);
+            Route::post('/couriers/recruit/{courierProfileId}', [MitraPortalController::class, 'recruitCourier']);
+            Route::post('/couriers/terminate/{assignmentId}', [MitraPortalController::class, 'terminateCourier']);
+            Route::post('/couriers/reject/{courierProfileId}', [MitraPortalController::class, 'rejectCourier']);
+            Route::get('/ratings', [MitraPortalController::class, 'ratings']);
+            Route::get('/complaints', [MitraPortalController::class, 'complaints']);
+            Route::patch('/complaints/{id}/status', [MitraPortalController::class, 'updateComplaintStatus']);
+        });
+    });
+
     // ===== Protected Courier Portal =====
     Route::prefix('kurir')->middleware(['auth:sanctum', 'ability:role:courier', 'role:courier'])->group(function () {
         Route::get('/tasks', [CourierPortalController::class, 'tasks']);
+    });
+
+    Route::prefix('courier')->middleware(['auth:sanctum', 'ability:role:courier', 'role:courier'])->group(function () {
+        Route::get('/profile', [CourierPortalController::class, 'profile']);
+        Route::get('/tasks', [CourierPortalController::class, 'taskList']);
+        Route::get('/tasks/{orderId}', [CourierPortalController::class, 'taskDetail']);
+        Route::post('/tasks/{orderId}/claim', [CourierPortalController::class, 'claimTask']);
+        Route::post('/tasks/{orderId}/transition', [CourierPortalController::class, 'transitionTask']);
+        Route::post('/tasks/{orderId}/confirm-cod', [CourierPortalController::class, 'confirmCod']);
+    });
+
+    // ===== User Notifications Portal (Customer, Mitra, Courier) =====
+    Route::prefix('notifications')->middleware('auth:sanctum')->group(function () {
+        Route::get('/', [NotificationPortalController::class, 'index']);
+        Route::patch('/read-all', [NotificationPortalController::class, 'markAllAsRead']);
+        Route::patch('/{id}/read', [NotificationPortalController::class, 'markAsRead']);
+        Route::get('/preferences', [NotificationPortalController::class, 'preferences']);
+        Route::put('/preferences', [NotificationPortalController::class, 'updatePreferences']);
     });
 
     // ===== Protected Admin Portal =====

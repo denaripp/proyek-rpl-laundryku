@@ -77,6 +77,7 @@ export const ALLOWED_PROXY_PREFIXES = [
   '/customer',
   '/stores',
   '/store',
+  '/store-admin',
   '/store-owner',
   '/mitra',
   '/courier',
