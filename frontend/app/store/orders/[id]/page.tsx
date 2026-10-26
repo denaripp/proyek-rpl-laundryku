@@ -23,6 +23,7 @@ import {
   ORDER_STATUS_META,
   OrderStatus,
 } from '@/lib/order';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
 import {
@@ -94,8 +95,7 @@ export default function StoreAdminOrderDetailPage({
         setItemQuantities(initItemQty);
       }
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setError(errObj.response?.data?.error?.message || errObj.message || 'Gagal memuat detail pesanan.');
+      setError(formatFriendlyErrorMessage(err, 'Gagal memuat detail pesanan.'));
     } finally {
       setLoading(false);
     }

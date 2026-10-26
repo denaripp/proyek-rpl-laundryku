@@ -23,6 +23,7 @@ import {
   AssignedCourierItem,
   AvailableCandidateItem,
 } from '@/lib/courier';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
@@ -70,8 +71,7 @@ export default function StoreAdminCouriersPage() {
       const data = await getStoreCouriers();
       setStoreData(data);
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setError(errObj.response?.data?.error?.message || errObj.message || 'Gagal memuat data kurir toko.');
+      setError(formatFriendlyErrorMessage(err, 'Gagal memuat data kurir toko.'));
     } finally {
       setLoading(false);
     }

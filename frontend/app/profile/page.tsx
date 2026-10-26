@@ -43,6 +43,7 @@ import {
   ProfileData,
   AddressItem,
 } from '@/lib/profile';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -104,7 +105,7 @@ export default function ProfilePage() {
         }
         setAddresses(addrData);
       } catch (err: unknown) {
-        toastError('Gagal Memuat Profil', err instanceof Error ? err.message : 'Terjadi kesalahan');
+        toastError('Gagal Memuat Profil', formatFriendlyErrorMessage(err, 'Terjadi kesalahan'));
       } finally {
         setLoading(false);
       }
@@ -136,7 +137,7 @@ export default function ProfilePage() {
       setShowAddEmail(false);
       success('Profil Diperbarui', 'Data diri Anda berhasil disimpan.');
     } catch (err: unknown) {
-      toastError('Gagal Menyimpan', err instanceof Error ? err.message : 'Gagal memperbarui profil');
+      toastError('Gagal Menyimpan', formatFriendlyErrorMessage(err, 'Gagal memperbarui profil'));
     } finally {
       setSavingProfile(false);
     }
@@ -256,7 +257,7 @@ export default function ProfilePage() {
       resetAddressForm();
       success('Alamat Ditambahkan', 'Alamat baru siap digunakan untuk pesanan.');
     } catch (err: unknown) {
-      toastError('Gagal Menambahkan Alamat', err instanceof Error ? err.message : 'Terjadi kesalahan');
+      toastError('Gagal Menambahkan Alamat', formatFriendlyErrorMessage(err, 'Terjadi kesalahan'));
     } finally {
       setSavingAddr(false);
     }
@@ -273,7 +274,7 @@ export default function ProfilePage() {
       setAddressToDelete(null);
       success('Alamat Dihapus', 'Alamat telah berhasil dihapus dari daftar.');
     } catch (err: unknown) {
-      toastError('Gagal Menghapus Alamat', err instanceof Error ? err.message : 'Terjadi kesalahan');
+      toastError('Gagal Menghapus Alamat', formatFriendlyErrorMessage(err, 'Terjadi kesalahan'));
     } finally {
       setDeletingAddr(false);
     }
@@ -286,7 +287,7 @@ export default function ProfilePage() {
       setAddresses(await getAddresses());
       success('Alamat Utama Diubah', 'Alamat telah diatur sebagai default penjemputan.');
     } catch (err: unknown) {
-      toastError('Gagal Mengubah Alamat Utama', err instanceof Error ? err.message : 'Terjadi kesalahan');
+      toastError('Gagal Mengubah Alamat Utama', formatFriendlyErrorMessage(err, 'Terjadi kesalahan'));
     }
   };
 

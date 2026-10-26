@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button, Input, PasswordInput } from '@/components/ui';
 import { getStoredUser, fetchPortalSession, AuthUser } from '@/lib/auth';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { User, Lock, Mail, Phone, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function StoreProfilePage() {
@@ -78,7 +79,7 @@ export default function StoreProfilePage() {
       setProfileSuccess('Profil akun berhasil disimpan.');
       await fetchPortalSession('mitra');
     } catch (err: unknown) {
-      setProfileError(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.');
+      setProfileError(formatFriendlyErrorMessage(err, 'Terjadi kesalahan sistem.'));
     } finally {
       setSavingProfile(false);
     }
@@ -130,7 +131,7 @@ export default function StoreProfilePage() {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      setPasswordError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengubah password.');
+      setPasswordError(formatFriendlyErrorMessage(err, 'Terjadi kesalahan saat mengubah password.'));
     } finally {
       setSavingPassword(false);
     }

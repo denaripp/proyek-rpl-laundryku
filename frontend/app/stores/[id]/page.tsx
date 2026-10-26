@@ -15,6 +15,7 @@ import {
 import { DynamicStoreMap } from '@/components/map/DynamicStoreMap';
 import { StoreReviewsSection } from '@/components/rating/StoreReviewsSection';
 import { getStore, StoreItem, StoreServiceItem } from '@/lib/store';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { startOrGetConversation } from '@/lib/chat';
 import { formatRupiah, cn } from '@/lib/format';
 import {
@@ -71,7 +72,7 @@ export default function StoreDetailPage({
       })
       .catch((err) => {
         if (!ignore) {
-          setError(err instanceof Error ? err.message : 'Toko tidak ditemukan.');
+          setError(formatFriendlyErrorMessage(err, 'Toko tidak ditemukan.'));
           setLoading(false);
         }
       });
@@ -90,7 +91,7 @@ export default function StoreDetailPage({
         setLoading(false);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Toko tidak ditemukan.');
+        setError(formatFriendlyErrorMessage(err, 'Toko tidak ditemukan.'));
         setLoading(false);
       });
   };

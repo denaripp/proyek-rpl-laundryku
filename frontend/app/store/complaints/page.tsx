@@ -22,6 +22,7 @@ import {
   COMPLAINT_CATEGORY_LABELS,
   COMPLAINT_STATUS_LABELS,
 } from '@/lib/complaint';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
@@ -75,7 +76,7 @@ export default function StoreAdminComplaintsPage() {
       setComplaints(res.data);
       setTotalPages(res.meta?.last_page as number || 1);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal memuat daftar komplain.';
+      const msg = formatFriendlyErrorMessage(err, 'Gagal memuat daftar komplain.');
       setError(msg);
     } finally {
       setLoading(false);
@@ -134,7 +135,7 @@ export default function StoreAdminComplaintsPage() {
         setSelectedComplaint(null);
       }, 1000);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal memperbarui status komplain.';
+      const msg = formatFriendlyErrorMessage(err, 'Gagal memperbarui status komplain.');
       setUpdateError(msg);
     } finally {
       setUpdating(false);

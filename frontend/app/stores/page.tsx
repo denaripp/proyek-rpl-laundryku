@@ -13,6 +13,7 @@ import {
   StoreNearbyMeta,
 } from '@/lib/store';
 import { getAddresses, AddressItem } from '@/lib/profile';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getOrders, OrderDetail, ORDER_STATUS_META } from '@/lib/order';
 import { isAuthenticated, getStoredUser } from '@/lib/auth';
 import { useAuth } from '@/lib/AuthContext';
@@ -118,8 +119,8 @@ export default function StoreSearchPage() {
       });
       setStores(res.stores);
       setMeta(res.meta);
-    } catch (err: any) {
-      setError(err.message || 'Gagal memuat daftar toko.');
+    } catch (err: unknown) {
+      setError(formatFriendlyErrorMessage(err, 'Gagal memuat daftar toko.'));
     } finally {
       setLoading(false);
     }

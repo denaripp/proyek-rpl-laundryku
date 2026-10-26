@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, Button, Skeleton } from '@/components/ui';
 import { getStoredUser, logout, AuthUser, getActiveStoreId } from '@/lib/auth';
 import { getStoreMetrics, StoreMetricsData } from '@/lib/store';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { formatRupiah, formatTanggalWaktu } from '@/lib/format';
 import {
   Sparkles,
@@ -52,7 +53,7 @@ export default function StoreDashboardOverviewPage() {
       const data = await getStoreMetrics(activeStoreId || undefined);
       setDashboardData(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Gagal memuat ringkasan dashboard toko.');
+      setError(formatFriendlyErrorMessage(err, 'Gagal memuat ringkasan dashboard toko.'));
     } finally {
       setLoading(false);
     }

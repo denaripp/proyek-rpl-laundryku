@@ -14,10 +14,14 @@ export const TEMP_2FA_COOKIE_NAMES: Record<'mitra' | 'admin', string> = {
   admin: 'laundryku_admin_temp_token',
 };
 
-export const LARAVEL_API_BASE_URL =
+const rawBaseUrl =
   process.env.LARAVEL_INTERNAL_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   'http://127.0.0.1:8000/api/v1';
+
+// Server-side Node -> Laravel internal API base URL.
+// Normalizes 'localhost' to '127.0.0.1' so Node.js (BFF) avoids IPv6 (::1) ECONNREFUSED issues on Windows.
+export const LARAVEL_API_BASE_URL = rawBaseUrl.replace('://localhost', '://127.0.0.1');
 
 export function getCookieOptions(maxAge: number = 2592000) {
   return {

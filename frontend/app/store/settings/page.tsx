@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button, Input, Textarea, Badge } from '@/components/ui';
 import { getStoredUser, fetchPortalSession, AuthUser } from '@/lib/auth';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { reverseGeocode } from '@/lib/profile';
 import {
   Store,
@@ -311,7 +312,7 @@ export default function StoreSettingsPage() {
         setStore(json.data.store);
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.');
+      setErrorMsg(formatFriendlyErrorMessage(err, 'Terjadi kesalahan sistem.'));
     } finally {
       setSaving(false);
     }

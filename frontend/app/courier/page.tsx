@@ -24,6 +24,7 @@ import {
   CourierTaskItem,
 } from '@/lib/courier';
 import { ORDER_STATUS_META, OrderStatus, confirmCourierCod } from '@/lib/order';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
 import {
@@ -88,8 +89,7 @@ export default function CourierDashboardPage() {
       setCourierProfile(profileData);
       setTasks(tasksData || []);
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setError(errObj.response?.data?.error?.message || errObj.message || 'Gagal memuat dashboard kurir.');
+      setError(formatFriendlyErrorMessage(err, 'Gagal memuat dashboard kurir.'));
     } finally {
       setLoading(false);
     }

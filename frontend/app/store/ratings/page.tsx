@@ -13,6 +13,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { getStoreAdminRatings, RatingItem } from '@/lib/rating';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
@@ -54,8 +55,7 @@ export default function StoreAdminRatingsPage() {
       }
       setTotalPages(res.meta?.last_page || 1);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal memuat daftar ulasan.';
-      setError(msg);
+      setError(formatFriendlyErrorMessage(err, 'Gagal memuat daftar ulasan.'));
     } finally {
       setLoading(false);
     }

@@ -81,7 +81,34 @@ async function handleProxy(request: NextRequest, { params }: { params: Promise<{
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Gagal menghubungi server backend.';
+    const rawError = err instanceof Error ? err.message : String(err);
+    const causeCode = (err as { cause?: { code?: string } })?.cause?.code;
+    const causeMessage = (err as { cause?: { message?: string } })?.cause?.message;
+
+    // Log technical error on server console without tokens or passwords
+    console.error(
+      `[BFF Proxy Error] ${method} ${targetPath}:`,
+      rawError,
+      causeCode || causeMessage || ''
+    );
+
+    const isNetworkError =
+      rawError === 'fetch failed' ||
+      rawError.includes('fetch failed') ||
+      rawError.includes('ECONNREFUSED') ||
+      rawError.includes('ETIMEDOUT') ||
+      rawError.includes('ENOTFOUND') ||
+      causeCode === 'ECONNREFUSED' ||
+      causeCode === 'ETIMEDOUT' ||
+      (typeof causeMessage === 'string' &&
+        (causeMessage.includes('ECONNREFUSED') || causeMessage.includes('ETIMEDOUT')));
+
+    const message = isNetworkError
+      ? 'Server tidak dapat dihubungi. Coba lagi sebentar lagi.'
+      : err instanceof Error
+        ? err.message
+        : 'Server tidak dapat dihubungi. Coba lagi sebentar lagi.';
+
     return NextResponse.json(
       { success: false, error: { code: 'BACKEND_COMMUNICATION_ERROR', message } },
       { status: 502 }

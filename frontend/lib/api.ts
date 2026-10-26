@@ -57,6 +57,36 @@ export async function checkBackendHealth(): Promise<HealthCheckResponse> {
   return json.data || json;
 }
 
+/**
+ * Helper to ensure raw network/fetch error strings are converted into a friendly user message.
+ */
+export function formatFriendlyErrorMessage(
+  err: unknown,
+  fallbackMessage: string = 'Terjadi kesalahan sistem.'
+): string {
+  if (!err) return fallbackMessage;
+
+  const msg =
+    (err as { responseData?: { error?: { message?: string } } })?.responseData?.error?.message ||
+    (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ||
+    (err instanceof Error ? err.message : typeof err === 'string' ? err : '');
+
+  if (
+    !msg ||
+    msg === 'fetch failed' ||
+    msg.includes('fetch failed') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('ENOTFOUND')
+  ) {
+    return 'Server tidak dapat dihubungi. Coba lagi sebentar lagi.';
+  }
+
+  return msg;
+}
+
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
   if (!headers.has('Accept')) {
@@ -73,11 +103,16 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     ? `/api/proxy${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
     : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (err: unknown) {
+    throw new Error(formatFriendlyErrorMessage(err, 'Server tidak dapat dihubungi. Coba lagi sebentar lagi.'));
+  }
 
   let data: ApiResponse<T>;
   try {
@@ -89,7 +124,8 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
   if (!response.ok || (data as ApiErrorResponse).success === false) {
     const errObj = (data as ApiErrorResponse).error;
     const rawData = data as unknown as { message?: string; error?: { message?: string } };
-    const errorMsg = errObj?.message || rawData?.message || 'Terjadi kesalahan pada sistem.';
+    const rawErrorMsg = errObj?.message || rawData?.message || 'Terjadi kesalahan pada sistem.';
+    const errorMsg = formatFriendlyErrorMessage(rawErrorMsg, 'Terjadi kesalahan pada sistem.');
     const error = new Error(errorMsg);
     (error as unknown as { responseData: unknown; status: number; code?: string }).responseData = data;
     (error as unknown as { status: number }).status = response.status;

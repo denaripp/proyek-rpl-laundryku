@@ -30,6 +30,7 @@ import {
   StoreServicesMeta,
 } from '@/lib/store';
 import { getStoreStatus, StoreStatusData } from '@/lib/profile';
+import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser, getActiveStoreId } from '@/lib/auth';
 import { formatRupiah, cn } from '@/lib/format';
 import {
@@ -162,7 +163,7 @@ export default function StoreServicesPage() {
       setServices(res.services);
       setStoreMeta(res.meta);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Gagal memuat daftar layanan toko.';
+      const msg = formatFriendlyErrorMessage(err, 'Gagal memuat daftar layanan toko.');
       setError(msg);
     } finally {
       setLoading(false);
