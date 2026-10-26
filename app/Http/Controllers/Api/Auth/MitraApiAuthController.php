@@ -185,9 +185,13 @@ class MitraApiAuthController extends Controller
      */
     public function login(LoginApiRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->input('email'))->first();
+        $inputEmail = strtolower(trim((string) $request->input('email')));
 
-        if (! $user || $user->role !== User::ROLE_STORE_ADMIN || ! Hash::check($request->input('password'), $user->password)) {
+        $user = User::whereRaw('LOWER(TRIM(email)) = ?', [$inputEmail])
+            ->where('role', User::ROLE_STORE_ADMIN)
+            ->first();
+
+        if (! $user || ! Hash::check($request->input('password'), $user->password)) {
             AuditLog::create([
                 'actor_id' => $user?->id,
                 'actor_role' => User::ROLE_STORE_ADMIN,
@@ -196,7 +200,7 @@ class MitraApiAuthController extends Controller
                 'resource_id' => null,
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'after_value' => json_encode(['email' => $request->input('email')]),
+                'after_value' => json_encode(['email' => $inputEmail]),
             ]);
 
             return response()->json([
@@ -238,6 +242,8 @@ class MitraApiAuthController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
+        $store = Store::where('owner_user_id', $user->id)->first();
+
         return response()->json([
             'message' => 'Login berhasil.',
             'token' => $token,
@@ -249,6 +255,13 @@ class MitraApiAuthController extends Controller
                 'phone' => $user->phone,
                 'role' => $user->role,
             ],
+            'store' => $store ? [
+                'id' => $store->id,
+                'name' => $store->name,
+                'slug' => $store->slug,
+                'status' => $store->status,
+                'is_active' => (bool) $store->is_active,
+            ] : null,
         ], 200);
     }
 
