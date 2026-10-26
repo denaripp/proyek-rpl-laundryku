@@ -76,6 +76,21 @@ class AiTextNormalizer
         'cra' => 'cara',
         'jdi' => 'jadi',
         'hr' => 'hari',
+        'kmrn' => 'kemarin',
+        'kmarin' => 'kemarin',
+        'pdptn' => 'pendapatan',
+        'pndptn' => 'pendapatan',
+        'pemasukan' => 'pemasukan',
+        'nunggu' => 'menunggu',
+        'msh' => 'masih',
+        'bestseller' => 'terlaris',
+        'bestsellers' => 'terlaris',
+        'laku' => 'laris',
+        'diapprove' => 'disetujui',
+        'approval' => 'persetujuan',
+        'approve' => 'setujui',
+        'pending' => 'menunggu',
+        'kelar' => 'selesai',
         'tko' => 'toko',
         'msk' => 'masuk',
         'bj' => 'pakaian',
@@ -408,8 +423,8 @@ class AiTextNormalizer
 
         // 4b. Pre-replace multi-word compound phrases before tokenization
         $clean = str_replace(
-            ['cash on delivery', 'customer service', 'terima kasih', 'sama sama'],
-            ['cod', 'customer service', 'terima kasih', 'sama sama'],
+            ['cash on delivery', 'customer service', 'terima kasih', 'sama sama', 'se-platform', 'seplatform', 'uang masuk', 'duit masuk', 'top customer'],
+            ['cod', 'customer service', 'terima kasih', 'sama sama', 'se platform', 'se platform', 'pemasukan', 'pemasukan', 'top customer'],
             $clean
         );
 

@@ -99,13 +99,37 @@ return [
         'keywords' => [
             'kelola kurir', 'rekrut kurir', 'pelamar kurir', 'kandidat kurir',
             'terima kurir', 'tolak kurir', 'daftar kurir toko', 'cara rekrut kurir',
+            'menugaskan kurir', 'tugaskan kurir', 'kurir antar jemput', 'antar jemput',
+            'penugasan kurir', 'kurir toko',
         ],
         'steps' => [
             'Buka "Dashboard Mitra" (/store) dan masuk ke menu "Manajemen Kurir" (/store/couriers).',
             'Pada tab "Kurir Aktif", Anda dapat melihat daftar kurir yang terikat dengan toko Anda beserta nomor kontak dan status ketersediaannya.',
             'Pada tab "Kandidat / Pelamar", Anda dapat meninjau calon kurir yang telah diverifikasi oleh platform.',
             'Klik tombol "Setujui" untuk merekrut kurir tersebut ke armada toko Anda, atau klik "Tolak" bila kuota kurir sudah penuh.',
+            'Untuk penugasan pesanan: saat pesanan berstatus "Siap Diantar" (ready_for_delivery), sistem otomatis menugaskan kurir aktif terikat yang sedang online.',
         ],
         'note' => 'Kurir yang telah direkrut akan otomatis dapat menerima tugas penjemputan dan pengantaran pesanan toko Anda.',
+    ],
+
+    'guide_store_settings' => [
+        'id' => 'guide_store_settings',
+        'role' => 'store_admin',
+        'title' => 'Panduan Pengaturan Toko, Radius, Jam Buka, dan Profil Gerai',
+        'keywords' => [
+            'pengaturan toko', 'atur radius', 'radius layanan', 'radius jangkauan',
+            'profil gerai', 'alamat toko', 'ubah alamat toko', 'settings toko',
+            'edit profil', 'edit profil gerai', 'koordinat toko', 'lokasi gerai',
+            'profil akun', 'jam buka toko', 'status approval', 'status gerai',
+            'atur jam operasional', 'ubah jam operasional',
+        ],
+        'steps' => [
+            'Masuk ke "Dashboard Mitra" (/store) lalu klik menu "Pengaturan Toko" (/store/settings).',
+            'Pada bagian "Profil & Lokasi Gerai", perbarui nama gerai, deskripsi, alamat lengkap, kota, provinsi, dan koordinat GPS (dapat memanfaatkan tombol "Deteksi GPS Saya").',
+            'Pada bagian "Radius Jangkauan Layanan", tentukan jarak maksimal jangkauan antar-jemput dalam kilometer (antara 0,5 hingga 50 km).',
+            'Pada bagian "Jam Operasional Toko", tentukan jadwal buka/tutup untuk masing-masing hari dari Senin sampai Minggu (atau tandai libur/tutup).',
+            'Klik tombol "Simpan Semua Pengaturan". Untuk memperbarui identitas akun pemilik atau mengubah password, gunakan menu "Profil Akun" (/store/profile).',
+        ],
+        'note' => 'Pengaturan radius dan jam operasional langsung memengaruhi penemuan toko oleh pelanggan pada marketplace LaundryKu.',
     ],
 ];

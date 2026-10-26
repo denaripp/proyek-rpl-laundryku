@@ -479,26 +479,54 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         $isStoreManager = in_array('store_owner', $roles, true) || in_array('store_admin', $roles, true);
         $isCourier = in_array('courier', $roles, true);
 
-        if ($isSuperAdmin && ($intent === AiIntentRouter::INTENT_SUPER_ADMIN_PLATFORM || $intent === AiIntentRouter::INTENT_SUPER_ADMIN_SEARCH || $orderNumber !== null || str_contains($normalized, 'platform') || str_contains($normalized, 'cari') || str_contains($normalized, 'toko') || str_contains($normalized, 'user') || str_contains($normalized, 'pengguna'))) {
+        if ($isSuperAdmin) {
             $adminRes = $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
             if ($adminRes !== null) {
                 return $adminRes;
             }
+            if ($intent === AiIntentRouter::INTENT_SUPER_ADMIN_APPROVALS) {
+                return $this->dataQueryService->getSuperAdminApprovalsResponse($user, $normalized);
+            }
+            if ($intent === AiIntentRouter::INTENT_SUPER_ADMIN_USERS) {
+                return $this->dataQueryService->getSuperAdminUsersResponse($user, $normalized);
+            }
+            if ($intent === AiIntentRouter::INTENT_SUPER_ADMIN_COMPLAINTS) {
+                return $this->dataQueryService->getSuperAdminComplaintsResponse($user, $normalized);
+            }
             return $this->orderStatsService->getStatsResponse($user, $normalized);
         }
 
-        if ($isStoreManager && ($intent === AiIntentRouter::INTENT_STORE_ORDERS || $intent === AiIntentRouter::INTENT_STORE_STATS || $intent === AiIntentRouter::INTENT_STORE_COURIERS_DATA || $intent === AiIntentRouter::INTENT_STORE_APPLICANTS_DATA || $this->dataQueryService->isStoreManagementInquiry($normalized))) {
+        if ($isStoreManager) {
+            $storeRes = $this->dataQueryService->handleStoreManagerQuery($user, $normalized);
+            if ($storeRes !== null) {
+                return $storeRes;
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_TOP_CUSTOMERS) {
+                return $this->dataQueryService->getStoreTopCustomersResponse($user);
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_BESTSELLERS) {
+                return $this->dataQueryService->getStoreBestsellersResponse($user);
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_SETTINGS_DATA) {
+                return $this->dataQueryService->getStoreSettingsResponse($user, $normalized);
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_ACTION_ORDERS) {
+                return $this->dataQueryService->getStoreActionOrdersResponse($user, $normalized);
+            }
             if ($intent === AiIntentRouter::INTENT_STORE_COURIERS_DATA || str_contains($normalized, 'kurir saya') || str_contains($normalized, 'daftar kurir')) {
                 return $this->dataQueryService->getStoreCouriersResponse($user);
             }
             if ($intent === AiIntentRouter::INTENT_STORE_APPLICANTS_DATA || str_contains($normalized, 'pelamar') || str_contains($normalized, 'kandidat')) {
                 return $this->dataQueryService->getStoreApplicantsResponse($user);
             }
-            if ($orderNumber || str_contains($normalized, 'rating') || str_contains($normalized, 'ulasan')) {
-                $storeRes = $this->dataQueryService->handleStoreManagerQuery($user, $normalized);
-                if ($storeRes !== null) {
-                    return $storeRes;
-                }
+            if ($intent === AiIntentRouter::INTENT_STORE_SERVICES_DATA) {
+                return $this->dataQueryService->getStoreServicesResponse($user);
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_HOURS_DATA) {
+                return $this->dataQueryService->getStoreHoursResponse($user);
+            }
+            if ($intent === AiIntentRouter::INTENT_STORE_COMPLAINTS_DATA) {
+                return $this->dataQueryService->getStoreComplaintsResponse($user);
             }
             return $this->orderStatsService->getStoreManagerStats($user);
         }
@@ -581,6 +609,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             case AiIntentRouter::INTENT_GUIDE_STORE_SERVICES:
             case AiIntentRouter::INTENT_GUIDE_STORE_HOURS:
             case AiIntentRouter::INTENT_GUIDE_STORE_COMPLAINTS:
+            case AiIntentRouter::INTENT_GUIDE_STORE_COURIERS:
+            case AiIntentRouter::INTENT_GUIDE_STORE_SETTINGS:
             case AiIntentRouter::INTENT_GUIDE_ADMIN_APPROVALS:
             case AiIntentRouter::INTENT_GUIDE_ADMIN_OVERVIEW:
             case AiIntentRouter::INTENT_PROCEDURAL_GUIDE:
@@ -588,6 +618,18 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
             case AiIntentRouter::INTENT_GUIDE_TOPICS_MENU:
                 return $this->router->getKnowledgeBase()->getGuideTopicsMenu($user->role);
+
+            case AiIntentRouter::INTENT_STORE_TOP_CUSTOMERS:
+                return $this->dataQueryService->getStoreTopCustomersResponse($user);
+
+            case AiIntentRouter::INTENT_STORE_BESTSELLERS:
+                return $this->dataQueryService->getStoreBestsellersResponse($user);
+
+            case AiIntentRouter::INTENT_STORE_SETTINGS_DATA:
+                return $this->dataQueryService->getStoreSettingsResponse($user, $normalized);
+
+            case AiIntentRouter::INTENT_STORE_ACTION_ORDERS:
+                return $this->dataQueryService->getStoreActionOrdersResponse($user, $normalized);
 
             case AiIntentRouter::INTENT_STORE_SERVICES_DATA:
                 return $this->dataQueryService->getStoreServicesResponse($user);
@@ -608,6 +650,15 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             case AiIntentRouter::INTENT_STORE_ORDERS:
                 $store = $this->dataQueryService->handleStoreManagerQuery($user, $normalized);
                 return $store ?? $this->orderStatsService->getStoreManagerStats($user);
+
+            case AiIntentRouter::INTENT_SUPER_ADMIN_APPROVALS:
+                return $this->dataQueryService->getSuperAdminApprovalsResponse($user, $normalized);
+
+            case AiIntentRouter::INTENT_SUPER_ADMIN_USERS:
+                return $this->dataQueryService->getSuperAdminUsersResponse($user, $normalized);
+
+            case AiIntentRouter::INTENT_SUPER_ADMIN_COMPLAINTS:
+                return $this->dataQueryService->getSuperAdminComplaintsResponse($user, $normalized);
 
             case AiIntentRouter::INTENT_SUPER_ADMIN_PLATFORM:
             case AiIntentRouter::INTENT_SUPER_ADMIN_SEARCH:
@@ -693,9 +744,17 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
      */
     protected function handleMutationChatRequest(User $user, string $lowerMsg): ?string
     {
-        // Don't intercept how-to / procedural questions
-        if (str_contains($lowerMsg, 'cara') || str_contains($lowerMsg, 'bagaimana') || str_contains($lowerMsg, 'gimana') || str_contains($lowerMsg, 'prosedur') || str_contains($lowerMsg, 'langkah') || str_contains($lowerMsg, 'tutorial')) {
-            return null;
+        // Don't intercept how-to / procedural questions (bypassed to knowledge base procedural guides)
+        $proceduralBypass = [
+            'cara', 'bagaimana', 'gimana', 'prosedur', 'langkah', 'tutorial',
+            'panduan', 'petunjuk', 'aturan', 'alur', 'tata cara', 'di mana', 'dimana',
+            'edukasi', 'bisa tolong jelaskan', 'jelaskan', 'apakah bisa', 'bisakah',
+            'apa saja langkah', 'tahapan', 'menu apa', 'lewat mana',
+        ];
+        foreach ($proceduralBypass as $bp) {
+            if (str_contains($lowerMsg, $bp)) {
+                return null;
+            }
         }
 
         // Cancel order mutation

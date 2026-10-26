@@ -758,38 +758,58 @@ class AiDataQueryService
             return "Pesanan {$orderNumber} di toko Anda: Pelanggan {$custName}, Status '{$label}', Berat {$weight} kg, Total tagihan Rp " . number_format($total, 0, ',', '.') . ".";
         }
 
-        // Check if query is asking for applicants / courier candidates
+        // 1. Top customers (nama saja, tanpa kontak)
+        if (str_contains($normalizedMessage, 'top customer') || str_contains($normalizedMessage, 'paling sering') || str_contains($normalizedMessage, 'paling loyal') || str_contains($normalizedMessage, 'pelanggan teratas') || str_contains($normalizedMessage, 'pelanggan paling loyal')) {
+            return $this->getStoreTopCustomersResponse($user);
+        }
+
+        // 2. Best-selling services
+        if (str_contains($normalizedMessage, 'terlaris') || str_contains($normalizedMessage, 'paling laku') || str_contains($normalizedMessage, 'paling laris') || str_contains($normalizedMessage, 'bestseller') || str_contains($normalizedMessage, 'paling banyak dipesan')) {
+            return $this->getStoreBestsellersResponse($user);
+        }
+
+        // 3. Operational settings, radius, address, approval status
+        if (str_contains($normalizedMessage, 'radius') || str_contains($normalizedMessage, 'jangkauan') || str_contains($normalizedMessage, 'approval') || str_contains($normalizedMessage, 'disetujui admin') || str_contains($normalizedMessage, 'status persetujuan') || str_contains($normalizedMessage, 'status approval') || str_contains($normalizedMessage, 'terdaftar di mana') || str_contains($normalizedMessage, 'tutup gak') || str_contains($normalizedMessage, 'minggu tutup') || (str_contains($normalizedMessage, 'alamat') && str_contains($normalizedMessage, 'toko'))) {
+            return $this->getStoreSettingsResponse($user, $normalizedMessage);
+        }
+
+        // 4. Action orders & status breakdown
+        if (str_contains($normalizedMessage, 'belum ditimbang') || str_contains($normalizedMessage, 'blm ditimbang') || str_contains($normalizedMessage, 'siap diantar') || str_contains($normalizedMessage, 'butuh tindakan') || str_contains($normalizedMessage, 'perlu tindakan') || str_contains($normalizedMessage, 'perlu diproses') || str_contains($normalizedMessage, 'perlu proses') || str_contains($normalizedMessage, 'lagi dicuci') || str_contains($normalizedMessage, 'orderan baru') || str_contains($normalizedMessage, 'pesanan baru') || str_contains($normalizedMessage, 'belum kelar') || str_contains($normalizedMessage, 'blm kelar') || str_contains($normalizedMessage, 'msh diproses') || str_contains($normalizedMessage, 'masih diproses') || str_contains($normalizedMessage, 'nunggu jemput') || str_contains($normalizedMessage, 'menunggu penjemputan') || str_contains($normalizedMessage, 'status orderan toko') || str_contains($normalizedMessage, 'status pesanan toko saat ini')) {
+            return $this->getStoreActionOrdersResponse($user, $normalizedMessage);
+        }
+
+        // 5. Check if query is asking for applicants / courier candidates
         if (str_contains($normalizedMessage, 'pelamar') || str_contains($normalizedMessage, 'kandidat') || str_contains($normalizedMessage, 'rekrut')) {
             return $this->getStoreApplicantsResponse($user);
         }
 
-        // Check if query is asking for store couriers
+        // 6. Check if query is asking for store couriers
         if (str_contains($normalizedMessage, 'kurir') && !str_contains($normalizedMessage, 'tugas')) {
             return $this->getStoreCouriersResponse($user);
         }
 
-        // Check if query is asking for store omzet / revenue
-        if (str_contains($normalizedMessage, 'omset') || str_contains($normalizedMessage, 'omzet') || str_contains($normalizedMessage, 'pendapatan')) {
+        // 7. Check if query is asking for store omzet / revenue
+        if (str_contains($normalizedMessage, 'omset') || str_contains($normalizedMessage, 'omzet') || str_contains($normalizedMessage, 'pendapatan') || str_contains($normalizedMessage, 'pemasukan') || str_contains($normalizedMessage, 'duit masuk') || str_contains($normalizedMessage, 'uang masuk')) {
             return $this->getStoreRevenueResponse($user, $normalizedMessage);
         }
 
-        // Check if query is asking for store services & prices
-        if (str_contains($normalizedMessage, 'harga') || str_contains($normalizedMessage, 'layanan') || str_contains($normalizedMessage, 'tarif')) {
+        // 8. Check if query is asking for store services & prices
+        if (str_contains($normalizedMessage, 'harga') || str_contains($normalizedMessage, 'layanan') || str_contains($normalizedMessage, 'tarif') || str_contains($normalizedMessage, 'menu servis') || str_contains($normalizedMessage, 'list harga')) {
             return $this->getStoreServicesResponse($user);
         }
 
-        // Check if query is asking for store complaints
+        // 9. Check if query is asking for store complaints
         if (str_contains($normalizedMessage, 'komplain') || str_contains($normalizedMessage, 'keluhan') || str_contains($normalizedMessage, 'dispute')) {
             return $this->getStoreComplaintsResponse($user);
         }
 
-        // Check if query is asking for store operational hours
+        // 10. Check if query is asking for store operational hours
         if (str_contains($normalizedMessage, 'jam') || str_contains($normalizedMessage, 'buka') || str_contains($normalizedMessage, 'operasional')) {
             return $this->getStoreHoursResponse($user);
         }
 
-        // Check if query is asking for store rating & reviews
-        if (str_contains($normalizedMessage, 'rating') || str_contains($normalizedMessage, 'ulasan toko') || str_contains($normalizedMessage, 'ulasan')) {
+        // 11. Check if query is asking for store rating & reviews
+        if (str_contains($normalizedMessage, 'rating') || str_contains($normalizedMessage, 'bintang') || str_contains($normalizedMessage, 'ulasan toko') || str_contains($normalizedMessage, 'ulasan') || str_contains($normalizedMessage, 'review')) {
             $store = Store::whereIn('id', $storeIds)->first();
             $rating = number_format((float) ($store->average_rating ?? 5.0), 1);
             $revCount = (int) ($store->review_count ?? 0);
@@ -811,12 +831,18 @@ class AiDataQueryService
         $totalOrders = (clone $query)->count();
 
         if ($totalOrders === 0) {
-            return "Toko yang Anda kelola ({$storeNames}) belum menerima pesanan.";
+            return "Toko yang Anda kelola ({$storeNames}) belum mencatatkan transaksi terbayar hari ini. Saran tindakan: Anda dapat mempromosikan layanan toko atau memastikan jam operasional toko aktif di /store/settings.";
         }
 
         $storageTimezone = config('app.timezone', 'UTC');
         $startOfTodayStorage = Carbon::now('Asia/Jakarta')->startOfDay()->setTimezone($storageTimezone);
         $endOfTodayStorage = Carbon::now('Asia/Jakarta')->endOfDay()->setTimezone($storageTimezone);
+
+        $startOfYesterdayStorage = Carbon::now('Asia/Jakarta')->subDay()->startOfDay()->setTimezone($storageTimezone);
+        $endOfYesterdayStorage = Carbon::now('Asia/Jakarta')->subDay()->endOfDay()->setTimezone($storageTimezone);
+
+        $startOfWeekStorage = Carbon::now('Asia/Jakarta')->startOfWeek()->setTimezone($storageTimezone);
+        $startOfMonthStorage = Carbon::now('Asia/Jakarta')->startOfMonth()->setTimezone($storageTimezone);
 
         $orderIds = (clone $query)->pluck('id');
         $hasPayments = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->exists();
@@ -824,14 +850,31 @@ class AiDataQueryService
         if ($hasPayments) {
             $todayRevenue = (float) Payment::where('status', 'paid')
                 ->whereIn('order_id', $orderIds)
-                ->whereDate('paid_at', Carbon::today('Asia/Jakarta'))
+                ->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
                 ->sum('amount');
+
+            $yesterdayRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->whereBetween('paid_at', [$startOfYesterdayStorage, $endOfYesterdayStorage])
+                ->sum('amount');
+
+            $weekRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->whereBetween('paid_at', [$startOfWeekStorage, $endOfTodayStorage])
+                ->sum('amount');
+
+            $monthRevenue = (float) Payment::where('status', 'paid')
+                ->whereIn('order_id', $orderIds)
+                ->whereBetween('paid_at', [$startOfMonthStorage, $endOfTodayStorage])
+                ->sum('amount');
+
             $totalRevenue = (float) Payment::where('status', 'paid')
                 ->whereIn('order_id', $orderIds)
                 ->sum('amount');
         } else {
             $paidQuery = (clone $query)->where('payment_status', 'paid');
             $totalRevenue = (float) (clone $paidQuery)->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+
             $todayRevenue = (float) (clone $paidQuery)
                 ->where(function ($q) use ($startOfTodayStorage, $endOfTodayStorage) {
                     $q->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
@@ -841,17 +884,290 @@ class AiDataQueryService
                       });
                 })
                 ->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+
+            $yesterdayRevenue = (float) (clone $paidQuery)
+                ->where(function ($q) use ($startOfYesterdayStorage, $endOfYesterdayStorage) {
+                    $q->whereBetween('paid_at', [$startOfYesterdayStorage, $endOfYesterdayStorage])
+                      ->orWhere(function ($sub) use ($startOfYesterdayStorage, $endOfYesterdayStorage) {
+                          $sub->whereNull('paid_at')
+                              ->whereBetween('created_at', [$startOfYesterdayStorage, $endOfYesterdayStorage]);
+                      });
+                })
+                ->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+
+            $weekRevenue = (float) (clone $paidQuery)
+                ->where(function ($q) use ($startOfWeekStorage, $endOfTodayStorage) {
+                    $q->whereBetween('paid_at', [$startOfWeekStorage, $endOfTodayStorage])
+                      ->orWhere(function ($sub) use ($startOfWeekStorage, $endOfTodayStorage) {
+                          $sub->whereNull('paid_at')
+                              ->whereBetween('created_at', [$startOfWeekStorage, $endOfTodayStorage]);
+                      });
+                })
+                ->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+
+            $monthRevenue = (float) (clone $paidQuery)
+                ->where(function ($q) use ($startOfMonthStorage, $endOfTodayStorage) {
+                    $q->whereBetween('paid_at', [$startOfMonthStorage, $endOfTodayStorage])
+                      ->orWhere(function ($sub) use ($startOfMonthStorage, $endOfTodayStorage) {
+                          $sub->whereNull('paid_at')
+                              ->whereBetween('created_at', [$startOfMonthStorage, $endOfTodayStorage]);
+                      });
+                })
+                ->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
         }
 
         $todayFmt = 'Rp ' . number_format($todayRevenue, 0, ',', '.');
+        $yesterdayFmt = 'Rp ' . number_format($yesterdayRevenue, 0, ',', '.');
+        $weekFmt = 'Rp ' . number_format($weekRevenue, 0, ',', '.');
+        $monthFmt = 'Rp ' . number_format($monthRevenue, 0, ',', '.');
         $totalFmt = 'Rp ' . number_format($totalRevenue, 0, ',', '.');
 
         $norm = strtolower($message);
+
+        // Comparison query: "hari ini dibanding kemarin"
+        if (str_contains($norm, 'dibanding') || str_contains($norm, 'perbandingan') || (str_contains($norm, 'hari ini') && str_contains($norm, 'kemarin'))) {
+            $diff = abs($todayRevenue - $yesterdayRevenue);
+            $diffFmt = 'Rp ' . number_format($diff, 0, ',', '.');
+            $compStr = $todayRevenue >= $yesterdayRevenue
+                ? "Pemasukan hari ini lebih tinggi {$diffFmt} dibanding kemarin."
+                : "Pemasukan hari ini lebih rendah {$diffFmt} dibanding kemarin.";
+
+            return "Perbandingan omzet toko {$storeNames} (hanya transaksi terbayar):\n- Hari ini: {$todayFmt}\n- Kemarin: {$yesterdayFmt}\n{$compStr}";
+        }
+
+        if (str_contains($norm, 'kemarin')) {
+            return "Omzet kemarin untuk toko {$storeNames} adalah {$yesterdayFmt} (hanya transaksi yang telah terbayar).";
+        }
+
+        if (str_contains($norm, 'minggu ini') || str_contains($norm, 'pekan ini')) {
+            return "Total pendapatan toko {$storeNames} minggu ini adalah {$weekFmt} (hanya transaksi yang telah terbayar).";
+        }
+
+        if (str_contains($norm, 'bulan ini')) {
+            return "Total omzet toko {$storeNames} bulan ini adalah {$monthFmt} (hanya transaksi yang telah terbayar). Total keseluruhan: {$totalFmt}.";
+        }
+
         if (str_contains($norm, 'hari ini')) {
             return "Omzet hari ini untuk toko {$storeNames} adalah {$todayFmt} (hanya transaksi yang telah terbayar). Total omzet keseluruhan: {$totalFmt}.";
         }
 
-        return "Ringkasan omzet toko {$storeNames} (hanya transaksi terbayar):\n- Omzet hari ini: {$todayFmt}\n- Total omzet: {$totalFmt}";
+        return "Ringkasan omzet toko {$storeNames} (hanya transaksi terbayar):\n- Hari ini: {$todayFmt}\n- Kemarin: {$yesterdayFmt}\n- Minggu ini: {$weekFmt}\n- Bulan ini: {$monthFmt}\n- Total omzet: {$totalFmt}";
+    }
+
+    public function getStoreActionOrdersResponse(User $user, string $message = ''): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+        $query = Order::whereIn('store_id', $storeIds);
+
+        // Belum ditimbang: actual_weight null or 0, in active pre-weighed or receiving states
+        $unweighed = (clone $query)->where(function ($q) {
+            $q->whereNull('actual_weight')->orWhere('actual_weight', 0);
+        })->whereIn('status', [
+            'created', 'waiting_pickup', 'courier_assigned', 'courier_to_customer',
+            'picked_up', 'in_transit_to_store', 'received_by_store',
+        ])->count();
+
+        // Menunggu penjemputan
+        $waitingPickup = (clone $query)->whereIn('status', [
+            'created', 'waiting_pickup',
+        ])->count();
+
+        // Siap diantar
+        $readyDelivery = (clone $query)->where('status', 'ready_for_delivery')->count();
+
+        // Sedang dicuci / diproses
+        $inProcess = (clone $query)->where('status', 'processing')->count();
+
+        // Orderan baru masuk hari ini
+        $storageTimezone = config('app.timezone', 'UTC');
+        $startOfTodayStorage = Carbon::now('Asia/Jakarta')->startOfDay()->setTimezone($storageTimezone);
+        $endOfTodayStorage = Carbon::now('Asia/Jakarta')->endOfDay()->setTimezone($storageTimezone);
+
+        $newToday = (clone $query)
+            ->whereRaw('COALESCE(order_date, created_at) >= ? AND COALESCE(order_date, created_at) <= ?', [
+                $startOfTodayStorage->format('Y-m-d H:i:s'),
+                $endOfTodayStorage->format('Y-m-d H:i:s'),
+            ])
+            ->count();
+
+        // Completed today
+        $completedToday = (clone $query)
+            ->where('status', 'completed')
+            ->whereRaw('updated_at >= ? AND updated_at <= ?', [
+                $startOfTodayStorage->format('Y-m-d H:i:s'),
+                $endOfTodayStorage->format('Y-m-d H:i:s'),
+            ])
+            ->count();
+
+        $norm = strtolower($message);
+
+        if (str_contains($norm, 'timbang')) {
+            if ($unweighed === 0) {
+                return "Semua cucian yang tiba di toko {$storeNames} sudah ditimbang. Tidak ada antrean penimbangan saat ini.";
+            }
+            return "Toko {$storeNames} memiliki {$unweighed} pesanan yang belum ditimbang. Silakan timbang pakaian fisik dan masukkan angka timbangan di menu Pesanan Toko (/store/orders).";
+        }
+
+        if (str_contains($norm, 'siap diantar') || str_contains($norm, 'siap antar')) {
+            if ($readyDelivery === 0) {
+                return "Saat ini belum ada pesanan yang siap diantar di toko {$storeNames}.";
+            }
+            return "Toko {$storeNames} memiliki {$readyDelivery} pesanan yang sudah selesai dikerjakan dan siap diantar oleh kurir.";
+        }
+
+        if (str_contains($norm, 'jemput')) {
+            if ($waitingPickup === 0) {
+                return "Saat ini tidak ada pesanan yang menunggu penjemputan kurir untuk toko {$storeNames}.";
+            }
+            return "Toko {$storeNames} memiliki {$waitingPickup} pesanan yang sedang menunggu penjemputan oleh kurir.";
+        }
+
+        if (str_contains($norm, 'dicuci') || str_contains($norm, 'diproses')) {
+            if ($inProcess === 0) {
+                return "Saat ini tidak ada cucian yang sedang dalam tahap pencucian di toko {$storeNames}.";
+            }
+            return "Toko {$storeNames} memiliki {$inProcess} pesanan cucian yang sedang diproses/dicuci.";
+        }
+
+        if (str_contains($norm, 'baru') || str_contains($norm, 'orderan baru')) {
+            return "Hari ini ada {$newToday} pesanan baru yang masuk di toko {$storeNames}.";
+        }
+
+        if (str_contains($norm, 'selesai') && str_contains($norm, 'hari ini')) {
+            return "Hari ini ada {$completedToday} pesanan yang telah selesai di toko {$storeNames}.";
+        }
+
+        return "Ringkasan status operasional pesanan di toko {$storeNames}:\n"
+            . "- Belum ditimbang: {$unweighed} pesanan\n"
+            . "- Menunggu penjemputan kurir: {$waitingPickup} pesanan\n"
+            . "- Sedang dicuci / diproses: {$inProcess} pesanan\n"
+            . "- Siap diantar ke pelanggan: {$readyDelivery} pesanan\n"
+            . "- Pesanan baru hari ini: {$newToday} pesanan.\n"
+            . "Kelola rincian aksi pada menu Pesanan Toko (/store/orders).";
+    }
+
+    public function getStoreTopCustomersResponse(User $user): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+
+        $top = Order::whereIn('store_id', $storeIds)
+            ->whereNotNull('customer_id')
+            ->select('customer_id', DB::raw('count(*) as order_count'))
+            ->groupBy('customer_id')
+            ->orderByDesc('order_count')
+            ->with('customer')
+            ->take(3)
+            ->get();
+
+        if ($top->isEmpty()) {
+            return "Toko {$storeNames} belum memiliki data riwayat pesanan dari pelanggan.";
+        }
+
+        $lines = ["Pelanggan teratas di toko {$storeNames} berdasarkan frekuensi pesanan:"];
+        $rank = 1;
+        foreach ($top as $item) {
+            $name = optional($item->customer)->name ?? 'Pelanggan Setia';
+            $lines[] = "{$rank}. {$name} ({$item->order_count} kali mencuci)";
+            $rank++;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getStoreBestsellersResponse(User $user): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+
+        $best = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->join('services', 'order_items.service_id', '=', 'services.id')
+            ->whereIn('orders.store_id', $storeIds)
+            ->select('services.name as service_name', DB::raw('SUM(order_items.quantity) as total_qty'), DB::raw('COUNT(order_items.id) as order_count'))
+            ->groupBy('services.name')
+            ->orderByDesc('total_qty')
+            ->take(3)
+            ->get();
+
+        if ($best->isEmpty()) {
+            return "Toko {$storeNames} belum mencatatkan transaksi layanan. Layanan terpopuler pada platform yang dapat Anda tawarkan adalah Cuci Komplit Kiloan dan Dry Clean.";
+        }
+
+        $lines = ["Layanan terlaris di toko {$storeNames}:"];
+        $rank = 1;
+        foreach ($best as $item) {
+            $lines[] = "{$rank}. {$item->service_name} (total {$item->total_qty} unit dipesan dalam {$item->order_count} pesanan)";
+            $rank++;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getStoreSettingsResponse(User $user, string $message = ''): string
+    {
+        $storeIds = $this->getManagedStoreIds($user);
+        if (empty($storeIds)) {
+            return 'Anda belum memiliki toko mitra yang dikelola.';
+        }
+
+        $store = Store::whereIn('id', $storeIds)->first();
+        if (!$store) {
+            return 'Data toko Anda tidak ditemukan.';
+        }
+
+        $norm = strtolower($message);
+
+        // Check if query is specifically asking about radius
+        if (str_contains($norm, 'radius') || str_contains($norm, 'jangkauan')) {
+            $radius = $store->service_radius_km ? number_format((float) $store->service_radius_km, 2) : '5.00';
+            return "Radius jangkauan layanan toko {$store->name} adalah {$radius} km. Anda dapat memperbarui radius jangkauan layanan melalui Dashboard Mitra di Pengaturan Toko (/store/settings).";
+        }
+
+        // Check if query is specifically asking about approval status
+        if (str_contains($norm, 'approval') || str_contains($norm, 'disetujui') || str_contains($norm, 'status persetujuan') || str_contains($norm, 'status gerai') || str_contains($norm, 'status approval')) {
+            $statusLabel = match($store->status) {
+                'approved' => 'Disetujui (Approved)',
+                'pending' => 'Menunggu Persetujuan Admin (Pending)',
+                'rejected' => 'Ditolak (Rejected)',
+                default => ucfirst($store->status ?? 'pending'),
+            };
+            $activeLabel = $store->is_active ? 'Aktif' : 'Nonaktif / Tutup Sementara';
+            return "Status toko {$store->name}: Status pendaftaran '{$statusLabel}', Status operasional '{$activeLabel}'.";
+        }
+
+        // Check if query is specifically asking about store address
+        if (str_contains($norm, 'alamat') || str_contains($norm, 'lokasi') || str_contains($norm, 'terdaftar')) {
+            $cityProv = array_filter([$store->city, $store->province]);
+            $cityProvStr = !empty($cityProv) ? ' (' . implode(', ', $cityProv) . ')' : '';
+            return "Alamat toko {$store->name} terdaftar di: {$store->address}{$cityProvStr}. Anda dapat memperbarui lokasi di /store/settings.";
+        }
+
+        // General settings overview
+        $radius = $store->service_radius_km ? number_format((float) $store->service_radius_km, 2) : '5.00';
+        $statusLabel = match($store->status) {
+            'approved' => 'Disetujui',
+            'pending' => 'Menunggu Persetujuan',
+            'rejected' => 'Ditolak',
+            default => ucfirst($store->status ?? 'pending'),
+        };
+        $cityProv = array_filter([$store->city, $store->province]);
+        $cityProvStr = !empty($cityProv) ? ' (' . implode(', ', $cityProv) . ')' : '';
+
+        return "Pengaturan gerai {$store->name}:\n- Alamat: {$store->address}{$cityProvStr}\n- Radius layanan: {$radius} km\n- Status toko: {$statusLabel} (Operasional: " . ($store->is_active ? 'Aktif' : 'Nonaktif') . ")\nPengaturan dapat dikelola di /store/settings dan profil akun di /store/profile.";
     }
 
     public function getStoreCouriersResponse(User $user): string
@@ -977,7 +1293,7 @@ class AiDataQueryService
         return implode("\n", $lines);
     }
 
-    public function getStoreHoursResponse(User $user): string
+    public function getStoreHoursResponse(User $user, string $message = ''): string
     {
         $storeIds = $this->getManagedStoreIds($user);
         if (empty($storeIds)) {
@@ -989,8 +1305,48 @@ class AiDataQueryService
             return 'Data toko Anda tidak ditemukan.';
         }
 
-        $hours = $store->operational_hours ?: 'Senin - Minggu: 08:00 - 20:00 WIB';
-        return "Jam operasional toko {$store->name}: {$hours}.";
+        $rawHours = $store->operational_hours;
+        if (is_string($rawHours)) {
+            $decoded = json_decode($rawHours, true);
+            if (is_array($decoded)) {
+                $rawHours = $decoded;
+            }
+        }
+
+        $norm = strtolower($message);
+
+        if (is_array($rawHours)) {
+            $days = [
+                'monday' => 'Senin', 'tuesday' => 'Selasa', 'wednesday' => 'Rabu',
+                'thursday' => 'Kamis', 'friday' => 'Jumat', 'saturday' => 'Sabtu', 'sunday' => 'Minggu',
+            ];
+
+            if (str_contains($norm, 'minggu')) {
+                $sun = $rawHours['sunday'] ?? null;
+                if (!empty($sun['closed'])) {
+                    return "Hari Minggu toko {$store->name} libur / tutup.";
+                } elseif (!empty($sun['open']) && !empty($sun['close'])) {
+                    return "Hari Minggu toko {$store->name} buka dari jam {$sun['open']} sampai {$sun['close']} WIB.";
+                }
+            }
+
+            $formatted = [];
+            foreach ($days as $key => $label) {
+                if (!empty($rawHours[$key]['closed'])) {
+                    $formatted[] = "{$label}: Libur";
+                } elseif (!empty($rawHours[$key]['open']) && !empty($rawHours[$key]['close'])) {
+                    $formatted[] = "{$label} ({$rawHours[$key]['open']} - {$rawHours[$key]['close']} WIB)";
+                }
+            }
+            $hours = !empty($formatted) ? implode(', ', $formatted) : 'Senin - Minggu: 08:00 - 20:00 WIB';
+        } else {
+            $hours = (string) ($store->operational_hours ?: 'Senin - Minggu: 08:00 - 20:00 WIB');
+            if (str_contains($norm, 'minggu') && str_contains(strtolower($hours), 'minggu')) {
+                return "Jadwal operasional toko {$store->name}: {$hours}.";
+            }
+        }
+
+        return "Jadwal operasional toko {$store->name}: {$hours}. Anda dapat mengubah jadwal operasional di Pengaturan Toko (/store/settings).";
     }
 
     /**
@@ -1104,7 +1460,22 @@ class AiDataQueryService
             return "Detail Pesanan {$orderNumber}: Toko {$storeName}, Status '{$label}', Nominal Rp " . number_format($total, 0, ',', '.') . ".";
         }
 
-        // 2. Search for users (sensitive data like email and phone MUST be masked; passwords/tokens never shown)
+        // 2. Approvals / pending registrations
+        if (str_contains($normalizedMessage, 'approval') || str_contains($normalizedMessage, 'persetujuan') || str_contains($normalizedMessage, 'menunggu') || str_contains($normalizedMessage, 'verifikasi kurir') || str_contains($normalizedMessage, 'pendaftaran') || str_contains($normalizedMessage, 'mitra baru') || str_contains($normalizedMessage, 'kurir baru')) {
+            return $this->getSuperAdminApprovalsResponse($user, $normalizedMessage);
+        }
+
+        // 3. Platform complaints / disputes
+        if (str_contains($normalizedMessage, 'komplain') || str_contains($normalizedMessage, 'dispute') || str_contains($normalizedMessage, 'keluhan')) {
+            return $this->getSuperAdminComplaintsResponse($user, $normalizedMessage);
+        }
+
+        // 4. User counts per role (tanpa PII)
+        if (str_contains($normalizedMessage, 'per peran') || str_contains($normalizedMessage, 'jumlah user') || str_contains($normalizedMessage, 'total user') || str_contains($normalizedMessage, 'jumlah pengguna') || str_contains($normalizedMessage, 'total pengguna') || str_contains($normalizedMessage, 'daftar peran') || str_contains($normalizedMessage, 'berapa user') || str_contains($normalizedMessage, 'berapa pengguna')) {
+            return $this->getSuperAdminUsersResponse($user, $normalizedMessage);
+        }
+
+        // 5. Search for users (sensitive data like email and phone MUST be masked; passwords/tokens never shown)
         if (str_contains($normalizedMessage, 'cari user') || str_contains($normalizedMessage, 'cari pengguna') || str_contains($normalizedMessage, 'cari akun') || str_contains($normalizedMessage, 'cari pelanggan') || str_contains($normalizedMessage, 'info user') || str_contains($normalizedMessage, 'info pengguna')) {
             $term = trim(preg_replace('/^(.*)(cari user|cari pengguna|cari akun|cari pelanggan|info user|info pengguna)\s*/iu', '', $normalizedMessage));
             $term = trim(str_replace(['?', '!', '.', ','], '', $term));
@@ -1135,7 +1506,7 @@ class AiDataQueryService
             return implode("\n", $lines);
         }
 
-        // 3. Search for stores
+        // 6. Search for stores
         if (str_contains($normalizedMessage, 'cari toko') || str_contains($normalizedMessage, 'cari outlet') || str_contains($normalizedMessage, 'info toko mitra') || str_contains($normalizedMessage, 'status toko mitra')) {
             $term = trim(preg_replace('/^(.*)(cari toko|cari outlet|info toko mitra|status toko mitra)\s*/iu', '', $normalizedMessage));
             $term = trim(str_replace(['?', '!', '.', ','], '', $term));
@@ -1164,15 +1535,93 @@ class AiDataQueryService
             return implode("\n", $lines);
         }
 
-        // 4. Platform overview
-        if (str_contains($normalizedMessage, 'platform') || str_contains($normalizedMessage, 'total toko') || str_contains($normalizedMessage, 'semua toko') || str_contains($normalizedMessage, 'toko mitra') || str_contains($normalizedMessage, 'mitra yang aktif') || str_contains($normalizedMessage, 'toko aktif') || str_contains($normalizedMessage, 'sistem') || str_contains($normalizedMessage, 'ringkasan')) {
-            $activeStores = Store::where('status', 'approved')->where('is_active', true)->count();
-            $stats = $this->statsService->getPlatformStats();
-            return "{$stats} Jumlah toko aktif ({$activeStores} toko mitra aktif di platform).";
+        // 7. Platform overview & revenue & orders (agregat platform)
+        $totalOrders = Order::count();
+        $activeStores = Store::where('status', 'approved')->where('is_active', true)->count();
+        $pendingStores = Store::where('status', 'pending')->count();
+        $totalStores = Store::count();
+
+        $storageTimezone = config('app.timezone', 'UTC');
+        $startOfTodayStorage = Carbon::now('Asia/Jakarta')->startOfDay()->setTimezone($storageTimezone);
+        $endOfTodayStorage = Carbon::now('Asia/Jakarta')->endOfDay()->setTimezone($storageTimezone);
+
+        $todayRevenue = (float) Payment::where('status', 'paid')
+            ->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
+            ->sum('amount');
+
+        $totalRevenue = (float) Payment::where('status', 'paid')->sum('amount');
+        if ($totalRevenue === 0.0) {
+            $totalRevenue = (float) Order::where('payment_status', 'paid')->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
         }
 
-        $cnt = Store::where('status', 'approved')->where('is_active', true)->count();
-        return $this->statsService->getPlatformStats() . " Jumlah toko aktif ({$cnt} toko mitra aktif di platform).";
+        $todayRevFmt = 'Rp ' . number_format($todayRevenue, 0, ',', '.');
+        $totalRevFmt = 'Rp ' . number_format($totalRevenue, 0, ',', '.');
+
+        $stats = $this->statsService->getPlatformStats();
+        return "{$stats} Jumlah toko aktif ({$activeStores} toko mitra aktif di platform, {$pendingStores} menunggu persetujuan dari total {$totalStores} toko terdaftar). Omzet Platform: Hari ini {$todayRevFmt}, Total omzet terbayar {$totalRevFmt}.";
+    }
+
+    public function getSuperAdminApprovalsResponse(User $user, string $message = ''): string
+    {
+        $pendingStores = Store::where('status', 'pending')->count();
+        $pendingCouriers = Courier::where('is_verified', false)->count();
+
+        return "Pendaftaran dan verifikasi yang menunggu persetujuan:\n"
+            . "- Toko Mitra Baru: {$pendingStores} pendaftaran menunggu persetujuan (status: pending).\n"
+            . "- Kurir Baru: {$pendingCouriers} kurir menunggu verifikasi.\n"
+            . "Anda dapat memproses verifikasi dan persetujuan melalui menu Verifikasi & Persetujuan di Admin Portal (/admin).";
+    }
+
+    public function getSuperAdminUsersResponse(User $user, string $message = ''): string
+    {
+        $customerCount = User::where(function ($q) {
+            $q->where('role', 'customer')
+              ->orWhereHas('roles', fn ($r) => $r->where('name', 'customer'));
+        })->distinct()->count('id');
+
+        $courierCount = User::where(function ($q) {
+            $q->where('role', 'courier')
+              ->orWhereHas('roles', fn ($r) => $r->where('name', 'courier'));
+        })->distinct()->count('id');
+
+        $mitraCount = User::where(function ($q) {
+            $q->whereIn('role', ['store_owner', 'store_admin'])
+              ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['store_owner', 'store_admin']));
+        })->distinct()->count('id');
+
+        $adminCount = User::where(function ($q) {
+            $q->whereIn('role', ['super_admin', 'platform_owner', 'platform_admin'])
+              ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['super_admin', 'platform_owner', 'platform_admin']));
+        })->distinct()->count('id');
+
+        $totalUsers = User::count();
+        $activeUsers = User::where('is_active', true)->count();
+
+        return "Jumlah pengguna terdaftar di platform LaundryKu (total: {$totalUsers} pengguna, {$activeUsers} aktif):\n"
+            . "- Pelanggan (Customer): {$customerCount} pengguna\n"
+            . "- Kurir: {$courierCount} pengguna\n"
+            . "- Pengelola Toko (Mitra/Admin Toko): {$mitraCount} pengguna\n"
+            . "- Administrator Platform: {$adminCount} pengguna\n"
+            . "(Catatan: Data sensitif dan PII pelanggan tidak ditampilkan demi kepatuhan privasi).";
+    }
+
+    public function getSuperAdminComplaintsResponse(User $user, string $message = ''): string
+    {
+        $openDisputes = Dispute::whereIn('status', ['open', 'investigating'])->count();
+        $resolvedDisputes = Dispute::where('status', 'resolved')->count();
+        $rejectedDisputes = Dispute::where('status', 'rejected')->count();
+        $totalDisputes = Dispute::count();
+
+        if ($totalDisputes === 0) {
+            return "Saat ini belum ada pengajuan komplain atau dispute di platform LaundryKu.";
+        }
+
+        return "Statistik komplain & dispute platform LaundryKu:\n"
+            . "- Komplain aktif/terbuka: {$openDisputes} kasus (status: open/investigating).\n"
+            . "- Komplain selesai/teratasi: {$resolvedDisputes} kasus.\n"
+            . "- Komplain ditolak: {$rejectedDisputes} kasus.\n"
+            . "- Total komplain: {$totalDisputes} kasus.\n"
+            . "Mediasi komplain dapat ditangani melalui menu Manajemen Komplain di Admin Portal (/admin).";
     }
 
     /**

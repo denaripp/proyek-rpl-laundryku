@@ -47,6 +47,8 @@ class AiIntentRouter
     public const INTENT_GUIDE_STORE_SERVICES = 'guide_store_services';
     public const INTENT_GUIDE_STORE_HOURS = 'guide_store_hours';
     public const INTENT_GUIDE_STORE_COMPLAINTS = 'guide_store_complaints';
+    public const INTENT_GUIDE_STORE_COURIERS = 'guide_store_couriers';
+    public const INTENT_GUIDE_STORE_SETTINGS = 'guide_store_settings';
     public const INTENT_GUIDE_ADMIN_APPROVALS = 'guide_admin_approvals';
     public const INTENT_GUIDE_ADMIN_OVERVIEW = 'guide_admin_overview';
     public const INTENT_GUIDE_TOPICS_MENU = 'guide_topics_menu';
@@ -57,12 +59,19 @@ class AiIntentRouter
     public const INTENT_STORE_HOURS_DATA = 'store_hours_data';
     public const INTENT_STORE_COURIERS_DATA = 'store_couriers_data';
     public const INTENT_STORE_APPLICANTS_DATA = 'store_applicants_data';
+    public const INTENT_STORE_TOP_CUSTOMERS = 'store_top_customers';
+    public const INTENT_STORE_BESTSELLERS = 'store_bestsellers';
+    public const INTENT_STORE_SETTINGS_DATA = 'store_settings_data';
+    public const INTENT_STORE_ACTION_ORDERS = 'store_action_orders';
 
     // Courier Data Capabilities
     public const INTENT_COURIER_STORE_INFO = 'courier_store_info';
 
     // Super Admin Data Capabilities
     public const INTENT_SUPER_ADMIN_SEARCH = 'super_admin_search';
+    public const INTENT_SUPER_ADMIN_APPROVALS = 'super_admin_approvals';
+    public const INTENT_SUPER_ADMIN_USERS = 'super_admin_users';
+    public const INTENT_SUPER_ADMIN_COMPLAINTS = 'super_admin_complaints';
 
     // Deterministic Greetings, Thanks, and Goodbye
     public const INTENT_GREETING = 'greeting';
@@ -107,6 +116,8 @@ class AiIntentRouter
         self::INTENT_GUIDE_STORE_SERVICES,
         self::INTENT_GUIDE_STORE_HOURS,
         self::INTENT_GUIDE_STORE_COMPLAINTS,
+        self::INTENT_GUIDE_STORE_COURIERS,
+        self::INTENT_GUIDE_STORE_SETTINGS,
         self::INTENT_GUIDE_ADMIN_APPROVALS,
         self::INTENT_GUIDE_ADMIN_OVERVIEW,
         self::INTENT_GUIDE_TOPICS_MENU,
@@ -116,8 +127,15 @@ class AiIntentRouter
         self::INTENT_STORE_HOURS_DATA,
         self::INTENT_STORE_COURIERS_DATA,
         self::INTENT_STORE_APPLICANTS_DATA,
+        self::INTENT_STORE_TOP_CUSTOMERS,
+        self::INTENT_STORE_BESTSELLERS,
+        self::INTENT_STORE_SETTINGS_DATA,
+        self::INTENT_STORE_ACTION_ORDERS,
         self::INTENT_COURIER_STORE_INFO,
         self::INTENT_SUPER_ADMIN_SEARCH,
+        self::INTENT_SUPER_ADMIN_APPROVALS,
+        self::INTENT_SUPER_ADMIN_USERS,
+        self::INTENT_SUPER_ADMIN_COMPLAINTS,
 
         self::INTENT_GREETING,
         self::INTENT_THANKS,
@@ -623,16 +641,58 @@ class AiIntentRouter
         // --- STORE_SERVICES_DATA (Mitra asking own store prices/services) ---
         $stSvcScore = 0;
         if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko saya')) {
-            if ((str_contains($text, 'harga') || str_contains($text, 'tarif') || str_contains($text, 'layanan')) && (str_contains($text, 'toko') || str_contains($text, 'toko saya'))) {
+            if ((str_contains($text, 'harga') || str_contains($text, 'tarif') || str_contains($text, 'layanan') || str_contains($text, 'menu servis') || str_contains($text, 'list harga')) && (str_contains($text, 'toko') || str_contains($text, 'toko saya') || str_contains($text, 'kita'))) {
                 $stSvcScore += 90;
             }
         }
         $scores[self::INTENT_STORE_SERVICES_DATA] = max(0, $stSvcScore);
 
+        // --- STORE_BESTSELLERS (Mitra asking best-selling services) ---
+        $stBestScore = 0;
+        if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko saya') || str_contains($text, 'toko kita')) {
+            if (str_contains($text, 'terlaris') || str_contains($text, 'paling laku') || str_contains($text, 'paling laris') || str_contains($text, 'bestseller') || str_contains($text, 'paling banyak dipesan')) {
+                $stBestScore += 95;
+            }
+        }
+        $scores[self::INTENT_STORE_BESTSELLERS] = max(0, $stBestScore);
+
+        // --- STORE_TOP_CUSTOMERS (Mitra asking loyal/top customers) ---
+        $stTopCustScore = 0;
+        if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko saya') || str_contains($text, 'toko kita') || str_contains($text, 'toko')) {
+            if (str_contains($text, 'pelanggan') && (str_contains($text, 'sering') || str_contains($text, 'loyal') || str_contains($text, 'teratas') || str_contains($text, 'setia') || str_contains($text, 'banyak'))) {
+                $stTopCustScore += 95;
+            }
+            if (str_contains($text, 'top customer') || str_contains($text, 'pelanggan paling loyal') || str_contains($text, 'paling sering mencuci')) {
+                $stTopCustScore += 95;
+            }
+        }
+        $scores[self::INTENT_STORE_TOP_CUSTOMERS] = max(0, $stTopCustScore);
+
+        // --- STORE_ACTION_ORDERS (Mitra asking orders needing action or status breakdown) ---
+        $stActionScore = 0;
+        if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko') || str_contains($text, 'toko saya')) {
+            if (str_contains($text, 'belum ditimbang') || str_contains($text, 'blm ditimbang') || str_contains($text, 'siap diantar') || str_contains($text, 'butuh tindakan') || str_contains($text, 'perlu tindakan') || str_contains($text, 'perlu diproses') || str_contains($text, 'perlu proses') || str_contains($text, 'lagi dicuci') || str_contains($text, 'orderan baru') || str_contains($text, 'pesanan baru') || str_contains($text, 'belum kelar') || str_contains($text, 'blm kelar') || str_contains($text, 'msh diproses') || str_contains($text, 'masih diproses') || str_contains($text, 'nunggu jemput') || str_contains($text, 'menunggu penjemputan') || str_contains($text, 'menunggu jemput')) {
+                $stActionScore += 95;
+            }
+            if (str_contains($text, 'status orderan toko') || str_contains($text, 'status pesanan toko saat ini')) {
+                $stActionScore += 90;
+            }
+        }
+        $scores[self::INTENT_STORE_ACTION_ORDERS] = max(0, $stActionScore);
+
+        // --- STORE_SETTINGS_DATA (Mitra asking store operational settings, radius, address, approval status) ---
+        $stSettingsScore = 0;
+        if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko saya') || str_contains($text, 'gerai saya')) {
+            if (str_contains($text, 'radius') || str_contains($text, 'jangkauan') || str_contains($text, 'approval') || str_contains($text, 'disetujui admin') || str_contains($text, 'status persetujuan') || str_contains($text, 'status approval') || str_contains($text, 'terdaftar di mana') || str_contains($text, 'tutup gak') || str_contains($text, 'hari minggu tutup') || str_contains($text, 'jadwal buka')) {
+                $stSettingsScore += 95;
+            }
+        }
+        $scores[self::INTENT_STORE_SETTINGS_DATA] = max(0, $stSettingsScore);
+
         // --- STORE_COMPLAINTS_DATA (Mitra asking complaints in own store) ---
         $stCompScore = 0;
         if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko saya')) {
-            if ((str_contains($text, 'komplain') || str_contains($text, 'keluhan')) && (str_contains($text, 'toko') || str_contains($text, 'pelanggan') || str_contains($text, 'toko saya'))) {
+            if ((str_contains($text, 'komplain') || str_contains($text, 'keluhan')) && (str_contains($text, 'toko') || str_contains($text, 'pelanggan') || str_contains($text, 'toko saya') || str_contains($text, 'hari ini') || str_contains($text, 'belum selesai'))) {
                 $stCompScore += 90;
             }
         }
@@ -659,21 +719,25 @@ class AiIntentRouter
             $stOrderScore += 30;
         }
         // Penalty if personal customer context, platform context, or performa/omzet
-        if (str_contains($text, 'saya memesan') || str_contains($text, 'saya pesan') || str_contains($text, 'cucian saya') || str_contains($text, 'berapa kali') || str_contains($text, 'platform') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'statistik') || str_contains($text, 'paling baru saya') || str_contains($text, 'terbaru saya')) {
-            $stOrderScore -= 80;
+        if (str_contains($text, 'performa') || str_contains($text, 'saya memesan') || str_contains($text, 'saya pesan') || str_contains($text, 'cucian saya') || str_contains($text, 'berapa kali') || str_contains($text, 'platform') || str_contains($text, 'omzet') || str_contains($text, 'pendapatan') || str_contains($text, 'pemasukan') || str_contains($text, 'statistik') || str_contains($text, 'paling baru saya') || str_contains($text, 'terbaru saya')) {
+            $stOrderScore -= 120;
         }
         $scores[self::INTENT_STORE_ORDERS] = max(0, $stOrderScore);
 
         // --- STORE_STATS (Store managers) ---
         $stStatsScore = 0;
-        if (str_contains($text, 'statistik toko') || str_contains($text, 'performa toko') || str_contains($text, 'omzet toko') || str_contains($text, 'rekap toko') || str_contains($text, 'ringkasan toko') || (str_contains($text, 'toko') && (str_contains($text, 'statistik') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'rekap')))) {
-            $stStatsScore += 80;
+        if (str_contains($text, 'statistik toko') || str_contains($text, 'performa toko') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'omset') || str_contains($text, 'pendapatan') || str_contains($text, 'pemasukan') || str_contains($text, 'duit masuk') || str_contains($text, 'uang masuk') || str_contains($text, 'rekap toko') || str_contains($text, 'ringkasan toko') || (str_contains($text, 'toko') && (str_contains($text, 'statistik') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'rekap')))) {
+            if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko') || str_contains($text, 'gerai')) {
+                $stStatsScore += 95;
+            }
         }
-        if (in_array($role, ['store_admin', 'store_owner'], true) && str_contains($text, 'toko')) {
-            $stStatsScore += 40;
+        if (in_array($role, ['store_admin', 'store_owner'], true)) {
+            if (str_contains($text, 'omzet') || str_contains($text, 'omset') || str_contains($text, 'pendapatan') || str_contains($text, 'pemasukan')) {
+                $stStatsScore += 45;
+            }
         }
-        if (str_contains($text, 'platform') || str_contains($text, 'pesanan masuk')) {
-            $stStatsScore -= 40;
+        if (str_contains($text, 'platform')) {
+            $stStatsScore -= 60;
         }
         $scores[self::INTENT_STORE_STATS] = max(0, $stStatsScore);
 
@@ -685,19 +749,54 @@ class AiIntentRouter
         if (str_contains($text, 'semua pesanan') || str_contains($text, 'seluruh pesanan') || (str_contains($text, 'platform') && (str_contains($text, 'total') || str_contains($text, 'pesanan') || str_contains($text, 'transaksi') || str_contains($text, 'ringkasan') || str_contains($text, 'sistem') || str_contains($text, 'ekosistem')))) {
             $adminScore += 80;
         }
-        if (str_contains($text, 'toko mitra yang aktif') || str_contains($text, 'jumlah toko mitra') || str_contains($text, 'toko aktif di sistem') || str_contains($text, 'mitra yang aktif')) {
+        if (str_contains($text, 'toko mitra yang aktif') || str_contains($text, 'jumlah toko mitra') || str_contains($text, 'toko aktif di sistem') || str_contains($text, 'mitra yang aktif') || str_contains($text, 'toko terdaftar di seluruh sistem')) {
             $adminScore += 90;
         }
         if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true)) {
-            if (str_contains($text, 'platform') || str_contains($text, 'sistem') || str_contains($text, 'keseluruhan') || str_contains($text, 'ekosistem') || str_contains($text, 'toko mitra')) {
+            if (str_contains($text, 'platform') || str_contains($text, 'sistem') || str_contains($text, 'keseluruhan') || str_contains($text, 'ekosistem') || str_contains($text, 'semua') || str_contains($text, 'total transaksi')) {
+                $adminScore += 50;
+            }
+            if (str_contains($text, 'omset platform') || str_contains($text, 'omzet platform') || str_contains($text, 'total omzet platform') || str_contains($text, 'volume pesanan')) {
                 $adminScore += 50;
             }
         }
         $scores[self::INTENT_SUPER_ADMIN_PLATFORM] = max(0, $adminScore);
 
+        // --- SUPER_ADMIN_APPROVALS (Super admin asking stores or couriers pending approval) ---
+        $adminApprovScore = 0;
+        if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true) || str_contains($text, 'se platform')) {
+            if (str_contains($text, 'pending') || str_contains($text, 'menunggu') || str_contains($text, 'persetujuan') || str_contains($text, 'verifikasi') || str_contains($text, 'approval') || str_contains($text, 'disetujui') || str_contains($text, 'antrean')) {
+                if (str_contains($text, 'toko') || str_contains($text, 'mitra') || str_contains($text, 'kurir') || str_contains($text, 'pelamar')) {
+                    $adminApprovScore += 95;
+                }
+            }
+        }
+        $scores[self::INTENT_SUPER_ADMIN_APPROVALS] = max(0, $adminApprovScore);
+
+        // --- SUPER_ADMIN_USERS (Super admin asking user counts per role without PII) ---
+        $adminUsersScore = 0;
+        if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true) || str_contains($text, 'di sistem') || str_contains($text, 'di platform') || str_contains($text, 'di laundryku')) {
+            if (str_contains($text, 'pengguna per peran') || str_contains($text, 'user per peran') || str_contains($text, 'total pengguna') || str_contains($text, 'total user') || str_contains($text, 'jumlah user') || str_contains($text, 'jumlah pelanggan mitra') || str_contains($text, 'total customer di laundryku') || str_contains($text, 'jumlah kurir terdaftar di platform') || str_contains($text, 'total customer di platform')) {
+                $adminUsersScore += 95;
+            }
+            if (str_contains($text, 'user aktif platform') || str_contains($text, 'jumlah pelanggan') || str_contains($text, 'total customer')) {
+                $adminUsersScore += 90;
+            }
+        }
+        $scores[self::INTENT_SUPER_ADMIN_USERS] = max(0, $adminUsersScore);
+
+        // --- SUPER_ADMIN_COMPLAINTS (Super admin asking platform-wide open disputes/complaints) ---
+        $adminCompScore = 0;
+        if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true) || str_contains($text, 'se platform') || str_contains($text, 'di sistem')) {
+            if ((str_contains($text, 'komplain') || str_contains($text, 'dispute') || str_contains($text, 'keluhan')) && (str_contains($text, 'sistem') || str_contains($text, 'platform') || str_contains($text, 'aktif') || str_contains($text, 'terbuka') || str_contains($text, 'belum selesai'))) {
+                $adminCompScore += 95;
+            }
+        }
+        $scores[self::INTENT_SUPER_ADMIN_COMPLAINTS] = max(0, $adminCompScore);
+
         // --- STORE_COURIERS_DATA ---
         $stCourierScore = 0;
-        if (str_contains($text, 'kurir') && !str_contains($text, 'pelamar') && !str_contains($text, 'kandidat')) {
+        if (str_contains($text, 'kurir') && !str_contains($text, 'pelamar') && !str_contains($text, 'kandidat') && !str_contains($text, 'daftar di platform') && !str_contains($text, 'terdaftar di platform')) {
             if (str_contains($text, 'toko') || in_array($role, ['store_admin', 'store_owner'], true)) {
                 $stCourierScore += 85;
             }
@@ -1039,18 +1138,26 @@ Rules:
 
         if (in_array($role, ['store_admin', 'store_owner'], true)) {
             return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai pengelola toko mitra di LaundryKu, Anda dapat menanyakan:\n"
-                . "1. Pesanan masuk toko (contoh: \"pesanan masuk toko saya\")\n"
-                . "2. Statistik dan ringkasan toko (contoh: \"statistik toko saya\")\n"
-                . "3. Rincian status pesanan spesifik (contoh: \"status pesanan ORD-...\")\n"
-                . "Silakan tanyakan salah satu hal di atas!";
+                . "1. Omzet & Keuangan: \"omzet hari ini\", \"omzet kemarin\", \"omzet minggu ini\", \"omzet bulan ini\"\n"
+                . "2. Pesanan & Tindakan: \"pesanan yang belum ditimbang\", \"pesanan siap diantar\", \"pesanan nunggu jemput\"\n"
+                . "3. Pesanan Spesifik: \"status pesanan ORD-...\"\n"
+                . "4. Layanan & Penjualan: \"layanan terlaris\", \"daftar harga layanan toko\"\n"
+                . "5. Kurir & Pelamar: \"daftar kurir toko\", \"pelamar kurir baru\"\n"
+                . "6. Pengaturan Gerai: \"jam operasional toko\", \"radius layanan toko\", \"status approval toko\"\n"
+                . "7. Pelanggan & Ulasan: \"top customer toko\", \"rating dan ulasan toko\", \"komplain toko\"\n"
+                . "8. Panduan Prosedural: \"cara atur jam operasional\", \"cara menimbang pesanan\", \"cara atur radius\"\n"
+                . "Silakan ajukan salah satu pertanyaan di atas!";
         }
 
         if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true)) {
             return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai admin platform LaundryKu, Anda dapat menanyakan:\n"
-                . "1. Ringkasan performa platform (contoh: \"ringkasan platform\")\n"
-                . "2. Pengecekan pesanan di seluruh sistem (contoh: \"status pesanan ORD-...\")\n"
-                . "3. Daftar layanan dan aturan sistem (contoh: \"daftar layanan\" atau \"aturan cod\")\n"
-                . "Silakan tanyakan salah satu hal di atas!";
+                . "1. Ringkasan Platform: \"ringkasan platform\", \"total toko aktif\", \"total omzet platform\"\n"
+                . "2. Persetujuan & Verifikasi: \"pendaftaran mitra yang menunggu\", \"verifikasi kurir baru\"\n"
+                . "3. Pengguna & Peran: \"jumlah pengguna per peran\", \"berapa total customer dan kurir\"\n"
+                . "4. Komplain & Dispute: \"komplain terbuka platform\", \"dispute yang belum selesai\"\n"
+                . "5. Pelacakan Pesanan Global: \"status pesanan ORD-...\"\n"
+                . "6. Pencarian Data: \"cari toko Berkah\", \"cari user Budi\"\n"
+                . "Silakan ajukan salah satu pertanyaan di atas!";
         }
 
         // Customer default
