@@ -41,7 +41,6 @@ import {
   setActiveStoreId,
   OwnedStoreItem,
   logout,
-  switchUserMode,
   fetchPortalSession,
   hasRole,
 } from '@/lib/auth';
@@ -116,7 +115,6 @@ export const DashboardLayout = ({
   const [portalUser, setPortalUser] = useState<AuthUser | null>(null);
 
   const { user } = useAuth();
-  const availableModes = (user?.available_modes || (userRole === 'store_admin' ? ['customer', 'store'] : userRole === 'courier' ? ['customer', 'courier'] : ['customer'])) as string[];
 
   // Store owner multi-store and operational state
   const [ownedStores, setOwnedStores] = useState<OwnedStoreItem[]>([]);
@@ -600,96 +598,12 @@ export const DashboardLayout = ({
                 <h1 className="font-bold text-base text-slate-900 hidden sm:block">
                   {userRole === 'courier' ? 'Dashboard Kurir' : 'Portal LaundryKu'}
                 </h1>
-                {userRole === 'courier' && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await switchUserMode('customer');
-                      } catch {
-                        // ignore
-                      }
-                      router.push('/stores');
-                    }}
-                    className="text-xs px-2.5 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    Kembali ke Customer
-                  </button>
-                )}
               </div>
             )}
           </div>
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-3">
-            {/* Mode Switcher */}
-            {mounted && availableModes.length > 1 && (
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 text-[11px] mr-1">
-                {availableModes.includes('customer') && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await switchUserMode('customer');
-                      } catch {
-                        // ignore
-                      }
-                      router.push('/stores');
-                    }}
-                    className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
-                      user?.active_mode === 'customer'
-                        ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                        : 'text-slate-500 hover:text-slate-800'
-                    )}
-                  >
-                    Pelanggan
-                  </button>
-                )}
-                {availableModes.includes('store') && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await switchUserMode('store');
-                      } catch {
-                        // ignore
-                      }
-                      router.push('/store');
-                    }}
-                    className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
-                      user?.active_mode === 'store' || (!user?.active_mode && userRole === 'store_admin')
-                        ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                        : 'text-slate-500 hover:text-slate-800'
-                    )}
-                  >
-                    Toko
-                  </button>
-                )}
-                {availableModes.includes('courier') && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await switchUserMode('courier');
-                      } catch {
-                        // ignore
-                      }
-                      router.push('/courier');
-                    }}
-                    className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
-                      user?.active_mode === 'courier'
-                        ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                        : 'text-slate-500 hover:text-slate-800'
-                    )}
-                  >
-                    Kurir
-                  </button>
-                )}
-              </div>
-            )}
 
             {/* Operational Status Toggle for Store Admin */}
             {userRole === 'store_admin' && activeStore && (
@@ -757,22 +671,6 @@ export const DashboardLayout = ({
                   : userRole !== 'courier'
                   ? [{ id: 'profile', label: 'Profil Saya', onClick: () => router.push('/profile') }]
                   : []),
-                ...(isStorePortal
-                  ? [{ id: 'marketplace', label: 'Mode Pelanggan', onClick: () => router.push('/stores') }]
-                  : [
-                      {
-                        id: 'marketplace',
-                        label: 'Cari Toko',
-                        onClick: async () => {
-                          try {
-                            await switchUserMode('customer');
-                          } catch {
-                            // ignore
-                          }
-                          router.push('/stores');
-                        },
-                      },
-                    ]),
                 { id: 'div-1', label: '', divider: true },
                 { id: 'logout', label: 'Keluar', danger: true, onClick: handleLogout },
               ]}

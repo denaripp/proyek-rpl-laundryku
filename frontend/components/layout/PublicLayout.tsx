@@ -22,7 +22,7 @@ import { cn } from '@/lib/format';
 import { useAuth } from '@/lib/AuthContext';
 import { getUnreadChatCount } from '@/lib/chat';
 import { notificationApi } from '@/lib/notification';
-import { hasRole, hasApprovedStore, switchUserMode, getUserDisplayContact } from '@/lib/auth';
+import { hasRole, hasApprovedStore, getUserDisplayContact } from '@/lib/auth';
 
 export interface PublicLayoutProps {
   children: React.ReactNode;
@@ -150,13 +150,6 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
 
   const isApprovedOwner = hasRole(user, 'store_admin') || hasApprovedStore(user);
   const hasPendingOrOtherStore = !isApprovedOwner && Boolean(user?.stores && user.stores.length > 0);
-  const availableModes = (user?.available_modes || (hasRole(user, 'courier') ? ['customer', 'courier'] : isApprovedOwner ? ['customer', 'store'] : ['customer'])) as string[];
-  const canAccessCourier = availableModes.includes('courier') || hasRole(user, 'courier');
-  const activeModeBadge = (() => {
-    if (user?.active_mode === 'courier') return 'Mode Kurir';
-    if (user?.active_mode === 'store') return 'Mode Toko';
-    return 'Mode Pelanggan';
-  })();
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-900 font-sans pb-16 md:pb-0">
@@ -209,17 +202,6 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
               <>
                 <Link
                   href="/stores"
-                  onClick={async (e) => {
-                    if (user?.active_mode === 'store') {
-                      e.preventDefault();
-                      try {
-                        await switchUserMode('customer');
-                      } catch {
-                        // ignore
-                      }
-                      router.push('/stores');
-                    }
-                  }}
                   className={cn(
                     'text-xs font-medium transition-colors flex items-center gap-1.5',
                     pathname === '/stores' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-600 hover:text-slate-900'
@@ -240,7 +222,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   <Package className="w-4 h-4" strokeWidth={1.5} />
                   <span>Pesanan Saya</span>
                 </Link>
-                {!isApprovedOwner && !canAccessCourier && hasPendingOrOtherStore && (
+                {hasPendingOrOtherStore ? (
                   <Link
                     href="/upgrade"
                     className={cn(
@@ -251,8 +233,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                     <Briefcase className="w-4 h-4" strokeWidth={1.5} />
                     <span>Status Pengajuan</span>
                   </Link>
-                )}
-                {!isApprovedOwner && !canAccessCourier && !hasPendingOrOtherStore && (
+                ) : (
                   <Link
                     href="/upgrade"
                     className={cn(
@@ -274,62 +255,6 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
               <div className="h-8 w-24 bg-slate-100 animate-pulse rounded-md" />
             ) : isAuthenticated && user ? (
               <div className="flex items-center gap-2">
-                {/* Mode Switcher */}
-                {availableModes.length > 1 && (
-                  <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 text-[11px] mr-1">
-                    {availableModes.includes('customer') && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await switchUserMode('customer').catch(() => {});
-                          router.push('/stores');
-                        }}
-                        className={cn(
-                          'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
-                          user.active_mode === 'customer' || !user.active_mode
-                            ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                            : 'text-slate-500 hover:text-slate-800'
-                        )}
-                      >
-                        Pelanggan
-                      </button>
-                    )}
-                    {availableModes.includes('store') && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await switchUserMode('store').catch(() => {});
-                          router.push('/store');
-                        }}
-                        className={cn(
-                          'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
-                          user.active_mode === 'store'
-                            ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                            : 'text-slate-500 hover:text-slate-800'
-                        )}
-                      >
-                        Toko
-                      </button>
-                    )}
-                    {availableModes.includes('courier') && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await switchUserMode('courier').catch(() => {});
-                          router.push('/courier');
-                        }}
-                        className={cn(
-                          'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
-                          user.active_mode === 'courier'
-                            ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                            : 'text-slate-500 hover:text-slate-800'
-                        )}
-                      >
-                        Kurir
-                      </button>
-                    )}
-                  </div>
-                )}
                 {/* Chat Button */}
                 <Link
                   href="/chat"
@@ -424,7 +349,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                             </div>
                             <div className="mt-1.5">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white border border-white/20 tracking-wide">
-                                {activeModeBadge}
+                                Pelanggan
                               </span>
                             </div>
                           </div>
@@ -436,21 +361,19 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                         <div className="px-3.5 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                           Akun Saya
                         </div>
-                        {user?.active_mode !== 'courier' && (
-                          <Link
-                            href="/profile"
-                            role="menuitem"
-                            tabIndex={-1}
-                            onClick={() => setAccountDropdownOpen(false)}
-                            className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
-                          >
-                            <User className="w-4 h-4 text-slate-500 shrink-0 group-hover:text-slate-800 group-focus:text-slate-800" strokeWidth={1.5} />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-medium text-slate-800">Profil Saya</div>
-                              <div className="text-[11px] text-slate-500">Kelola info akun dan data pribadi</div>
-                            </div>
-                          </Link>
-                        )}
+                        <Link
+                          href="/profile"
+                          role="menuitem"
+                          tabIndex={-1}
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
+                        >
+                          <User className="w-4 h-4 text-slate-500 shrink-0 group-hover:text-slate-800 group-focus:text-slate-800" strokeWidth={1.5} />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-slate-800">Profil Saya</div>
+                            <div className="text-[11px] text-slate-500">Kelola info akun dan data pribadi</div>
+                          </div>
+                        </Link>
                         <Link
                           href="/profile#addresses"
                           role="menuitem"
@@ -466,67 +389,41 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                         </Link>
                       </div>
 
-                      {/* Grup Menu: Pengelolaan Toko / Kemitraan */}
-                      {(isApprovedOwner || (!canAccessCourier && !isApprovedOwner)) && (
-                        <div className="py-1 border-t border-slate-100">
-                          <div className="px-3.5 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                            {isApprovedOwner ? 'Pengelolaan Toko' : 'Kemitraan'}
-                          </div>
-                          {isApprovedOwner && (
-                            <Link
-                              href="/store"
-                              role="menuitem"
-                              tabIndex={-1}
-                              onClick={async () => {
-                                setAccountDropdownOpen(false);
-                                if (user?.active_mode !== 'store') {
-                                  try {
-                                    await switchUserMode('store');
-                                  } catch {
-                                    // ignore
-                                  }
-                                }
-                              }}
-                              className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
-                            >
-                              <Store className="w-4 h-4 text-[#1A3A5C] shrink-0" strokeWidth={1.5} />
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-semibold text-[#1A3A5C]">Dashboard Toko</div>
-                                <div className="text-[11px] text-slate-500">Kelola operasional dan pesanan toko</div>
-                              </div>
-                            </Link>
-                          )}
-                          {!isApprovedOwner && !canAccessCourier && (hasPendingOrOtherStore ? (
-                            <Link
-                              href="/upgrade"
-                              role="menuitem"
-                              tabIndex={-1}
-                              onClick={() => setAccountDropdownOpen(false)}
-                              className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
-                            >
-                              <Briefcase className="w-4 h-4 text-slate-500 shrink-0 group-hover:text-slate-800 group-focus:text-slate-800" strokeWidth={1.5} />
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-medium text-slate-800">Status Pengajuan</div>
-                                <div className="text-[11px] text-slate-500">Pantau verifikasi mitra laundry</div>
-                              </div>
-                            </Link>
-                          ) : (
-                            <Link
-                              href="/upgrade"
-                              role="menuitem"
-                              tabIndex={-1}
-                              onClick={() => setAccountDropdownOpen(false)}
-                              className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
-                            >
-                              <Briefcase className="w-4 h-4 text-slate-500 shrink-0 group-hover:text-slate-800 group-focus:text-slate-800" strokeWidth={1.5} />
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-medium text-slate-800">Gabung Mitra</div>
-                                <div className="text-[11px] text-slate-500">Daftarkan usaha laundry Anda</div>
-                              </div>
-                            </Link>
-                          ))}
+                      {/* Grup Menu: Kemitraan */}
+                      <div className="py-1 border-t border-slate-100">
+                        <div className="px-3.5 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                          Kemitraan
                         </div>
-                      )}
+                        {hasPendingOrOtherStore ? (
+                          <Link
+                            href="/upgrade"
+                            role="menuitem"
+                            tabIndex={-1}
+                            onClick={() => setAccountDropdownOpen(false)}
+                            className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
+                          >
+                            <Briefcase className="w-4 h-4 text-slate-500 shrink-0 group-hover:text-slate-800 group-focus:text-slate-800" strokeWidth={1.5} />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-slate-800">Status Pengajuan</div>
+                              <div className="text-[11px] text-slate-500">Pantau verifikasi mitra laundry</div>
+                            </div>
+                          </Link>
+                        ) : (
+                          <Link
+                            href="/upgrade"
+                            role="menuitem"
+                            tabIndex={-1}
+                            onClick={() => setAccountDropdownOpen(false)}
+                            className="flex items-center gap-3 px-3.5 py-2 text-slate-800 hover:bg-slate-50 focus:bg-slate-50 focus:outline-hidden transition-colors group cursor-pointer"
+                          >
+                            <Briefcase className="w-4 h-4 text-slate-500 shrink-0 group-hover:text-slate-800 group-focus:text-slate-800" strokeWidth={1.5} />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-slate-800">Gabung Mitra</div>
+                              <div className="text-[11px] text-slate-500">Daftarkan usaha laundry Anda</div>
+                            </div>
+                          </Link>
+                        )}
+                      </div>
 
                       {/* Item Keluar dengan pemisah */}
                       <div className="p-1.5 border-t border-slate-100 bg-slate-50/50">
@@ -623,22 +520,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 </>
               ) : (
                 <>
-                  <Link
-                    href="/stores"
-                    onClick={async (e) => {
-                      if (user?.active_mode === 'store') {
-                        e.preventDefault();
-                        try {
-                          await switchUserMode('customer');
-                        } catch {
-                          // ignore
-                        }
-                        setMobileMenuOpen(false);
-                        router.push('/stores');
-                      }
-                    }}
-                    className="block px-3 py-2 rounded-md hover:bg-slate-50"
-                  >
+                  <Link href="/stores" className="block px-3 py-2 rounded-md hover:bg-slate-50">
                     Cari Toko
                   </Link>
                   <Link href="/orders" className="block px-3 py-2 rounded-md hover:bg-slate-50">
@@ -650,83 +532,14 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   <Link href="/profile" className="block px-3 py-2 rounded-md hover:bg-slate-50">
                     Profil Akun
                   </Link>
-                  {canAccessCourier && (
-                    <Link href="/courier" className="block px-3 py-2 rounded-md bg-slate-100 text-[#1A3A5C] font-semibold">
-                      Dashboard Kurir
+                  {hasPendingOrOtherStore ? (
+                    <Link href="/upgrade" className="block px-3 py-2 rounded-md hover:bg-slate-50">
+                      Status Pengajuan
                     </Link>
-                  )}
-                  {!isApprovedOwner && !canAccessCourier && (
-                    hasPendingOrOtherStore ? (
-                      <Link href="/upgrade" className="block px-3 py-2 rounded-md hover:bg-slate-50">
-                        Status Pengajuan
-                      </Link>
-                    ) : (
-                      <Link href="/upgrade" className="block px-3 py-2 rounded-md hover:bg-slate-50">
-                        Gabung Mitra
-                      </Link>
-                    )
-                  )}
-
-                  {availableModes.length > 1 && (
-                    <div className="pt-2 pb-1 px-3">
-                      <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Mode Akun
-                      </span>
-                      <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await switchUserMode('customer').catch(() => {});
-                            setMobileMenuOpen(false);
-                            router.push('/stores');
-                          }}
-                          className={cn(
-                            'flex-1 py-1 rounded text-xs font-medium transition-colors text-center',
-                            user?.active_mode === 'customer' || !user?.active_mode
-                              ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                              : 'text-slate-500 hover:text-slate-800'
-                          )}
-                        >
-                          Pelanggan
-                        </button>
-                        {availableModes.includes('store') && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await switchUserMode('store').catch(() => {});
-                              setMobileMenuOpen(false);
-                              router.push('/store');
-                            }}
-                            className={cn(
-                              'flex-1 py-1 rounded text-xs font-medium transition-colors text-center',
-                              user?.active_mode === 'store'
-                                ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                                : 'text-slate-500 hover:text-slate-800'
-                            )}
-                          >
-                            Toko
-                          </button>
-                        )}
-                        {availableModes.includes('courier') && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await switchUserMode('courier').catch(() => {});
-                              setMobileMenuOpen(false);
-                              router.push('/courier');
-                            }}
-                            className={cn(
-                              'flex-1 py-1 rounded text-xs font-medium transition-colors text-center',
-                              user?.active_mode === 'courier'
-                                ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                                : 'text-slate-500 hover:text-slate-800'
-                            )}
-                          >
-                            Kurir
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                  ) : (
+                    <Link href="/upgrade" className="block px-3 py-2 rounded-md hover:bg-slate-50">
+                      Gabung Mitra
+                    </Link>
                   )}
                 </>
               )}

@@ -42,8 +42,6 @@ export interface AuthUser {
   roles: string[] | { id: number; code: string; name: string }[];
   active_roles?: string[];
   stores?: OwnedStoreItem[];
-  active_mode?: 'customer' | 'store' | 'courier' | string;
-  available_modes?: ('customer' | 'store' | 'courier' | string)[];
 }
 
 export function isPlaceholderEmail(email?: string | null): boolean {
@@ -487,10 +485,6 @@ export function hasRole(user: AuthUser | null, roleCode: string): boolean {
     return false;
   };
 
-  if (user.active_mode && isRoleMatch(user.active_mode)) {
-    return true;
-  }
-
   const anyUser = user as unknown as { role?: string };
   if (anyUser.role && isRoleMatch(anyUser.role)) {
     return true;
@@ -548,52 +542,8 @@ export function setActiveStoreId(storeId: string): void {
 export function getHomePathForRole(user: AuthUser | null): string {
   if (!user) return '/';
   if (hasRole(user, 'super_admin')) return '/admin';
-  if (user.active_mode === 'courier') return '/courier';
-  if (user.active_mode === 'store') return '/store';
-  if (user.active_mode === 'customer') return '/stores';
   if (hasRole(user, 'store_admin') || hasApprovedStore(user)) return '/store';
   if (hasRole(user, 'courier')) return '/courier';
   return '/stores';
-}
-
-export async function switchUserMode(
-  mode: 'customer' | 'store' | 'courier'
-): Promise<AuthUser> {
-  let res: Response;
-  try {
-    res = await fetch('/api/proxy/me/mode', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ mode }),
-    });
-  } catch {
-    throw new AuthApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0, 'NETWORK_ERROR');
-  }
-
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json || json.success === false) {
-    const errorMsg = json?.error?.message || json?.message || 'Gagal mengubah mode pengguna.';
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || 'MODE_SWITCH_FAILED');
-  }
-
-  // Update local session
-  const current = getStoredUser();
-  const updated: AuthUser = current
-    ? {
-        ...current,
-        active_mode: json.data?.active_mode || mode,
-        available_modes: json.data?.available_modes || current.available_modes,
-      }
-    : (json.data as AuthUser);
-
-  localStorage.setItem(USER_KEY, JSON.stringify(updated));
-  window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: updated }));
-  window.dispatchEvent(new CustomEvent('laundryku_auth_change', { detail: updated }));
-
-  return updated;
 }
 
