@@ -278,6 +278,8 @@ Route::prefix('v1')->group(function () {
     // ===== Protected Mitra Portal =====
     Route::prefix('mitra')->middleware(['auth:sanctum', 'ability:role:store_admin', 'role:store_admin'])->group(function () {
         Route::get('/store', [MitraPortalController::class, 'storeProfile']);
+        Route::patch('/store', [MitraPortalController::class, 'updateStoreProfile']);
+        Route::put('/password', [MitraPortalController::class, 'updatePassword'])->middleware('throttle:10,1');
         Route::get('/profile', [MitraPortalController::class, 'storeProfile']);
         Route::get('/orders', [MitraPortalController::class, 'orders']);
     });

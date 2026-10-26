@@ -13,9 +13,11 @@ use App\Models\ServicePrice;
 use App\Models\Store;
 use App\Models\StoreStaff;
 use App\Models\User;
+use App\Http\Requests\Mitra\UpdateStoreProfileRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class MitraPortalController extends Controller
@@ -131,6 +133,127 @@ class MitraPortalController extends Controller
                 'is_owner' => $isOwner,
                 'is_staff' => ! $isOwner,
             ],
+        ]);
+    }
+
+    /**
+     * PATCH /api/v1/mitra/store — Update store profile (owner only).
+     */
+    public function updateStoreProfile(UpdateStoreProfileRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user);
+
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Toko tidak ditemukan untuk akun ini.',
+            ], 404);
+        }
+
+        // Syarat: Hanya pemilik toko (owner_user_id = user login); staf atau pihak lain ditolak 403.
+        if ((int) $store->owner_user_id !== (int) $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pemilik toko yang memiliki izin untuk mengubah profil gerai.',
+            ], 403);
+        }
+
+        $validated = $request->validated();
+        // Whitelist HANYA field yang diizinkan (slug, status, is_active, owner_user_id dll TIDAK boleh diubah)
+        $allowed = array_intersect_key($validated, array_flip(['name', 'phone', 'address', 'description']));
+
+        $store->fill($allowed);
+        $store->save();
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'STORE_PROFILE_UPDATE',
+            'resource_type' => 'store',
+            'resource_id' => $store->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'after_value' => json_encode($allowed),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profil gerai berhasil diperbarui.',
+            'data' => [
+                'store' => [
+                    'id' => (string) $store->id,
+                    'name' => $store->name,
+                    'slug' => $store->slug,
+                    'description' => $store->description,
+                    'phone' => $store->phone,
+                    'address' => $store->address,
+                    'city' => $store->city,
+                    'province' => $store->province,
+                    'status' => $store->status,
+                    'is_active' => (bool) $store->is_active,
+                    'is_approved' => $store->isApproved(),
+                ],
+                'membership' => [
+                    'is_owner' => true,
+                    'is_staff' => false,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * PUT /api/v1/mitra/password — Change password for store admin.
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'current_password.required' => 'Password saat ini wajib diisi.',
+            'password.required' => 'Password baru wajib diisi.',
+            'password.min' => 'Password baru minimal 8 karakter.',
+            'password.confirmed' => 'Konfirmasi password baru tidak cocok.',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($request->input('current_password'), $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password saat ini salah.',
+                'errors' => [
+                    'current_password' => ['Password saat ini salah.'],
+                ],
+            ], 422);
+        }
+
+        // Simpan hash SEKALI (User model tidak memiliki cast 'hashed')
+        $user->password = Hash::make($request->input('password'));
+        $user->save();
+
+        // Batalkan token Sanctum lain milik user, simpan token sesi saat ini agar tetap aktif
+        $currentToken = $user->currentAccessToken();
+        if ($currentToken) {
+            $user->tokens()->where('id', '!=', $currentToken->id)->delete();
+        }
+
+        // Catat AuditLog tanpa mencatat password
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'MITRA_PASSWORD_UPDATE',
+            'resource_type' => 'user',
+            'resource_id' => $user->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'after_value' => json_encode(['password_changed' => true]),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password berhasil diperbarui.',
         ]);
     }
 

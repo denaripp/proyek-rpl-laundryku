@@ -95,7 +95,11 @@ class CustomerController extends Controller
         $user = $request->user();
         $validated = $request->validated();
 
-        $fillable = array_intersect_key($validated, array_flip(['name', 'email', 'phone']));
+        $allowed = ['name', 'phone'];
+        if ($user->role === \App\Models\User::ROLE_CUSTOMER) {
+            $allowed[] = 'email';
+        }
+        $fillable = array_intersect_key($validated, array_flip($allowed));
         $user->fill($fillable);
         $user->save();
 
