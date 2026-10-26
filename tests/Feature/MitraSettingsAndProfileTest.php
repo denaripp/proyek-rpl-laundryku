@@ -248,4 +248,266 @@ class MitraSettingsAndProfileTest extends TestCase
         $this->assertEquals('owner_profile@laundry.id', $owner->email);
         $this->assertEquals(User::ROLE_STORE_ADMIN, $owner->role);
     }
+
+    public function test_store_owner_can_update_operational_hours_and_service_radius(): void
+    {
+        $owner = $this->createStoreAdminUser('owner_settings@laundry.id');
+        $store = Store::factory()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Toko Operasional',
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($owner, ['role:store_admin']);
+
+        $operationalHours = [
+            'senin' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            'selasa' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            'rabu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            'kamis' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            'jumat' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            'sabtu' => ['open' => '09:00', 'close' => '18:00', 'is_closed' => false],
+            'minggu' => ['open' => '09:00', 'close' => '17:00', 'is_closed' => true],
+        ];
+
+        $payload = [
+            'name' => 'Toko Operasional Baru',
+            'phone' => '081299998888',
+            'address' => 'Jl. Riau No. 88, Citarum',
+            'city' => 'Kota Bandung',
+            'province' => 'Jawa Barat',
+            'latitude' => -6.908500,
+            'longitude' => 107.619800,
+            'service_radius_km' => 7.50,
+            'operational_hours' => $operationalHours,
+        ];
+
+        $response = $this->patchJson('/api/v1/mitra/store', $payload);
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('data.store.service_radius_km', 7.5);
+        $response->assertJsonPath('data.store.operational_hours.senin.open', '08:00');
+        $response->assertJsonPath('data.store.operational_hours.minggu.is_closed', true);
+        $response->assertJsonPath('data.store.city', 'Kota Bandung');
+        $response->assertJsonPath('data.store.province', 'Jawa Barat');
+
+        $store->refresh();
+        $this->assertEquals(7.50, (float) $store->service_radius_km);
+        $this->assertEquals('Kota Bandung', $store->city);
+        $this->assertEquals('Jawa Barat', $store->province);
+        $this->assertEquals(-6.908500, (float) $store->latitude);
+        $this->assertEquals(107.619800, (float) $store->longitude);
+        $this->assertEquals('08:00', $store->operational_hours['senin']['open']);
+        $this->assertTrue((bool) $store->operational_hours['minggu']['is_closed']);
+
+        // Verify GET /api/v1/mitra/store returns the new fields
+        $getRes = $this->getJson('/api/v1/mitra/store');
+        $getRes->assertStatus(200);
+        $getRes->assertJsonPath('data.store.service_radius_km', 7.5);
+        $getRes->assertJsonPath('data.store.city', 'Kota Bandung');
+        $getRes->assertJsonPath('data.store.province', 'Jawa Barat');
+        $getRes->assertJsonPath('data.store.operational_hours.senin.open', '08:00');
+    }
+
+    public function test_update_store_rejects_invalid_operational_hours(): void
+    {
+        $owner = $this->createStoreAdminUser('owner_invalid_hours@laundry.id');
+        $store = Store::factory()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Toko Validasi Jam',
+        ]);
+
+        Sanctum::actingAs($owner, ['role:store_admin']);
+
+        // 1. Jam tutup <= jam buka (open 18:00, close 08:00)
+        $invalidClose = [
+            'name' => 'Toko Validasi Jam',
+            'phone' => '081234567890',
+            'address' => 'Jl. Alamat',
+            'operational_hours' => [
+                'senin' => ['open' => '18:00', 'close' => '08:00', 'is_closed' => false],
+                'selasa' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'rabu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'kamis' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'jumat' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'sabtu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'minggu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            ],
+        ];
+        $res1 = $this->patchJson('/api/v1/mitra/store', $invalidClose);
+        $res1->assertStatus(422);
+        $res1->assertJsonValidationErrors(['operational_hours.senin.close']);
+
+        // 2. Format jam salah (bukan HH:MM, misal '8:00' atau '25:00')
+        $invalidFormat = [
+            'name' => 'Toko Validasi Jam',
+            'phone' => '081234567890',
+            'address' => 'Jl. Alamat',
+            'operational_hours' => [
+                'senin' => ['open' => '8:00', 'close' => '25:00', 'is_closed' => false],
+                'selasa' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'rabu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'kamis' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'jumat' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'sabtu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'minggu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            ],
+        ];
+        $res2 = $this->patchJson('/api/v1/mitra/store', $invalidFormat);
+        $res2->assertStatus(422);
+        $res2->assertJsonValidationErrors(['operational_hours.senin.open', 'operational_hours.senin.close']);
+
+        // 3. Hari tidak lengkap (kurang 'minggu')
+        $missingDay = [
+            'name' => 'Toko Validasi Jam',
+            'phone' => '081234567890',
+            'address' => 'Jl. Alamat',
+            'operational_hours' => [
+                'senin' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'selasa' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'rabu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'kamis' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'jumat' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+                'sabtu' => ['open' => '08:00', 'close' => '20:00', 'is_closed' => false],
+            ],
+        ];
+        $res3 = $this->patchJson('/api/v1/mitra/store', $missingDay);
+        $res3->assertStatus(422);
+        $res3->assertJsonValidationErrors(['operational_hours.minggu']);
+    }
+
+    public function test_update_store_rejects_invalid_service_radius(): void
+    {
+        $owner = $this->createStoreAdminUser('owner_radius@laundry.id');
+        $store = Store::factory()->create([
+            'owner_user_id' => $owner->id,
+            'name' => 'Toko Validasi Radius',
+        ]);
+
+        Sanctum::actingAs($owner, ['role:store_admin']);
+
+        // Radius < 0.5 km
+        $resTooSmall = $this->patchJson('/api/v1/mitra/store', [
+            'name' => 'Toko Validasi Radius',
+            'phone' => '081234567890',
+            'address' => 'Jl. Alamat',
+            'service_radius_km' => 0.2,
+        ]);
+        $resTooSmall->assertStatus(422);
+        $resTooSmall->assertJsonValidationErrors(['service_radius_km']);
+
+        // Radius > 50 km
+        $resTooBig = $this->patchJson('/api/v1/mitra/store', [
+            'name' => 'Toko Validasi Radius',
+            'phone' => '081234567890',
+            'address' => 'Jl. Alamat',
+            'service_radius_km' => 55.0,
+        ]);
+        $resTooBig->assertStatus(422);
+        $resTooBig->assertJsonValidationErrors(['service_radius_km']);
+
+        // Radius dengan desimal lebih dari 2 angka
+        $resTooManyDecimals = $this->patchJson('/api/v1/mitra/store', [
+            'name' => 'Toko Validasi Radius',
+            'phone' => '081234567890',
+            'address' => 'Jl. Alamat',
+            'service_radius_km' => 5.125,
+        ]);
+        $resTooManyDecimals->assertStatus(422);
+        $resTooManyDecimals->assertJsonValidationErrors(['service_radius_km']);
+    }
+
+    public function test_other_store_owner_cannot_update_store_profile_and_gets_403(): void
+    {
+        $ownerA = $this->createStoreAdminUser('ownerA@laundry.id');
+        $storeA = Store::factory()->create([
+            'owner_user_id' => $ownerA->id,
+            'name' => 'Toko Milik A',
+            'phone' => '081111111111',
+            'address' => 'Alamat A',
+        ]);
+
+        $ownerB = $this->createStoreAdminUser('ownerB@laundry.id');
+        $storeB = Store::factory()->create([
+            'owner_user_id' => $ownerB->id,
+            'name' => 'Toko Milik B',
+            'phone' => '082222222222',
+            'address' => 'Alamat B',
+        ]);
+
+        // Owner B acts as authenticated user
+        Sanctum::actingAs($ownerB, ['role:store_admin']);
+
+        // When Owner B calls /api/v1/mitra/store, it resolves Store B (their own store), NOT Store A
+        $response = $this->patchJson('/api/v1/mitra/store', [
+            'name' => 'Toko B Diubah',
+            'phone' => '083333333333',
+            'address' => 'Alamat B Baru',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertEquals('Toko B Diubah', $storeB->fresh()->name);
+        // Store A must remain completely unaffected
+        $this->assertEquals('Toko Milik A', $storeA->fresh()->name);
+    }
+
+    public function test_registration_then_read_settings_keeps_exact_location_consistent(): void
+    {
+        // 1. Customer initiates registration
+        $customer = User::factory()->create([
+            'email' => 'customer_applicant@laundry.id',
+            'phone' => '081234560001',
+            'role' => User::ROLE_CUSTOMER,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($customer, ['role:customer']);
+
+        $registrationPayload = [
+            'name' => 'Arif Laundry Owner',
+            'email' => 'ariflaundry@laundry.id',
+            'phone' => '081234560099',
+            'password' => 'SecurePassword123',
+            'password_confirmation' => 'SecurePassword123',
+            'store_name' => 'Arif Laundry Baros',
+            'store_address' => 'Jl. Baros No. 12, Kel. Baros, Kec. Cimahi Selatan',
+            'city' => 'Kota Cimahi',
+            'province' => 'Jawa Barat',
+            'latitude' => -6.885600,
+            'longitude' => 107.543200,
+        ];
+
+        $regResponse = $this->postJson('/api/v1/auth/mitra/register', $registrationPayload);
+        $regResponse->assertStatus(201);
+        $this->assertNotEmpty($regResponse->json('token'));
+
+        // 2. Fetch the newly created mitra user and store
+        $mitraUser = User::where('email', 'ariflaundry@laundry.id')->firstOrFail();
+        $this->assertEquals(User::ROLE_STORE_ADMIN, $mitraUser->role);
+
+        $newStore = Store::where('owner_user_id', $mitraUser->id)->firstOrFail();
+        $this->assertEquals('Arif Laundry Baros', $newStore->name);
+        $this->assertEquals('Jl. Baros No. 12, Kel. Baros, Kec. Cimahi Selatan', $newStore->address);
+        $this->assertEquals('Kota Cimahi', $newStore->city);
+        $this->assertEquals('Jawa Barat', $newStore->province);
+        $this->assertEquals(-6.885600, (float) $newStore->latitude);
+        $this->assertEquals(107.543200, (float) $newStore->longitude);
+
+        // 3. Log in / Authenticate as the new mitra user
+        Sanctum::actingAs($mitraUser, ['role:store_admin']);
+
+        // 4. Read GET /api/v1/mitra/store (the endpoint queried by /store/settings)
+        $settingsResponse = $this->getJson('/api/v1/mitra/store');
+        $settingsResponse->assertStatus(200);
+        $settingsResponse->assertJsonPath('success', true);
+
+        $storeSettingsData = $settingsResponse->json('data.store');
+        $this->assertEquals('Arif Laundry Baros', $storeSettingsData['name']);
+        $this->assertEquals('Jl. Baros No. 12, Kel. Baros, Kec. Cimahi Selatan', $storeSettingsData['address']);
+        $this->assertEquals('Kota Cimahi', $storeSettingsData['city']);
+        $this->assertEquals('Jawa Barat', $storeSettingsData['province']);
+        $this->assertEquals(-6.885600, (float) $storeSettingsData['latitude']);
+        $this->assertEquals(107.543200, (float) $storeSettingsData['longitude']);
+    }
 }

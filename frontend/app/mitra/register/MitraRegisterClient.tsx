@@ -17,6 +17,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
+import { reverseGeocode } from '@/lib/profile';
 
 export default function MitraRegisterClient() {
   const router = useRouter();
@@ -28,8 +29,8 @@ export default function MitraRegisterClient() {
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
-  const [city, setCity] = useState('Jakarta');
-  const [province, setProvince] = useState('DKI Jakarta');
+  const [city, setCity] = useState('');
+  const [province, setProvince] = useState('');
   const [latitude, setLatitude] = useState('-6.2088');
   const [longitude, setLongitude] = useState('106.8456');
   const [isLocating, setIsLocating] = useState(false);
@@ -48,10 +49,28 @@ export default function MitraRegisterClient() {
     }
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude.toFixed(6));
-        setLongitude(pos.coords.longitude.toFixed(6));
-        setIsLocating(false);
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLatitude(lat.toFixed(6));
+        setLongitude(lng.toFixed(6));
+
+        try {
+          const result = await reverseGeocode({ latitude: lat, longitude: lng });
+          if (result.city) {
+            setCity(result.city);
+          }
+          if (result.province) {
+            setProvince(result.province);
+          }
+          if (result.formatted_address && !storeAddress) {
+            setStoreAddress(result.formatted_address);
+          }
+        } catch {
+          // Fallback gracefully if reverse geocoding is unavailable
+        } finally {
+          setIsLocating(false);
+        }
       },
       () => {
         setIsLocating(false);
@@ -357,6 +376,37 @@ export default function MitraRegisterClient() {
                     onChange={(e) => setStoreAddress(e.target.value)}
                     placeholder="Nama jalan, nomor ruko/rumah, RT/RW, kelurahan"
                     className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Kota & Provinsi */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Kota / Kabupaten
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Contoh: Kota Bandung"
+                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Provinsi
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={province}
+                    onChange={(e) => setProvince(e.target.value)}
+                    placeholder="Contoh: Jawa Barat"
+                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                   />
                 </div>
               </div>

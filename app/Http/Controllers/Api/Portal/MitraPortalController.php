@@ -96,21 +96,28 @@ class MitraPortalController extends Controller
 
         $isOwner = (int) $store->owner_user_id === (int) $user->id;
 
+        $storeData = [
+            'id' => (string) $store->id,
+            'name' => $store->name,
+            'slug' => $store->slug,
+            'description' => $store->description,
+            'phone' => $store->phone,
+            'address' => $store->address,
+            'city' => $store->city,
+            'province' => $store->province,
+            'latitude' => $store->latitude !== null ? (float) $store->latitude : null,
+            'longitude' => $store->longitude !== null ? (float) $store->longitude : null,
+            'service_radius_km' => $store->service_radius_km !== null ? (float) $store->service_radius_km : null,
+            'operational_hours' => $store->operational_hours,
+            'status' => $store->status,
+            'is_active' => (bool) $store->is_active,
+            'is_approved' => $store->isApproved(),
+        ];
+
         return response()->json([
             'success' => true,
             'data' => [
-                'store' => [
-                    'id' => (string) $store->id,
-                    'name' => $store->name,
-                    'slug' => $store->slug,
-                    'phone' => $store->phone,
-                    'address' => $store->address,
-                    'city' => $store->city,
-                    'province' => $store->province,
-                    'status' => $store->status,
-                    'is_active' => (bool) $store->is_active,
-                    'is_approved' => $store->isApproved(),
-                ],
+                'store' => $storeData,
                 'membership' => [
                     'is_owner' => $isOwner,
                     'is_staff' => ! $isOwner,
@@ -121,10 +128,15 @@ class MitraPortalController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
                 'slug' => $store->slug,
+                'description' => $store->description,
                 'phone' => $store->phone,
                 'address' => $store->address,
                 'city' => $store->city,
                 'province' => $store->province,
+                'latitude' => $store->latitude !== null ? (float) $store->latitude : null,
+                'longitude' => $store->longitude !== null ? (float) $store->longitude : null,
+                'service_radius_km' => $store->service_radius_km !== null ? (float) $store->service_radius_km : null,
+                'operational_hours' => $store->operational_hours,
                 'status' => $store->status,
                 'is_active' => $store->is_active,
                 'is_approved' => $store->isApproved(),
@@ -160,8 +172,20 @@ class MitraPortalController extends Controller
         }
 
         $validated = $request->validated();
-        // Whitelist HANYA field yang diizinkan (slug, status, is_active, owner_user_id dll TIDAK boleh diubah)
-        $allowed = array_intersect_key($validated, array_flip(['name', 'phone', 'address', 'description']));
+        // Whitelist HANYA field yang diizinkan (slug, status, is_active, is_approved, owner_user_id dll TIDAK boleh diubah)
+        $allowedFields = [
+            'name',
+            'phone',
+            'address',
+            'description',
+            'city',
+            'province',
+            'latitude',
+            'longitude',
+            'service_radius_km',
+            'operational_hours',
+        ];
+        $allowed = array_intersect_key($validated, array_flip($allowedFields));
 
         $store->fill($allowed);
         $store->save();
@@ -190,6 +214,10 @@ class MitraPortalController extends Controller
                     'address' => $store->address,
                     'city' => $store->city,
                     'province' => $store->province,
+                    'latitude' => $store->latitude !== null ? (float) $store->latitude : null,
+                    'longitude' => $store->longitude !== null ? (float) $store->longitude : null,
+                    'service_radius_km' => $store->service_radius_km !== null ? (float) $store->service_radius_km : null,
+                    'operational_hours' => $store->operational_hours,
                     'status' => $store->status,
                     'is_active' => (bool) $store->is_active,
                     'is_approved' => $store->isApproved(),

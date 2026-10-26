@@ -99,6 +99,7 @@ export const ALLOWED_PROXY_PREFIXES = [
   '/upgrades',
   '/conversations',
   '/chatbot',
+  '/geocode',
 ];
 
 export function isPathAllowedInProxy(path: string): boolean {
