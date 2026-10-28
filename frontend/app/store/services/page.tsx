@@ -490,13 +490,13 @@ export default function StoreServicesPage() {
         )}
 
         {/* 1. Header (Tugas C.1) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
-                Layanan
+              <h1 className="font-heading font-extrabold text-xl sm:text-2xl text-slate-900 tracking-tight">
+                Katalog layanan
               </h1>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-mono tabular-nums">
                 {totalCount} total · {activeCount} aktif
               </span>
             </div>
@@ -509,10 +509,10 @@ export default function StoreServicesPage() {
             <Button
               variant="primary"
               onClick={handleOpenCreate}
-              className="rounded-xl min-h-[40px] px-4 font-semibold text-sm flex items-center gap-2 shadow-xs bg-[#1A3A5C] hover:bg-[#142e4a] text-white border-transparent"
+              className="rounded-xl min-h-[38px] px-4 font-semibold text-xs flex items-center gap-2 shadow-2xs bg-navy-900 hover:bg-navy-800 text-white border-transparent"
               id="btn-tambah-layanan"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 text-sky-300" strokeWidth={1.75} />
               <span>Tambah layanan</span>
             </Button>
           </div>
@@ -522,13 +522,13 @@ export default function StoreServicesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
           {/* Search Input */}
           <div className="sm:col-span-5 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={1.75} />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari nama layanan..."
-              className="w-full h-10 pl-10 pr-4 text-sm bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1A3A5C] focus:border-transparent transition-all"
+              className="w-full h-10 pl-10 pr-4 text-xs bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-transparent transition-all shadow-2xs"
               aria-label="Cari nama layanan"
             />
             {searchQuery && (
@@ -547,10 +547,10 @@ export default function StoreServicesPage() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1A3A5C] focus:border-transparent transition-all font-medium"
+              className="w-full h-10 px-3 text-xs bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-transparent transition-all font-medium shadow-2xs"
               aria-label="Filter kategori layanan"
             >
-              <option value="all">Semua Kategori</option>
+              <option value="all">Semua kategori</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
@@ -564,10 +564,10 @@ export default function StoreServicesPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1A3A5C] focus:border-transparent transition-all font-medium"
+              className="w-full h-10 px-3 text-xs bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-transparent transition-all font-medium shadow-2xs"
               aria-label="Filter status layanan"
             >
-              <option value="all">Semua Status</option>
+              <option value="all">Semua status</option>
               <option value="active">Aktif</option>
               <option value="inactive">Nonaktif</option>
             </select>
@@ -578,14 +578,14 @@ export default function StoreServicesPage() {
             <select
               value={selectedSort}
               onChange={(e) => setSelectedSort(e.target.value as any)}
-              className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1A3A5C] focus:border-transparent transition-all font-medium"
+              className="w-full h-10 px-3 text-xs bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-transparent transition-all font-medium shadow-2xs"
               aria-label="Urutkan layanan"
             >
               <option value="latest">Terbaru</option>
               <option value="name_asc">Nama (A-Z)</option>
               <option value="name_desc">Nama (Z-A)</option>
-              <option value="price_asc">Harga Terendah</option>
-              <option value="price_desc">Harga Tertinggi</option>
+              <option value="price_asc">Harga terendah</option>
+              <option value="price_desc">Harga tertinggi</option>
             </select>
           </div>
         </div>
@@ -595,31 +595,31 @@ export default function StoreServicesPage() {
           <div
             role="region"
             aria-label="Aksi massal layanan"
-            className="flex items-center justify-between px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs sm:text-sm font-medium shadow-sm animate-fadeIn"
+            className="flex items-center justify-between px-4 py-2.5 bg-[#0b1728] text-white rounded-2xl text-xs sm:text-sm font-medium shadow-md border border-white/10 animate-fadeIn"
           >
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-teal-300">{selectedIds.length}</span>
+              <span className="font-semibold text-sky-300 font-mono">{selectedIds.length}</span>
               <span>layanan dipilih</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 disabled={bulkActionLoading}
                 onClick={() => handleBulkStatusUpdate(true)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-semibold transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-emerald-300 font-semibold transition-colors disabled:opacity-50 text-xs cursor-pointer"
               >
                 Aktifkan
               </button>
               <button
                 disabled={bulkActionLoading}
                 onClick={() => handleBulkStatusUpdate(false)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-semibold transition-colors disabled:opacity-50 text-xs cursor-pointer"
               >
                 Nonaktifkan
               </button>
               <button
                 disabled={bulkActionLoading}
                 onClick={() => setSelectedIds([])}
-                className="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors"
+                className="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors text-xs cursor-pointer"
                 aria-label="Batal pilih semua"
               >
                 Batal
@@ -630,23 +630,23 @@ export default function StoreServicesPage() {
 
         {/* 3. Tabel / List Padat (Tugas C.3 & C.5) */}
         {loading ? (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 p-4 space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
+          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden divide-y divide-slate-100 p-4 space-y-4 shadow-2xs">
+            <Skeleton className="h-10 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
           </div>
         ) : error ? (
           <ErrorState
-            title="Gagal Memuat Layanan"
+            title="Gagal memuat layanan"
             message={error}
             onRetry={loadServices}
             retryText="Coba lagi"
           />
         ) : services.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 sm:p-12 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-500">
-              <Layers className="w-6 h-6" />
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-8 sm:p-12 text-center shadow-2xs">
+            <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-500">
+              <Layers className="w-6 h-6" strokeWidth={1.75} />
             </div>
             <h3 className="font-heading font-bold text-lg text-slate-900">
               Belum ada layanan
@@ -659,16 +659,16 @@ export default function StoreServicesPage() {
             <Button
               variant="primary"
               onClick={handleOpenCreate}
-              className="rounded-xl min-h-[40px] px-4 font-semibold text-sm bg-[#1A3A5C] hover:bg-[#142e4a] text-white border-transparent"
+              className="rounded-xl min-h-[38px] px-4 font-semibold text-xs bg-navy-900 hover:bg-navy-800 text-white border-transparent shadow-2xs"
             >
-              <Plus className="w-4 h-4 mr-1.5" />
+              <Plus className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
               <span>Tambah layanan pertama Anda</span>
             </Button>
           </div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-2xs">
             {/* Desktop Table Header */}
-            <div className="hidden md:grid md:grid-cols-12 gap-4 px-4 py-3 bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-600 select-none">
+            <div className="hidden md:grid md:grid-cols-12 gap-4 px-4 py-3 bg-slate-50/70 border-b border-slate-100 text-[11px] font-semibold text-slate-500 select-none">
               <div className="col-span-1 flex items-center">
                 <input
                   type="checkbox"
@@ -677,12 +677,12 @@ export default function StoreServicesPage() {
                     if (el) el.indeterminate = isIndeterminate;
                   }}
                   onChange={handleToggleSelectAll}
-                  className="w-4 h-4 rounded border-slate-300 text-[#1A3A5C] focus:ring-[#1A3A5C] cursor-pointer"
+                  className="w-4 h-4 rounded border-slate-300 text-navy-900 focus:ring-navy-900 cursor-pointer"
                   aria-label="Pilih semua layanan"
                 />
               </div>
-              <div className="col-span-4">Layanan & Kategori</div>
-              <div className="col-span-3">Satuan & Tarif</div>
+              <div className="col-span-4">Layanan & kategori</div>
+              <div className="col-span-3">Satuan & tarif</div>
               <div className="col-span-1">Estimasi</div>
               <div className="col-span-1 text-center">Status</div>
               <div className="col-span-2 text-right pr-2">Aksi</div>
