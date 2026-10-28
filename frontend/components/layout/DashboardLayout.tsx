@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Star,
   Tag,
+  CreditCard,
   BarChart3,
   Settings,
   AlertTriangle,
@@ -107,8 +108,8 @@ export const DashboardLayout = ({
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const [activeAvatar, setActiveAvatar] = useState<string | null | undefined>(userAvatar);
   const [sidebarCounts, setSidebarCounts] = useState<StoreSidebarCounts | null>(null);
-  const isStorePortal = userRole === 'store_admin' || pathname.startsWith('/store');
-  const isCourierPortal = userRole === 'courier' || pathname.startsWith('/courier');
+  const isStorePortal = userRole === 'store_admin' || pathname === '/store' || pathname.startsWith('/store/');
+  const isCourierPortal = userRole === 'courier' || pathname === '/courier' || pathname.startsWith('/courier/');
   const targetPortal = isStorePortal ? 'mitra' : isCourierPortal ? 'courier' : 'customer';
 
   const [mounted, setMounted] = useState(false);
@@ -148,7 +149,7 @@ export const DashboardLayout = ({
 
   useEffect(() => {
     fetchSidebarCounts();
-    const interval = setInterval(fetchSidebarCounts, 30000);
+    const interval = setInterval(fetchSidebarCounts, 10000);
 
     const handleRefresh = () => {
       fetchSidebarCounts();
@@ -156,36 +157,45 @@ export const DashboardLayout = ({
 
     window.addEventListener('laundryku_sidebar_count_refresh', handleRefresh);
     window.addEventListener('laundryku_active_store_change', handleRefresh);
+    window.addEventListener('laundryku_store_changed', handleRefresh);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('laundryku_sidebar_count_refresh', handleRefresh);
       window.removeEventListener('laundryku_active_store_change', handleRefresh);
+      window.removeEventListener('laundryku_store_changed', handleRefresh);
     };
   }, [fetchSidebarCounts]);
 
-  const syncStores = useCallback((targetUser?: AuthUser | null) => {
-    const userToSync = targetUser || getStoredUser(targetPortal);
-    if (userToSync) {
-      const newAvatar = userToSync.avatar_url || null;
-      setActiveAvatar((prev) => (prev === newAvatar ? prev : newAvatar));
+  // Synchronize store list and current active store
+  const syncStores = useCallback((currentUser: AuthUser | null) => {
+    if (!currentUser) return;
+    const stores = getApprovedStores(currentUser);
+    setOwnedStores((prev) => (areStoresEqual(prev, stores) ? prev : stores));
 
-      const approved = getApprovedStores(userToSync);
-      setOwnedStores((prev) => (areStoresEqual(prev, approved) ? prev : approved));
-
-      const currentActiveId = getActiveStoreId(userToSync);
-      const current = approved.find((s) => s.id === currentActiveId) || approved[0] || null;
-      setActiveStore((prev) => (isStoreEqual(prev, current) ? prev : current));
+    if (stores.length > 0) {
+      const currentActiveId = getActiveStoreId();
+      const matched = stores.find((s) => s.id === currentActiveId) || stores[0];
+      setActiveStore((prev) => (isStoreEqual(prev, matched) ? prev : matched));
+      if (currentActiveId !== matched.id) {
+        setActiveStoreId(matched.id);
+      }
+    } else {
+      setActiveStore(null);
     }
-  }, [targetPortal]);
+  }, []);
 
+  // Hydrate portal-specific user from localStorage immediately on mount
   useEffect(() => {
-    let cancelled = false;
     setMounted(true);
+    let cancelled = false;
 
     const stored = getStoredUser(targetPortal);
-    if (stored && !cancelled) {
+    if (stored) {
       setPortalUser((prev) => (isUserEqual(prev, stored) ? prev : stored));
+      if (stored.avatar_url) {
+        setActiveAvatar(stored.avatar_url);
+      }
       syncStores(stored);
     }
 
@@ -193,6 +203,9 @@ export const DashboardLayout = ({
       fetchPortalSession(targetPortal).then((freshUser) => {
         if (!cancelled && freshUser) {
           setPortalUser((prev) => (isUserEqual(prev, freshUser) ? prev : freshUser));
+          if (freshUser.avatar_url) {
+            setActiveAvatar(freshUser.avatar_url);
+          }
           syncStores(freshUser);
         }
       });
@@ -209,20 +222,25 @@ export const DashboardLayout = ({
         const u = getStoredUser(targetPortal);
         if (u) syncStores(u);
       };
-
+      window.addEventListener('laundryku_store_changed', handleStoreChange);
       window.addEventListener('laundryku_active_store_change', handleStoreChange);
       return () => {
+        window.removeEventListener('laundryku_store_changed', handleStoreChange);
         window.removeEventListener('laundryku_active_store_change', handleStoreChange);
       };
     }
+  }, [isStorePortal, isCourierPortal, targetPortal, syncStores]);
 
+  // Handle immediate avatar updates
+  useEffect(() => {
     const handleUserUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<AuthUser | null>;
-      const nextUser = customEvent.detail;
-      if (nextUser) {
-        setPortalUser((prev) => (isUserEqual(prev, nextUser) ? prev : nextUser));
-        setActiveAvatar((prev) => (prev === (nextUser.avatar_url || null) ? prev : (nextUser.avatar_url || null)));
-        syncStores(nextUser);
+      if (customEvent.detail !== undefined) {
+        setPortalUser((prev) => (isUserEqual(prev, customEvent.detail) ? prev : customEvent.detail));
+        if (customEvent.detail?.avatar_url !== undefined) {
+          setActiveAvatar(customEvent.detail.avatar_url);
+        }
+        syncStores(customEvent.detail);
       }
     };
 
@@ -237,21 +255,28 @@ export const DashboardLayout = ({
 
   // Click outside listener for store switcher dropdown
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
         setSwitcherOpen(false);
       }
+    };
+
+    if (switcherOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [switcherOpen]);
 
   const fetchUnread = useCallback(async () => {
+    if (userRole !== 'store_admin') return;
     const count = await getUnreadChatCount();
     setUnreadChatCount(count);
-  }, []);
+  }, [userRole]);
 
   useEffect(() => {
+    if (userRole !== 'store_admin') return;
     fetchUnread();
     const interval = setInterval(fetchUnread, 10000);
 
@@ -267,48 +292,48 @@ export const DashboardLayout = ({
       window.removeEventListener('laundryku_chat_read', handleChatRead);
       window.removeEventListener('laundryku_auth_change', handleChatRead);
     };
-  }, [fetchUnread]);
+  }, [fetchUnread, userRole]);
 
   // Handle switching active store
   const handleSelectStore = (storeId: string) => {
     setActiveStoreId(storeId);
-    const target = ownedStores.find((s) => s.id === storeId) || null;
-    setActiveStore(target);
+    const matched = ownedStores.find((s) => s.id === storeId);
+    if (matched) {
+      setActiveStore(matched);
+      window.dispatchEvent(new CustomEvent('laundryku_active_store_change', { detail: storeId }));
+      window.dispatchEvent(new Event('laundryku_store_changed'));
+    }
     setSwitcherOpen(false);
-    // Reload or emit event for child pages
-    router.refresh();
   };
 
-  // Handle toggle operational status (active / inactive)
+  // Handle operational status toggle (Active <-> Inactive)
   const handleToggleStatus = async () => {
-    if (!activeStore || activeStore.operational_status === 'suspended' || isUpdatingStatus) return;
+    if (!activeStore || isUpdatingStatus) return;
+    const currentActive = activeStore.operational_status === 'active';
+    const nextActive = !currentActive;
 
-    const nextStatus = activeStore.operational_status === 'active' ? 'inactive' : 'active';
     setIsUpdatingStatus(true);
     try {
-      const res = await toggleStoreOperationalStatus(activeStore.id, nextStatus);
-      setActiveStore((prev) => (prev ? { ...prev, operational_status: res.operational_status } : null));
-
-      // Update stored user store status in localStorage
-      const storageKey = isStorePortal ? 'laundryku_mitra_user' : 'laundryku_user';
-      const currentUserData = getStoredUser(targetPortal);
-      if (currentUserData && currentUserData.stores) {
-        const updatedStores = currentUserData.stores.map((s) =>
-          s.id === activeStore.id ? { ...s, operational_status: res.operational_status } : s
-        );
-        currentUserData.stores = updatedStores;
-        localStorage.setItem(storageKey, JSON.stringify(currentUserData));
-        setPortalUser(currentUserData);
-        window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: currentUserData }));
-      }
+      const updated = await toggleStoreOperationalStatus(activeStore.id, nextActive ? 'active' : 'inactive');
+      const newStatus = updated.operational_status;
+      setActiveStore((prev) => (prev ? { ...prev, operational_status: newStatus } : null));
+      setOwnedStores((prev) =>
+        prev.map((s) => (s.id === activeStore.id ? { ...s, operational_status: newStatus } : s))
+      );
+      window.dispatchEvent(new Event('laundryku_store_changed'));
     } catch {
-      // Revert if error
+      // Handled silently
     } finally {
       setIsUpdatingStatus(false);
     }
   };
 
-  const handleLogout = onLogout || (async () => {
+  const handleLogout = useCallback(async () => {
+    if (onLogout) {
+      onLogout();
+      return;
+    }
+
     if (isStorePortal) {
       await fetch('/api/auth/mitra/logout', { method: 'POST' }).catch(() => null);
       if (typeof window !== 'undefined') localStorage.removeItem('laundryku_mitra_user');
@@ -325,31 +350,32 @@ export const DashboardLayout = ({
       await logout();
       router.push('/auth');
     }
-  });
+  }, [isStorePortal, isCourierPortal, onLogout, router, userRole]);
 
-  const roleNavItems: Record<UserRole, { label: string; href: string; icon: React.ComponentType<{ className?: string }> }[]> = {
+  const roleNavItems: Record<UserRole, { label: string; href: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[]> = {
     customer: [
       { label: 'Ringkasan', href: '/profile', icon: LayoutDashboard },
-      { label: 'Alamat Saya', href: '/profile#alamat', icon: MapPin },
-      { label: 'Gabung Mitra', href: '/upgrade', icon: ShieldCheck },
+      { label: 'Alamat saya', href: '/profile#alamat', icon: MapPin },
+      { label: 'Gabung mitra', href: '/upgrade', icon: ShieldCheck },
     ],
     courier: [
-      { label: 'Dashboard Kurir', href: '/courier', icon: Truck },
-      { label: 'Tugas Pengantaran', href: '/courier/tasks', icon: ShoppingBag },
+      { label: 'Dashboard kurir', href: '/courier', icon: Truck },
+      { label: 'Tugas pengantaran', href: '/courier/tasks', icon: ShoppingBag },
     ],
     store_admin: [
       { label: 'Dashboard', href: '/store', icon: LayoutDashboard },
       { label: 'Pesanan', href: '/store/orders', icon: ShoppingBag },
       { label: 'Layanan', href: '/store/services', icon: Sparkles },
       { label: 'Harga', href: '/store/pricing', icon: Tag },
+      { label: 'Pembayaran', href: '/store/payment', icon: CreditCard },
       { label: 'Kurir', href: '/store/couriers', icon: Truck },
       { label: 'Laporan', href: '/store/reports', icon: BarChart3 },
       { label: 'Pengaturan', href: '/store/settings', icon: Settings },
     ],
     super_admin: [
-      { label: 'Admin Overview', href: '/admin', icon: LayoutDashboard },
-      { label: 'Kelola Toko', href: '/admin/stores', icon: Store },
-      { label: 'Kelola User', href: '/admin/users', icon: User },
+      { label: 'Ringkasan admin', href: '/admin', icon: LayoutDashboard },
+      { label: 'Kelola toko', href: '/admin/stores', icon: Store },
+      { label: 'Kelola user', href: '/admin/users', icon: User },
     ],
   };
 
@@ -363,7 +389,7 @@ export const DashboardLayout = ({
     ? 'Kurir LaundryKu'
     : userRole === 'super_admin'
     ? 'Super Admin'
-    : 'Pelanggan LaundryKu';
+    : 'Pelanggan';
 
   const serverFallbackEmail = isStorePortal
     ? 'admin@toko.id'
@@ -371,8 +397,7 @@ export const DashboardLayout = ({
     ? 'kurir@laundryku.id'
     : 'customer@laundryku.id';
 
-  // Before mounted, both server and initial client hydration render MUST output identical defaults
-  const displayUser = mounted ? portalUser : null;
+  const displayUser = isStorePortal || isCourierPortal ? portalUser : user;
 
   const resolvedUserName = mounted && displayUser?.name
     ? displayUser.name
@@ -380,54 +405,55 @@ export const DashboardLayout = ({
     ? userName
     : serverFallbackName;
 
-  const resolvedUserEmail = mounted && (displayUser?.email || displayUser?.phone)
-    ? (displayUser.email || displayUser.phone)
-    : mounted && userEmail !== 'customer@laundryku.id' && userEmail !== 'admin@toko.id' && userEmail !== 'kurir@laundryku.id'
-    ? userEmail
-    : serverFallbackEmail;
-
   const resolvedAvatar = mounted
     ? (displayUser?.avatar_url || activeAvatar || userAvatar)
     : (userAvatar || null);
+
+  const getRoleBadgeLabel = () => {
+    if (userRole === 'store_admin') return 'Mitra toko';
+    if (userRole === 'courier') return 'Kurir';
+    if (userRole === 'super_admin') return 'Admin platform';
+    return 'Pelanggan';
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
       {/* Mobile Backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar (Desktop & Mobile Drawer) */}
+      {/* Sidebar (Desktop & Mobile Drawer) - Command Workspace Theme */}
       <aside
         className={cn(
-          'fixed md:static top-0 bottom-0 left-0 z-50 flex flex-col bg-[#1A3A5C] text-white transition-all duration-300 shadow-xl md:shadow-none border-r border-slate-800',
-          collapsed ? 'w-20' : 'w-60',
+          'fixed md:static top-0 bottom-0 left-0 z-50 flex flex-col bg-[#0b1728] text-white transition-all duration-300 shadow-xl md:shadow-none border-r border-white/5 select-none',
+          collapsed ? 'w-20' : 'w-64',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         )}
       >
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-white/10">
-          <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-md bg-white/15 border border-white/20 flex items-center justify-center shrink-0 text-white font-bold text-xs tracking-wider">
+          <Link href="/" className="flex items-center gap-3 overflow-hidden">
+            <div className="w-8 h-8 rounded-xl bg-navy-800 border border-sky-400/30 flex items-center justify-center shrink-0 text-white font-bold text-xs tracking-wider shadow-2xs">
               LK
             </div>
             {!collapsed && (
               <div className="flex flex-col truncate">
-                <span className="font-bold text-base text-white tracking-tight">
+                <span className="font-heading font-extrabold text-base text-white tracking-tight">
                   Laundry<span className="text-sky-300">Ku</span>
                 </span>
-                <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
-                  {userRole === 'store_admin' ? 'Dashboard Mitra' : userRole.replace('_', ' ')}
+                <span className="inline-flex items-center text-[10px] font-semibold text-slate-300 bg-white/10 px-2 py-0.2 rounded-md border border-white/10 mt-0.5 self-start">
+                  {getRoleBadgeLabel()}
                 </span>
               </div>
             )}
           </Link>
           <button
             onClick={() => setMobileOpen(false)}
-            className="md:hidden text-slate-300 hover:text-white p-2 min-h-[44px] min-w-[44px]"
+            className="md:hidden text-slate-400 hover:text-white p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
             aria-label="Tutup menu navigasi"
           >
             <X className="w-5 h-5" />
@@ -435,7 +461,7 @@ export const DashboardLayout = ({
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 py-4 px-2.5 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#334155_transparent]">
           {currentNav.map((item) => {
             const isExactOnly = item.href === '/courier' || item.href === '/store' || item.href === '/admin';
             const isActive =
@@ -467,22 +493,30 @@ export const DashboardLayout = ({
                 onClick={() => setMobileOpen(false)}
                 aria-label={badgeAriaLabel}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-colors min-h-[40px]',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all min-h-[40px]',
                   isActive
-                    ? 'bg-white text-[#1A3A5C] font-semibold shadow-xs'
-                    : 'text-slate-200 hover:bg-white/10 hover:text-white'
+                    ? 'bg-white text-navy-950 font-bold shadow-2xs'
+                    : 'text-slate-300 hover:bg-white/10 hover:text-white font-medium'
                 )}
                 title={collapsed ? badgeAriaLabel : undefined}
               >
-                <Icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-[#1A3A5C]' : 'text-slate-300')} />
+                <Icon
+                  className={cn('w-4 h-4 shrink-0', isActive ? 'text-navy-900' : 'text-slate-300')}
+                  strokeWidth={isActive ? 2 : 1.75}
+                />
                 {!collapsed && <span className="truncate flex-1">{item.label}</span>}
                 {!collapsed && badgeCount > 0 && (
-                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold text-slate-900 bg-slate-100 rounded-[6px] shrink-0 tabular-nums">
+                  <span
+                    className={cn(
+                      'ml-auto px-2 py-0.5 text-[10px] font-bold rounded-lg shrink-0 tabular-nums font-mono',
+                      isActive ? 'bg-navy-100 text-navy-950' : 'bg-navy-800 text-sky-200 border border-navy-700/80'
+                    )}
+                  >
                     {badgeCount}
                   </span>
                 )}
                 {collapsed && badgeCount > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-slate-100 shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
                 )}
               </Link>
             );
@@ -490,24 +524,24 @@ export const DashboardLayout = ({
         </nav>
 
         {/* Sidebar Footer & Collapse Toggle */}
-        <div className="p-2.5 border-t border-white/10 space-y-1">
+        <div className="p-3 border-t border-white/10 space-y-1">
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden md:flex items-center justify-center w-full py-2 rounded-md text-slate-300 hover:bg-white/10 hover:text-white transition-colors text-xs font-medium min-h-[38px] cursor-pointer"
+            className="hidden md:flex items-center justify-center w-full py-2 px-3 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold min-h-[38px] cursor-pointer"
             aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
           >
             {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4 mr-1.5" />}
-            {!collapsed && 'Ciutkan Menu'}
+            {!collapsed && 'Ciutkan menu'}
           </button>
 
           <button
             onClick={handleLogout}
             className={cn(
-              'flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-rose-300 hover:bg-rose-900/30 hover:text-rose-200 transition-colors text-xs font-medium min-h-[38px] cursor-pointer',
+              'flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 transition-all text-xs font-semibold min-h-[38px] cursor-pointer',
               collapsed && 'justify-center'
             )}
           >
-            <LogOut className="w-4 h-4 shrink-0" />
+            <LogOut className="w-4 h-4 shrink-0" strokeWidth={1.75} />
             {!collapsed && <span>Keluar</span>}
           </button>
         </div>
@@ -515,12 +549,12 @@ export const DashboardLayout = ({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Header Bar */}
-        <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between">
+        {/* Top Header Bar - Command Workspace Sticky Bar */}
+        <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/90 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between shadow-2xs select-none">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="md:hidden p-2 rounded-md text-slate-600 hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="md:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shadow-2xs"
               aria-label="Buka menu navigasi"
             >
               <Menu className="w-5 h-5" />
@@ -533,70 +567,94 @@ export const DashboardLayout = ({
                   <button
                     type="button"
                     onClick={() => setSwitcherOpen(!switcherOpen)}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors text-left cursor-pointer"
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all text-left cursor-pointer shadow-2xs"
                     aria-label="Pilih Toko Aktif"
                     aria-expanded={switcherOpen}
                   >
-                    <Store className="w-4 h-4 text-[#1A3A5C] shrink-0" />
+                    <Store className="w-4 h-4 text-navy-700 shrink-0" strokeWidth={1.75} />
                     <div className="min-w-0 max-w-[180px] sm:max-w-[240px]">
-                      <div className="text-xs font-bold text-slate-900 truncate leading-tight">
+                      <div className="text-xs font-bold text-navy-900 truncate leading-tight">
                         {activeStore.name}
                       </div>
                       <div className="text-[10px] text-slate-500 truncate">
-                        {ownedStores.length} Toko Terdaftar · Ganti Toko
+                        {ownedStores.length} toko terdaftar · Ganti toko
                       </div>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-[#1A3A5C]">
-                      <Store className="w-4 h-4" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-navy-50 border border-navy-100 flex items-center justify-center text-navy-700 shrink-0">
+                      <Store className="w-4 h-4" strokeWidth={1.75} />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-900 truncate leading-tight">
+                      <div className="text-xs font-bold text-navy-900 truncate leading-tight">
                         {activeStore.name}
                       </div>
-                      <div className="text-[10px] text-slate-500">Admin Toko</div>
+                      <div className="text-[10px] text-slate-500">Mitra toko</div>
                     </div>
                   </div>
                 )}
 
                 {/* Dropdown Menu for Switching Store */}
                 {switcherOpen && ownedStores.length > 1 && (
-                  <div className="absolute left-0 mt-1 w-64 bg-white rounded-md border border-slate-200 shadow-lg py-1 z-50 animate-fadeIn text-xs">
-                    <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                      Pilih Toko Aktif
+                  <div className="absolute left-0 mt-1.5 w-64 bg-white rounded-2xl border border-slate-200/90 shadow-lg py-1.5 z-50 animate-fadeIn text-xs">
+                    <div className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      Pilih toko aktif
                     </div>
-                    {ownedStores.map((s) => {
-                      const isCurrent = s.id === activeStore.id;
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => handleSelectStore(s.id)}
-                          className={cn(
-                            'w-full flex items-center justify-between px-3 py-2 text-left transition-colors cursor-pointer hover:bg-slate-50',
-                            isCurrent && 'bg-slate-50 font-semibold text-[#1A3A5C]'
-                          )}
-                        >
-                          <div className="min-w-0 flex-1 pr-2">
-                            <div className="truncate text-slate-900">{s.name}</div>
-                            <div className="text-[10px] text-slate-500 capitalize">
-                              Status: {s.operational_status}
+                    <div className="py-1 max-h-60 overflow-y-auto">
+                      {ownedStores.map((s) => {
+                        const isCurrent = s.id === activeStore.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => handleSelectStore(s.id)}
+                            className={cn(
+                              'w-full flex items-center justify-between px-3.5 py-2 text-left transition-colors cursor-pointer hover:bg-slate-50',
+                              isCurrent && 'bg-navy-50/70 font-bold text-navy-900'
+                            )}
+                          >
+                            <div className="min-w-0 flex-1 pr-2">
+                              <div className="truncate text-slate-900">{s.name}</div>
+                              <div className="text-[10px] text-slate-500 capitalize">
+                                Status: {s.operational_status}
+                              </div>
                             </div>
-                          </div>
-                          {isCurrent && <Check className="w-4 h-4 text-[#1A3A5C] shrink-0" />}
-                        </button>
-                      );
-                    })}
+                            {isCurrent && <Check className="w-4 h-4 text-navy-700 shrink-0" strokeWidth={2} />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
+            ) : userRole === 'courier' ? (
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-navy-50 text-navy-800 border border-navy-100 flex items-center justify-center shrink-0">
+                  <Truck className="w-4 h-4 text-navy-700" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h1 className="font-heading font-bold text-sm sm:text-base text-navy-900 leading-tight">
+                    Dashboard kurir
+                  </h1>
+                </div>
+              </div>
+            ) : userRole === 'super_admin' ? (
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-navy-50 text-navy-800 border border-navy-100 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4 text-navy-700" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h1 className="font-heading font-bold text-sm sm:text-base text-navy-900 leading-tight">
+                    Admin platform
+                  </h1>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center gap-3">
-                <h1 className="font-bold text-base text-slate-900 hidden sm:block">
-                  {userRole === 'courier' ? 'Dashboard Kurir' : 'Portal LaundryKu'}
+                <h1 className="font-heading font-bold text-base text-navy-900 hidden sm:block">
+                  Portal LaundryKu
                 </h1>
               </div>
             )}
@@ -604,13 +662,12 @@ export const DashboardLayout = ({
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-3">
-
             {/* Operational Status Toggle for Store Admin */}
             {userRole === 'store_admin' && activeStore && (
               <div className="flex items-center gap-2">
                 {isSuspended ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                    <AlertTriangle className="w-3 h-3" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" strokeWidth={2} />
                     <span>Ditangguhkan</span>
                   </span>
                 ) : (
@@ -619,7 +676,7 @@ export const DashboardLayout = ({
                     onClick={handleToggleStatus}
                     disabled={isUpdatingStatus}
                     className={cn(
-                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors cursor-pointer disabled:opacity-50',
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer disabled:opacity-50 shadow-2xs active:scale-95',
                       isOpen
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                         : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
@@ -627,39 +684,41 @@ export const DashboardLayout = ({
                     aria-label={`Ubah status toko, saat ini ${isOpen ? 'Buka' : 'Tutup'}`}
                     title="Klik untuk mengubah status operasional toko"
                   >
-                    <Power className={cn('w-3.5 h-3.5', isOpen ? 'text-emerald-600' : 'text-slate-400')} />
-                    <span>{isOpen ? 'Toko Buka' : 'Toko Tutup'}</span>
+                    <Power className={cn('w-3.5 h-3.5', isOpen ? 'text-emerald-600' : 'text-slate-500')} strokeWidth={2} />
+                    <span>{isOpen ? 'Toko buka' : 'Toko tutup'}</span>
                   </button>
                 )}
               </div>
             )}
 
-            {/* Chat Icon Button */}
-            <Link
-              href={userRole === 'store_admin' ? '/store/chat' : '/chat'}
-              className={cn(
-                'relative p-2 rounded-md transition-colors border text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-slate-200',
-                (pathname === '/chat' || pathname.startsWith('/chat/') || pathname === '/store/chat' || pathname.startsWith('/store/chat/'))
-                  ? 'bg-slate-100 text-slate-900 border-slate-300'
-                  : ''
-              )}
-              aria-label="Pesan Chat"
-              title="Pesan Chat"
-            >
-              <MessageSquare className="w-4 h-4" />
-              {unreadChatCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-rose-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                  {unreadChatCount > 9 ? '9+' : unreadChatCount}
-                </span>
-              )}
-            </Link>
+            {/* Chat Icon Button (Only for store_admin) */}
+            {userRole === 'store_admin' && (
+              <Link
+                href="/store/chat"
+                className={cn(
+                  'relative p-2 rounded-xl transition-all border text-slate-600 hover:text-navy-900 hover:bg-slate-50 border-slate-200 bg-white shadow-2xs active:scale-95 flex items-center justify-center min-h-[36px] min-w-[36px]',
+                  (pathname === '/store/chat' || pathname.startsWith('/store/chat/'))
+                    ? 'bg-navy-50 text-navy-900 border-navy-200 font-semibold'
+                    : ''
+                )}
+                aria-label="Pesan chat"
+                title="Pesan chat"
+              >
+                <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
+                {unreadChatCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-rose-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                    {unreadChatCount > 9 ? '9+' : unreadChatCount}
+                  </span>
+                )}
+              </Link>
+            )}
 
             {/* Profile Dropdown */}
             <Dropdown
               trigger={
-                <div className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer text-xs">
-                  <Avatar src={resolvedAvatar} name={resolvedUserName} size="sm" className="w-6 h-6" />
-                  <span className="font-medium text-slate-800 max-w-[100px] truncate hidden sm:inline-block">
+                <div className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all cursor-pointer text-xs shadow-2xs">
+                  <Avatar src={resolvedAvatar} name={resolvedUserName} size="sm" className="w-6 h-6 rounded-lg" />
+                  <span className="font-semibold text-slate-800 max-w-[110px] truncate hidden sm:inline-block">
                     {resolvedUserName}
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -667,9 +726,9 @@ export const DashboardLayout = ({
               }
               items={[
                 ...(isStorePortal
-                  ? [{ id: 'profile', label: 'Pengaturan Toko', onClick: () => router.push('/store/settings') }]
+                  ? [{ id: 'profile', label: 'Pengaturan toko', onClick: () => router.push('/store/settings') }]
                   : userRole !== 'courier'
-                  ? [{ id: 'profile', label: 'Profil Saya', onClick: () => router.push('/profile') }]
+                  ? [{ id: 'profile', label: 'Profil saya', onClick: () => router.push('/profile') }]
                   : []),
                 { id: 'div-1', label: '', divider: true },
                 { id: 'logout', label: 'Keluar', danger: true, onClick: handleLogout },
@@ -680,10 +739,10 @@ export const DashboardLayout = ({
 
         {/* Suspended Alert Banner */}
         {userRole === 'store_admin' && isSuspended && (
-          <div className="bg-rose-50 border-b border-rose-200 px-4 sm:px-6 py-3 flex items-start gap-3 text-xs text-rose-900">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="mx-4 sm:mx-6 lg:mx-8 mt-4 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 shadow-2xs flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" strokeWidth={2} />
             <div className="space-y-0.5 flex-1">
-              <div className="font-bold">Toko Anda Sedang Ditangguhkan</div>
+              <div className="font-bold">Toko Anda sedang ditangguhkan</div>
               <p className="text-rose-700 leading-relaxed">
                 {activeStore?.rejection_reason
                   ? `Alasan penangguhan: ${activeStore.rejection_reason}. `
