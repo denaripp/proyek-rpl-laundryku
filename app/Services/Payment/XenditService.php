@@ -25,6 +25,85 @@ class XenditService
     }
 
     /**
+     * Create a new Xendit Dynamic QR Code.
+     */
+    public function createQRCode(Order $order): array
+    {
+        if (empty($this->apiKey)) {
+            throw new Exception('Xendit API key is not configured.');
+        }
+
+        $serverAmount = (float) ($order->total_amount ?? $order->final_price ?? $order->total_price ?? $order->estimated_price ?? 0);
+        if ($serverAmount <= 0) {
+            throw new Exception('Jumlah pembayaran harus lebih besar dari 0.');
+        }
+
+        $referenceId = 'order-' . $order->id . '-' . time();
+
+        $payload = [
+            'reference_id' => $referenceId,
+            'type' => 'DYNAMIC',
+            'currency' => 'IDR',
+            'amount' => (int) round($serverAmount),
+        ];
+
+        $response = Http::withBasicAuth($this->apiKey, '')
+            ->withHeaders([
+                'api-version' => '2022-07-31',
+            ])
+            ->post($this->apiUrl . '/qr_codes', $payload);
+
+        if ($response->failed()) {
+            Log::error('Xendit create QR code failed', [
+                'order_id' => $order->id,
+                'status' => $response->status(),
+                'response_body' => $response->body(),
+            ]);
+            throw new Exception('Xendit QR Code API error: ' . $response->status());
+        }
+
+        $data = $response->json();
+        $qrString = $data['qr_string'] ?? ($data['qr_code'] ?? null);
+        $qrId = $data['id'] ?? null;
+
+        $payment = Payment::updateOrCreate(
+            ['order_id' => $order->id],
+            [
+                'payment_method' => 'qris',
+                'amount' => $serverAmount,
+                'status' => 'pending',
+                'xendit_invoice_id' => $qrId,
+                'xendit_payment_id' => null,
+                'xendit_payment_method' => 'QRIS',
+                'xendit_payment_channel' => 'QRIS',
+                'payment_reference' => $qrString,
+                'expires_at' => now()->addMinutes(2),
+                'metadata' => array_merge(['xendit_response' => $data], [
+                    'reference_id' => $referenceId,
+                    'qr_string' => $qrString,
+                    'qr_id' => $qrId,
+                    'type' => 'DYNAMIC',
+                ]),
+            ]
+        );
+
+        return [
+            'payment_id' => (string) $payment->id,
+            'order_id' => (string) $payment->order_id,
+            'order_number' => $order->order_number,
+            'method' => 'qris',
+            'qr_string' => $qrString,
+            'amount' => $serverAmount,
+            'status' => 'pending',
+            'expires_at' => $payment->expires_at?->toISOString() ?? now()->addMinutes(2)->toISOString(),
+            'payment_details' => [
+                'method_label' => 'QRIS',
+                'qr_string' => $qrString,
+                'amount' => $serverAmount,
+            ],
+        ];
+    }
+    /**
      * Create a new Xendit invoice.
      */
     public function createInvoice(Order $order, string $paymentMethod = 'BANK_TRANSFER', array $customerData = []): array
@@ -83,21 +162,23 @@ class XenditService
 
         $data = $response->json();
 
-        // Store payment
-        $payment = Payment::create([
-            'order_id' => $order->id,
-            'payment_method' => $paymentMethod,
-            'amount' => $order->total_amount,
-            'status' => 'pending',
-            'xendit_invoice_id' => $data['id'],
-            'xendit_payment_id' => null,
-            'xendit_payment_method' => null,
-            'xendit_payment_channel' => null,
-            'payment_reference' => $data['invoice_url'] ?? null,
-            'expires_at' => now()->addMinutes($this->expiryMinutes),
-            'idempotency_key' => $idempotencyKey,
-            'metadata' => ['xendit_response' => $data],
-        ]);
+        // Store payment (updateOrCreate to handle retries without violating unique order_id)
+        $payment = Payment::updateOrCreate(
+            ['order_id' => $order->id],
+            [
+                'payment_method' => $paymentMethod,
+                'amount' => $order->total_amount,
+                'status' => 'pending',
+                'xendit_invoice_id' => $data['id'] ?? null,
+                'xendit_payment_id' => null,
+                'xendit_payment_method' => null,
+                'xendit_payment_channel' => null,
+                'payment_reference' => $data['invoice_url'] ?? null,
+                'expires_at' => now()->addMinutes($this->expiryMinutes),
+                'idempotency_key' => $idempotencyKey,
+                'metadata' => array_merge(['xendit_response' => $data], $customerData),
+            ]
+        );
 
         return $this->formatInvoiceResponse($payment, $data);
     }
@@ -105,13 +186,33 @@ class XenditService
     /**
      * Format response for frontend.
      */
-    protected function formatInvoiceResponse(Payment $payment, ?array $xenditData = null): array
+    public function formatInvoiceResponse(Payment $payment, ?array $xenditData = null): array
     {
+        $meta = $payment->metadata ?? [];
+        $xData = $xenditData ?? ($meta['xendit_response'] ?? []);
+        $method = strtolower($payment->payment_method);
+        $bankCode = $meta['bank_code'] ?? ($xData['bank_code'] ?? 'BCA');
+        $vaNumber = $meta['va_number'] ?? ($xData['va_number'] ?? ($xData['available_banks'][0]['account_number'] ?? ('88000' . str_pad($payment->order_id, 8, '0', STR_PAD_LEFT))));
+        $qrString = $meta['qr_string'] ?? ($xData['qr_string'] ?? ($xData['invoice_url'] ?? null));
+
         return [
-            'payment_id' => $payment->id,
+            'payment_id' => (string) $payment->id,
+            'order_id' => (string) $payment->order_id,
+            'order_number' => $payment->order?->order_number,
+            'method' => $method,
+            'bank_code' => $bankCode,
+            'va_number' => $vaNumber,
+            'qr_string' => $qrString,
+            'amount' => (float) $payment->amount,
             'status' => $payment->status,
-            'invoice_url' => $xenditData['invoice_url'] ?? $payment->payment_reference,
-            'expires_at' => $payment->expires_at->toISOString(),
+            'expires_at' => $payment->expires_at?->toISOString() ?? now()->addHour()->toISOString(),
+            'invoice_url' => $xData['invoice_url'] ?? $payment->payment_reference,
+            'payment_details' => [
+                'method_label' => strtoupper($method),
+                'bank_code' => $bankCode,
+                'va_number' => $vaNumber,
+                'qr_string' => $qrString,
+            ],
         ];
     }
 
@@ -142,7 +243,7 @@ class XenditService
     /**
      * Verify webhook signature.
      */
-    public function verifyWebhookSignature(string $payload, string $signature, string $webhookId): bool
+    public function verifyWebhookSignature(string $payload, ?string $signature = null, ?string $webhookId = null): bool
     {
         $secret = config('xendit.webhook_secret');
 
@@ -157,9 +258,11 @@ class XenditService
             throw new \Exception('Webhook secret not configured. Please set XENDIT_WEBHOOK_SECRET in .env.');
         }
 
-        // Xendit uses HMAC-SHA256 with webhook secret
-        $expected = hash_hmac('sha256', $payload . $webhookId, $secret);
-        return hash_equals($expected, $signature);
+        $token = !empty($signature) ? $signature : $payload;
+        if (empty($token)) {
+            return false;
+        }
+        return hash_equals((string) $secret, (string) $token);
     }
 
     /**
@@ -167,15 +270,31 @@ class XenditService
      */
     public function processWebhook(array $data, string $eventType): void
     {
-        $xenditInvoiceId = $data['id'] ?? null;
-        if (!$xenditInvoiceId) {
-            throw new Exception('Missing invoice ID in webhook payload');
+        $xenditInvoiceId = $data['qr_id'] ?? ($data['data']['qr_id'] ?? ($data['id'] ?? ($data['data']['id'] ?? null)));
+        $externalId = $data['reference_id'] ?? ($data['external_id'] ?? ($data['data']['reference_id'] ?? ($data['data']['external_id'] ?? null)));
+
+        if ($xenditInvoiceId) {
+            $payment = Payment::where('xendit_invoice_id', $xenditInvoiceId)->first();
+        } else {
+            $payment = null;
         }
 
-        // Find payment by xendit_invoice_id
-        $payment = Payment::where('xendit_invoice_id', $xenditInvoiceId)->first();
+        if (!$payment && !empty($data['id'])) {
+            $payment = Payment::where('xendit_invoice_id', $data['id'])->first();
+        }
+
+        if (!$payment && !empty($externalId) && preg_match('/order[_-](\d+)/', $externalId, $m)) {
+            $payment = Payment::where('order_id', $m[1])->first();
+        }
+
         if (!$payment) {
-            throw new Exception('Payment not found for invoice: ' . $xenditInvoiceId);
+            throw new Exception('Payment not found for invoice: ' . ($xenditInvoiceId ?? ($externalId ?? 'unknown')));
+        }
+
+        // Jika order sudah paid, return tanpa proses ulang
+        $order = $payment->order;
+        if (($order && ($order->payment_status === 'paid' || $order->status === 'paid')) || $payment->status === 'paid') {
+            return;
         }
 
         // Idempotency: check if we already processed this webhook event
@@ -203,20 +322,40 @@ class XenditService
         ]);
 
         // Update payment status based on Xendit status
-        $xenditStatus = $data['status'] ?? 'PENDING';
+        $rawStatus = $data['status'] ?? ($data['data']['status'] ?? 'PENDING');
+        $xenditStatus = strtoupper((string) $rawStatus);
         $payment->xendit_webhook_id = $xenditEventId;
         $payment->webhook_received_at = now();
 
-        if ($xenditStatus === 'PAID') {
+        if (in_array($xenditStatus, ['PAID', 'COMPLETED', 'SUCCEEDED'])) {
             // Verify amount matches order
-            $paidAmount = (float) ($data['amount'] ?? 0);
-            if (abs($paidAmount - $payment->amount) > 0.01) {
-                Log::error('Webhook amount mismatch', [
-                    'payment_id' => $payment->id,
-                    'expected' => $payment->amount,
-                    'received' => $paidAmount,
-                ]);
-                throw new Exception('Amount mismatch: expected ' . $payment->amount . ' got ' . $paidAmount);
+            $paidAmount = (float) ($data['amount'] ?? ($data['data']['amount'] ?? $payment->amount));
+            $isQr = str_contains(strtolower($eventType), 'qr')
+                || strtolower((string) $payment->payment_method) === 'qris'
+                || isset($data['qr_id'])
+                || isset($data['data']['qr_id']);
+
+            $orderTotal = (float) ($payment->order?->total_amount ?? $payment->amount);
+
+            if ($isQr) {
+                if (abs($paidAmount - $orderTotal) > 0.01) {
+                    Log::warning('Webhook amount mismatch for QR payment, not setting paid', [
+                        'payment_id' => $payment->id,
+                        'order_id' => $payment->order_id,
+                        'expected' => $orderTotal,
+                        'received' => $paidAmount,
+                    ]);
+                    return;
+                }
+            } else {
+                if (abs($paidAmount - $payment->amount) > 0.01) {
+                    Log::error('Webhook amount mismatch', [
+                        'payment_id' => $payment->id,
+                        'expected' => $payment->amount,
+                        'received' => $paidAmount,
+                    ]);
+                    throw new Exception('Amount mismatch: expected ' . $payment->amount . ' got ' . $paidAmount);
+                }
             }
 
             // Check if payment already expired

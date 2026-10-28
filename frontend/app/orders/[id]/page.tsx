@@ -36,6 +36,8 @@ import {
   Copy,
   Check,
   MessageSquare,
+  Clock,
+  RotateCcw,
 } from 'lucide-react';
 
 export default function OrderDetailPage({
@@ -71,6 +73,47 @@ export default function OrderDetailPage({
   const [selectedBank, setSelectedBank] = useState<string>('BCA');
   const [activePaymentInfo, setActivePaymentInfo] = useState<PaymentInfo | null>(null);
   const [copiedVa, setCopiedVa] = useState<boolean>(false);
+  const [qrTimer, setQrTimer] = useState<number>(120);
+  const [isPaidSuccess, setIsPaidSuccess] = useState<boolean>(false);
+
+  // QRIS Timer Countdown (2:00 -> 0:00)
+  useEffect(() => {
+    if (!activePaymentInfo || activePaymentInfo.method !== 'qris' || isPaidSuccess) return;
+    if (qrTimer <= 0) return;
+
+    const interval = setInterval(() => {
+      setQrTimer((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activePaymentInfo, isPaidSuccess, qrTimer]);
+
+  // QRIS Payment Polling (every 5 seconds)
+  useEffect(() => {
+    if (!activePaymentInfo || activePaymentInfo.method !== 'qris' || isPaidSuccess) return;
+    if (qrTimer <= 0) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const latest = await getOrder(orderId);
+        const pStatus = (latest.payment_status || '').toLowerCase();
+        if (pStatus === 'paid') {
+          setOrder(latest);
+          setIsPaidSuccess(true);
+        }
+      } catch {
+        // silent polling failure
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [activePaymentInfo, isPaidSuccess, qrTimer, orderId]);
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const handleStartChat = async () => {
     if (!order) return;
@@ -169,6 +212,8 @@ export default function OrderDetailPage({
         bank_code: paymentMethod === 'va' ? selectedBank : undefined,
       });
       setActivePaymentInfo(paymentRes);
+      setQrTimer(120);
+      setIsPaidSuccess(false);
 
       if (paymentMethod === 'cod') {
         const refreshed = await getOrder(order.id);
@@ -193,8 +238,7 @@ export default function OrderDetailPage({
       await simulatePaymentSuccess(order.id);
       const refreshed = await getOrder(order.id);
       setOrder(refreshed);
-      setShowPaymentModal(false);
-      setActivePaymentInfo(null);
+      setIsPaidSuccess(true);
       setActionSuccessMsg('Pembayaran berhasil diverifikasi.');
     } catch (err: unknown) {
       const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
@@ -308,7 +352,8 @@ export default function OrderDetailPage({
                 )}
 
                 {/* Action 1: Awaiting Price Approval Banner */}
-                {order.status === 'AWAITING_PRICE_APPROVAL' && (
+                {(order.status?.toUpperCase() === 'AWAITING_PRICE_APPROVAL' ||
+                  (order as any).raw_status?.toLowerCase() === 'awaiting_price_approval') && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
                     <div>
                       <h3 className="font-semibold text-sm text-amber-950">
@@ -329,16 +374,23 @@ export default function OrderDetailPage({
                       <div>
                         <span className="text-slate-500 block">Berat Aktual:</span>
                         <span className="font-semibold text-slate-900">
-                          {order.actual_weight_kg ? `${order.actual_weight_kg} kg` : '-'}
+                          {order.actual_weight_kg !== null && order.actual_weight_kg !== undefined ? `${order.actual_weight_kg} kg` : '-'}
                         </span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Total Final:</span>
                         <span className="font-semibold text-slate-900 tabular-nums">
-                          {formatRupiah(order.final_amount || 0)}
+                          {order.final_amount !== null && order.final_amount !== undefined ? formatRupiah(order.final_amount) : '-'}
                         </span>
                       </div>
                     </div>
+
+                    {(order.store_notes || (order as any).store_note || (order as any).note) && (
+                      <div className="p-3 bg-amber-100/70 border border-amber-200 rounded-lg text-xs text-amber-950">
+                        <span className="font-semibold block text-amber-900 mb-0.5">Catatan Penimbangan Toko:</span>
+                        <span>{order.store_notes || (order as any).store_note || (order as any).note}</span>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-end gap-2 pt-1">
                       <button
@@ -377,6 +429,10 @@ export default function OrderDetailPage({
                       type="button"
                       onClick={() => {
                         setActivePaymentInfo(null);
+                        const sm = order?.store_payment_methods;
+                        if (sm?.cod) setPaymentMethod('cod');
+                        else if (sm?.qris) setPaymentMethod('qris');
+                        else if (sm?.va) setPaymentMethod('va');
                         setShowPaymentModal(true);
                       }}
                       className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#152e4a] text-white rounded-lg text-xs font-medium cursor-pointer shrink-0"
@@ -412,7 +468,7 @@ export default function OrderDetailPage({
                             </span>
                           </div>
                           <div className="sm:text-right font-medium text-slate-900 tabular-nums">
-                            {formatRupiah(item.line_final_amount ?? item.line_estimated_amount)}
+                            {formatRupiah(item.line_final_amount ?? (item.line_estimated_amount || ((item.unit_price || 0) * ((item.quantity_actual ?? item.quantity_estimated) || 0))))}
                           </div>
                         </div>
                       ))}
@@ -429,7 +485,9 @@ export default function OrderDetailPage({
                       <div>
                         <span className="text-slate-500 block mb-1">Alamat Penjemputan:</span>
                         <p className="font-medium text-slate-900">
-                          {order.pickup_address?.address_text || '-'}
+                          {order.pickup_address?.address_text && order.pickup_address.address_text.trim() !== '' && order.pickup_address.address_text !== '-'
+                            ? order.pickup_address.address_text
+                            : 'Alamat tidak tersedia'}
                         </p>
                         {order.pickup_address?.recipient_name && (
                           <p className="text-slate-500 mt-0.5">
@@ -439,6 +497,22 @@ export default function OrderDetailPage({
                       </div>
 
                       <div>
+                        <span className="text-slate-500 block mb-1">Alamat Pengantaran:</span>
+                        <p className="font-medium text-slate-900">
+                          {order.delivery_address?.address_text && order.delivery_address.address_text.trim() !== '' && order.delivery_address.address_text !== '-'
+                            ? order.delivery_address.address_text
+                            : (order.pickup_address?.address_text && order.pickup_address.address_text.trim() !== '' && order.pickup_address.address_text !== '-'
+                              ? order.pickup_address.address_text
+                              : 'Alamat tidak tersedia')}
+                        </p>
+                        {order.delivery_address?.recipient_name && (
+                          <p className="text-slate-500 mt-0.5">
+                            {order.delivery_address.recipient_name} ({order.delivery_address.recipient_phone || '-'})
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="sm:col-span-2 pt-2 border-t border-slate-100">
                         <span className="text-slate-500 block mb-1">Kurir Toko:</span>
                         <p className="font-medium text-slate-900">
                           {order.courier_name || 'Menunggu penugasan kurir'}
@@ -477,17 +551,31 @@ export default function OrderDetailPage({
                         <tr>
                           <td className="py-2 text-slate-600">Estimasi Biaya Jasa</td>
                           <td className="py-2 text-right text-slate-900 tabular-nums">
-                            {formatRupiah((order.estimated_amount || 0) - (order.delivery_fee || 0))}
+                            {formatRupiah(
+                              order.items && order.items.length > 0
+                                ? order.items.reduce((acc, it) => acc + (it.line_estimated_amount || ((it.unit_price || 0) * (it.quantity_estimated || 0))), 0)
+                                : Math.max(0, (order.estimated_amount || 0) - (order.delivery_fee || 0) - (order.platform_fee ?? 1000))
+                            )}
                           </td>
                         </tr>
                         {order.final_amount !== null && (
                           <tr>
                             <td className="py-2 text-slate-600">Biaya Jasa Final</td>
                             <td className="py-2 text-right text-slate-900 tabular-nums font-medium">
-                              {formatRupiah((order.final_amount || 0) - (order.delivery_fee || 0))}
+                              {formatRupiah(
+                                order.items && order.items.length > 0
+                                  ? order.items.reduce((acc, it) => acc + (it.line_final_amount !== null ? it.line_final_amount : (it.line_estimated_amount || ((it.unit_price || 0) * ((it.quantity_actual ?? it.quantity_estimated) || 0)))), 0)
+                                  : Math.max(0, (order.final_amount || 0) - (order.delivery_fee || 0) - (order.platform_fee ?? 1000))
+                              )}
                             </td>
                           </tr>
                         )}
+                        <tr>
+                          <td className="py-2 text-slate-600">Biaya Platform</td>
+                          <td className="py-2 text-right text-slate-900 tabular-nums">
+                            {formatRupiah(order.platform_fee ?? 1000)}
+                          </td>
+                        </tr>
                         <tr>
                           <td className="py-2 text-slate-600">Ongkos Kirim</td>
                           <td className="py-2 text-right text-slate-900 tabular-nums">
@@ -612,206 +700,317 @@ export default function OrderDetailPage({
               setShowPaymentModal(false);
               setActivePaymentInfo(null);
             }}
-            title="Pembayaran"
+            title={
+              isPaidSuccess || (order?.payment_status || '').toLowerCase() === 'paid'
+                ? 'Pembayaran Berhasil'
+                : 'Pembayaran'
+            }
           >
             <div className="space-y-4 text-xs">
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-                <span className="text-slate-600">Total Tagihan:</span>
-                <span className="font-semibold text-sm text-slate-900 tabular-nums">
-                  {formatRupiah(order?.final_amount || order?.estimated_amount || 0)}
-                </span>
-              </div>
-
-              {/* Step 1: Select Payment Method */}
-              {!activePaymentInfo && (
-                <div className="space-y-3">
-                  <p className="font-medium text-slate-700">Pilih Metode Pembayaran:</p>
-
-                  <div className="space-y-2">
-                    {/* QRIS */}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('qris')}
-                      className={cn(
-                        'w-full p-3 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
-                        paymentMethod === 'qris'
-                          ? 'border-[#1A3A5C] bg-slate-50'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <QrCode className="w-4 h-4 text-slate-700" />
-                        <div>
-                          <span className="font-medium text-slate-900 block">QRIS</span>
-                          <span className="text-[11px] text-slate-500">GoPay, OVO, DANA, BCA, ShopeePay</span>
-                        </div>
-                      </div>
-                      <div className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center', paymentMethod === 'qris' ? 'border-[#1A3A5C] bg-[#1A3A5C]' : 'border-slate-300')}>
-                        {paymentMethod === 'qris' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                    </button>
-
-                    {/* Virtual Account */}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('va')}
-                      className={cn(
-                        'w-full p-3 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
-                        paymentMethod === 'va'
-                          ? 'border-[#1A3A5C] bg-slate-50'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <CreditCard className="w-4 h-4 text-slate-700" />
-                        <div>
-                          <span className="font-medium text-slate-900 block">Virtual Account</span>
-                          <span className="text-[11px] text-slate-500">BCA, Mandiri, BNI, BRI, Permata</span>
-                        </div>
-                      </div>
-                      <div className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center', paymentMethod === 'va' ? 'border-[#1A3A5C] bg-[#1A3A5C]' : 'border-slate-300')}>
-                        {paymentMethod === 'va' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                    </button>
-
-                    {/* VA Bank Selector */}
-                    {paymentMethod === 'va' && (
-                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                        <span className="text-slate-600 block">Pilih Bank:</span>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'].map((bank) => (
-                            <button
-                              key={bank}
-                              type="button"
-                              onClick={() => setSelectedBank(bank)}
-                              className={cn(
-                                'py-1.5 px-2 rounded font-medium text-xs border text-center transition-colors cursor-pointer',
-                                selectedBank === bank
-                                  ? 'bg-[#1A3A5C] text-white border-[#1A3A5C]'
-                                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                              )}
-                            >
-                              {bank}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* COD */}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('cod')}
-                      className={cn(
-                        'w-full p-3 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
-                        paymentMethod === 'cod'
-                          ? 'border-[#1A3A5C] bg-slate-50'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Truck className="w-4 h-4 text-slate-700" />
-                        <div>
-                          <span className="font-medium text-slate-900 block">Bayar di Tempat (COD)</span>
-                          <span className="text-[11px] text-slate-500">Bayar tunai ke kurir saat diantar</span>
-                        </div>
-                      </div>
-                      <div className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center', paymentMethod === 'cod' ? 'border-[#1A3A5C] bg-[#1A3A5C]' : 'border-slate-300')}>
-                        {paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                    </button>
+              {isPaidSuccess || (order?.payment_status || '').toLowerCase() === 'paid' ? (
+                <div className="py-4 text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto text-emerald-600">
+                    <CheckCircle2 className="w-10 h-10" />
                   </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowPaymentModal(false)}
-                      disabled={actionLoading}
-                      className="rounded-lg text-xs"
-                    >
-                      Batal
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={handleInitiatePayment}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#152e4a] text-white font-medium rounded-lg text-xs cursor-pointer"
-                    >
-                      {actionLoading ? 'Memproses...' : 'Lanjutkan'}
-                    </button>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Pembayaran Berhasil!</h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Pesanan #{order?.order_number} telah lunas dan siap diproses oleh pihak toko.
+                    </p>
                   </div>
-                </div>
-              )}
-
-              {/* Step 2: Payment Details Active (QRIS / VA Display) */}
-              {activePaymentInfo && (
-                <div className="space-y-4">
-                  {/* QRIS Display */}
-                  {activePaymentInfo.method === 'qris' && (
-                    <div className="p-4 bg-white rounded-lg border border-slate-200 text-center space-y-3">
-                      <div className="w-40 h-40 mx-auto bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-center p-2">
-                        <QrCode className="w-28 h-28 text-slate-900" />
-                      </div>
-                      <p className="text-xs text-slate-600">
-                        Pindai kode QR menggunakan aplikasi e-wallet atau mobile banking Anda.
-                      </p>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-left space-y-2 max-w-sm mx-auto">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-500">Metode</span>
+                      <span className="font-semibold text-slate-900 uppercase">
+                        {activePaymentInfo?.method || (order as unknown as { payment_method?: string })?.payment_method || 'QRIS'}
+                      </span>
                     </div>
-                  )}
-
-                  {/* Virtual Account Display */}
-                  {activePaymentInfo.method === 'va' && (
-                    <div className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-600">Bank Virtual Account:</span>
-                        <span className="font-medium text-slate-900">
-                          {activePaymentInfo.bank_code || selectedBank}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 text-[11px] block mb-1">Nomor Virtual Account:</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-medium text-base text-slate-900 bg-slate-50 px-3 py-1 rounded border border-slate-200 flex-1">
-                            {activePaymentInfo.va_number || '88000123456789'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyVa(activePaymentInfo.va_number || '88000123456789')}
-                            className="px-3 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
-                          >
-                            {copiedVa ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedVa ? 'Tersalin' : 'Salin'}</span>
-                          </button>
-                        </div>
-                      </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-500">Total Dibayar</span>
+                      <span className="font-bold text-slate-900">
+                        {formatRupiah(activePaymentInfo?.amount || order?.final_amount || order?.total_amount || order?.estimated_amount || 0)}
+                      </span>
                     </div>
-                  )}
-
-                  {/* Sandbox Simulation */}
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                    <span className="font-medium text-slate-900 block">Simulasi Sandbox:</span>
-                    <button
-                      type="button"
-                      onClick={handleSimulatePaymentSuccess}
-                      disabled={actionLoading}
-                      className="w-full py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded text-xs cursor-pointer"
-                    >
-                      {actionLoading ? 'Memverifikasi...' : 'Simulasikan Pembayaran Berhasil'}
-                    </button>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-500">Status</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                        LUNAS
+                      </span>
+                    </div>
                   </div>
-
-                  <div className="flex items-center justify-end pt-2">
+                  <div className="pt-2">
                     <Button
-                      variant="outline"
                       onClick={() => {
                         setShowPaymentModal(false);
                         setActivePaymentInfo(null);
+                        loadOrderDetail();
                       }}
-                      className="rounded-lg text-xs"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs"
                     >
-                      Tutup
+                      Lihat Status Pesanan
                     </Button>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                    <span className="text-slate-600">Total Tagihan:</span>
+                    <span className="font-semibold text-sm text-slate-900 tabular-nums">
+                      {formatRupiah(order?.final_amount || order?.total_amount || order?.estimated_amount || 0)}
+                    </span>
+                  </div>
+
+                  {/* Step 1: Select Payment Method */}
+                  {!activePaymentInfo && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-slate-700">Pilih Metode Pembayaran:</p>
+
+                      <div className="space-y-2">
+                        {/* QRIS - Only if enabled by store */}
+                        {order?.store_payment_methods?.qris && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod('qris')}
+                            className={cn(
+                              'w-full p-3 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
+                              paymentMethod === 'qris'
+                                ? 'border-[#1A3A5C] bg-slate-50'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <QrCode className="w-4 h-4 text-slate-700" />
+                              <div>
+                                <span className="font-medium text-slate-900 block">QRIS</span>
+                                <span className="text-[11px] text-slate-500">GoPay, OVO, DANA, BCA, ShopeePay</span>
+                              </div>
+                            </div>
+                            <div className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center', paymentMethod === 'qris' ? 'border-[#1A3A5C] bg-[#1A3A5C]' : 'border-slate-300')}>
+                              {paymentMethod === 'qris' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                          </button>
+                        )}
+
+                        {/* Virtual Account - Only if enabled by store */}
+                        {order?.store_payment_methods?.va && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMethod('va')}
+                              className={cn(
+                                'w-full p-3 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
+                                paymentMethod === 'va'
+                                  ? 'border-[#1A3A5C] bg-slate-50'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              )}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <CreditCard className="w-4 h-4 text-slate-700" />
+                                <div>
+                                  <span className="font-medium text-slate-900 block">Virtual Account</span>
+                                  <span className="text-[11px] text-slate-500">Transfer otomatis bank nasional</span>
+                                </div>
+                              </div>
+                              <div className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center', paymentMethod === 'va' ? 'border-[#1A3A5C] bg-[#1A3A5C]' : 'border-slate-300')}>
+                                {paymentMethod === 'va' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                              </div>
+                            </button>
+
+                            {/* VA Bank Selector (Only banks enabled by store) */}
+                            {paymentMethod === 'va' && (
+                              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                                <span className="text-slate-600 block">Pilih Bank:</span>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {(order?.store_payment_methods?.va_banks && order?.store_payment_methods.va_banks.length > 0
+                                    ? order?.store_payment_methods.va_banks
+                                    : ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA']
+                                  ).map((bank) => (
+                                    <button
+                                      key={bank}
+                                      type="button"
+                                      onClick={() => setSelectedBank(bank)}
+                                      className={cn(
+                                        'py-1.5 px-2 rounded font-medium text-xs border text-center transition-colors cursor-pointer',
+                                        selectedBank === bank
+                                          ? 'bg-[#1A3A5C] text-white border-[#1A3A5C]'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                      )}
+                                    >
+                                      {bank}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* COD - Only if enabled by store */}
+                        {(order?.store_payment_methods?.cod ?? true) && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod('cod')}
+                            className={cn(
+                              'w-full p-3 rounded-lg border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
+                              paymentMethod === 'cod'
+                                ? 'border-[#1A3A5C] bg-slate-50'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Truck className="w-4 h-4 text-slate-700" />
+                              <div>
+                                <span className="font-medium text-slate-900 block">Bayar di Tempat (COD)</span>
+                                <span className="text-[11px] text-slate-500">Bayar tunai ke kurir saat diantar</span>
+                              </div>
+                            </div>
+                            <div className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center', paymentMethod === 'cod' ? 'border-[#1A3A5C] bg-[#1A3A5C]' : 'border-slate-300')}>
+                              {paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowPaymentModal(false)}
+                          disabled={actionLoading}
+                          className="rounded-lg text-xs"
+                        >
+                          Batal
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={handleInitiatePayment}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#152e4a] text-white font-medium rounded-lg text-xs cursor-pointer"
+                        >
+                          {actionLoading ? 'Memproses...' : 'Lanjutkan'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Payment Details Active (QRIS / VA Display) */}
+                  {activePaymentInfo && (
+                    <div className="space-y-4">
+                      {/* QRIS Display */}
+                      {activePaymentInfo.method === 'qris' && (
+                        <div className="p-4 bg-white rounded-lg border border-slate-200 text-center space-y-3">
+                          {/* Total harga (besar) */}
+                          <div className="py-2 bg-slate-50 rounded-lg border border-slate-100">
+                            <span className="text-xs text-slate-500 block mb-0.5">Total Pembayaran</span>
+                            <span className="text-3xl font-extrabold text-slate-900 block tabular-nums">
+                              {formatRupiah(activePaymentInfo.amount || order?.final_amount || order?.total_amount || order?.estimated_amount || 0)}
+                            </span>
+                          </div>
+
+                          {/* Timer 2:00 or Expired */}
+                          {qrTimer > 0 ? (
+                            <>
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>Sisa waktu pembayaran: <strong className="font-mono">{formatTimer(qrTimer)}</strong></span>
+                              </div>
+
+                              {/* QR Code */}
+                              <div className="w-52 h-52 mx-auto bg-white border border-slate-200 rounded-lg flex flex-col items-center justify-center p-2 shadow-sm">
+                                {activePaymentInfo.qr_string || activePaymentInfo.payment_details?.qr_string ? (
+                                  <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                                      activePaymentInfo.qr_string || activePaymentInfo.payment_details?.qr_string || ''
+                                    )}`}
+                                    alt="QRIS QR Code"
+                                    className="w-44 h-44 object-contain"
+                                  />
+                                ) : (
+                                  <QrCode className="w-32 h-32 text-slate-900" />
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                Pindai kode QR menggunakan aplikasi e-wallet atau mobile banking Anda.
+                              </p>
+                            </>
+                          ) : (
+                            <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg space-y-3 text-center">
+                              <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
+                              <div>
+                                <p className="font-bold text-rose-800 text-sm">Waktu Pembayaran Habis</p>
+                                <p className="text-xs text-rose-600 mt-0.5">
+                                  Kode QR telah kedaluwarsa. Silakan buat QR baru untuk melanjutkan pembayaran.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleInitiatePayment}
+                                disabled={actionLoading}
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1A3A5C] hover:bg-[#152e4a] text-white rounded-lg text-xs font-medium cursor-pointer disabled:opacity-50"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                                <span>{actionLoading ? 'Membuat QR...' : 'Buat QR Baru'}</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Virtual Account Display */}
+                      {activePaymentInfo.method === 'va' && (
+                        <div className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <span className="text-slate-600">Bank Virtual Account:</span>
+                            <span className="font-medium text-slate-900">
+                              {activePaymentInfo.bank_code || selectedBank}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 text-[11px] block mb-1">Nomor Virtual Account:</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-medium text-base text-slate-900 bg-slate-50 px-3 py-1 rounded border border-slate-200 flex-1">
+                                {activePaymentInfo.va_number || '88000123456789'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyVa(activePaymentInfo.va_number || '88000123456789')}
+                                className="px-3 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+                              >
+                                {copiedVa ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                <span>{copiedVa ? 'Tersalin' : 'Salin'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sandbox Simulation */}
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                        <span className="font-medium text-slate-900 block">Simulasi Sandbox:</span>
+                        <button
+                          type="button"
+                          onClick={handleSimulatePaymentSuccess}
+                          disabled={actionLoading}
+                          className="w-full py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded text-xs cursor-pointer"
+                        >
+                          {actionLoading ? 'Memverifikasi...' : 'Simulasikan Pembayaran Berhasil'}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-end pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowPaymentModal(false);
+                            setActivePaymentInfo(null);
+                          }}
+                          className="rounded-lg text-xs"
+                        >
+                          Tutup
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </Modal>
