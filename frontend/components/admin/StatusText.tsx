@@ -29,12 +29,20 @@ export function StatusText({ status, type, className = '' }: StatusTextProps) {
     success: 'bg-emerald-500',
     warning: 'bg-amber-500',
     danger: 'bg-rose-500',
-    info: 'bg-blue-500',
+    info: 'bg-sky-500',
     neutral: 'bg-slate-400',
   };
 
+  const badgeStyles: Record<StatusType, string> = {
+    success: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    warning: 'bg-amber-50 text-amber-800 border-amber-200',
+    danger: 'bg-rose-50 text-rose-800 border-rose-200',
+    info: 'bg-sky-50 text-sky-800 border-sky-200',
+    neutral: 'bg-slate-100 text-slate-700 border-slate-200',
+  };
+
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badgeStyles[computedType]} ${className}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${dotColors[computedType]}`} />
       <span>{status}</span>
     </span>

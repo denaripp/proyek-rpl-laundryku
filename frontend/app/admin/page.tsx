@@ -6,8 +6,7 @@ import { adminApi, DashboardMetrics } from '@/lib/admin';
 import { StatCard } from '@/components/admin/StatCard';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { AdminHeader } from '@/components/admin/AdminHeader';
-import { StatusText } from '@/components/admin/StatusText';
-import { AlertCircle, ArrowUpRight, CheckCircle2, Clock, Ban, HelpCircle } from 'lucide-react';
+import { AlertCircle, ArrowUpRight } from 'lucide-react';
 
 export default function AdminDashboardPage() {
   const [period, setPeriod] = useState<string>('all_time');
@@ -67,7 +66,7 @@ export default function AdminDashboardPage() {
     },
     {
       header: 'Aksi',
-      accessor: (item) => <span className="font-mono text-slate-800 font-medium">{item.action}</span>,
+      accessor: (item) => <span className="font-mono text-slate-800 font-semibold">{item.action}</span>,
     },
     {
       header: 'Entitas',
@@ -85,17 +84,17 @@ export default function AdminDashboardPage() {
 
   if (error && !metricsData) {
     return (
-      <div>
-        <AdminHeader title="Ringkasan Platform" />
-        <div className="bg-white border border-rose-200 rounded-lg p-6 text-center">
-          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" strokeWidth={1.5} />
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Gagal Memuat Data Dashboard</h2>
+      <div className="space-y-6">
+        <AdminHeader title="Ringkasan platform" />
+        <div className="bg-white border border-rose-200/80 rounded-2xl p-8 text-center shadow-2xs">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" strokeWidth={1.75} />
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Gagal memuat data dashboard</h2>
           <p className="text-xs text-slate-500 mb-4">{error}</p>
           <button
             onClick={() => fetchMetrics()}
-            className="px-3 py-1.5 bg-slate-900 text-white rounded-md text-xs font-medium hover:bg-slate-800 transition-colors cursor-pointer"
+            className="px-4 py-2 bg-navy-900 text-white rounded-xl text-xs font-semibold hover:bg-navy-800 transition-colors cursor-pointer shadow-2xs min-h-[38px]"
           >
-            Coba Lagi
+            Coba lagi
           </button>
         </div>
       </div>
@@ -110,26 +109,26 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       {/* Header & Filter */}
       <AdminHeader
-        title="Ringkasan Platform"
-        subtitle="Agregasi metrik transaksi real-time dari basis data LaundryKu (Asia/Jakarta)"
+        title="Ringkasan platform"
+        subtitle="Agregasi metrik transaksi real-time dari basis data LaundryKu"
         onRefresh={() => fetchMetrics(true)}
         refreshing={refreshing}
         actions={
-          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md p-0.5">
+          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
             {[
               { id: 'all_time', label: 'Semua' },
-              { id: 'today', label: 'Hari Ini' },
-              { id: 'this_week', label: 'Minggu Ini' },
-              { id: 'this_month', label: 'Bulan Ini' },
-              { id: 'this_year', label: 'Tahun Ini' },
+              { id: 'today', label: 'Hari ini' },
+              { id: 'this_week', label: 'Minggu ini' },
+              { id: 'this_month', label: 'Bulan ini' },
+              { id: 'this_year', label: 'Tahun ini' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setPeriod(tab.id)}
-                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                   period === tab.id
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    ? 'bg-navy-900 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 {tab.label}
@@ -148,19 +147,19 @@ export default function AdminDashboardPage() {
           tooltip="Definisi: Total nilai transaksi bersih pada pesanan yang berstatus COMPLETED dalam periode terpilih."
         />
         <StatCard
-          label="Pendapatan Komisi"
+          label="Pendapatan komisi"
           value={loading ? '...' : formatRupiah(m?.total_platform_revenue)}
           subtext="Snapshot komisi platform"
           tooltip="Definisi: Total komisi platform yang tercatat saat pesanan diselesaikan."
         />
         <StatCard
-          label="Total Pesanan"
+          label="Total pesanan"
           value={loading ? '...' : (m?.total_orders ?? 0).toLocaleString('id-ID')}
           subtext={`${m?.completed_orders ?? 0} pesanan selesai`}
           tooltip="Total semua pesanan masuk pada periode terpilih."
         />
         <StatCard
-          label="Toko Aktif"
+          label="Toko aktif"
           value={loading ? '...' : (m?.active_stores ?? 0).toLocaleString('id-ID')}
           subtext={`${m?.pending_stores ?? 0} menunggu persetujuan`}
           tooltip="Toko berstatus operasional aktif dan disetujui."
@@ -170,24 +169,24 @@ export default function AdminDashboardPage() {
       {/* User & Store Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Order Status Summary */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Distribusi Status Pesanan</h2>
-            <Link href="/admin/orders" className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1">
-              <span>Lihat Semua</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
+            <h2 className="text-xs font-semibold text-slate-800">Distribusi status pesanan</h2>
+            <Link href="/admin/orders" className="text-xs text-slate-500 hover:text-navy-950 font-semibold flex items-center gap-1 transition-colors">
+              <span>Lihat semua</span>
+              <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
             </Link>
           </div>
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Menunggu Jemput</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Menunggu jemput</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading ? '-' : (statusCounts['PENDING_PICKUP'] || 0) + (statusCounts['PICKUP_ASSIGNED'] || 0)}
               </div>
             </div>
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Diproses Toko</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Diproses toko</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading
                   ? '-'
                   : (statusCounts['PROCESSING'] || 0) +
@@ -200,15 +199,15 @@ export default function AdminDashboardPage() {
                     (statusCounts['PAID'] || 0)}
               </div>
             </div>
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Selesai</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Selesai</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading ? '-' : (statusCounts['COMPLETED'] || 0)}
               </div>
             </div>
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Dibatalkan / Exp</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Dibatalkan / exp</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading
                   ? '-'
                   : (statusCounts['CANCELLED'] || 0) +
@@ -220,36 +219,36 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* User Composition */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Komposisi Pengguna Terdaftar</h2>
-            <Link href="/admin/users" className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1">
-              <span>Kelola Pengguna</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
+            <h2 className="text-xs font-semibold text-slate-800">Komposisi pengguna terdaftar</h2>
+            <Link href="/admin/users" className="text-xs text-slate-500 hover:text-navy-950 font-semibold flex items-center gap-1 transition-colors">
+              <span>Kelola pengguna</span>
+              <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
             </Link>
           </div>
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Pelanggan</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Pelanggan</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading ? '-' : (roleCounts?.customer || 0)}
               </div>
             </div>
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Admin Toko</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Admin toko</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading ? '-' : (roleCounts?.store_admin || 0)}
               </div>
             </div>
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Kurir</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Kurir</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading ? '-' : (roleCounts?.courier || 0)}
               </div>
             </div>
-            <div className="p-2.5 rounded bg-slate-50 border border-slate-100">
-              <div className="text-[11px] text-slate-500">Ditangguhkan</div>
-              <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
+            <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+              <div className="text-[11px] text-slate-500 font-medium">Ditangguhkan</div>
+              <div className="text-base font-bold font-mono text-slate-900 tabular-nums mt-0.5">
                 {loading ? '-' : (m?.suspended_users || 0)}
               </div>
             </div>
@@ -260,13 +259,13 @@ export default function AdminDashboardPage() {
       {/* Recent Audit Logs Section */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Aktivitas Audit Log Terbaru</h2>
+          <h2 className="text-xs font-semibold text-slate-800">Aktivitas audit log terbaru</h2>
           <Link
             href="/admin/audit-logs"
-            className="text-xs text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"
+            className="text-xs text-slate-500 hover:text-navy-950 font-semibold flex items-center gap-1 transition-colors"
           >
-            <span>Buka Seluruh Log</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
+            <span>Buka seluruh log</span>
+            <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
           </Link>
         </div>
 

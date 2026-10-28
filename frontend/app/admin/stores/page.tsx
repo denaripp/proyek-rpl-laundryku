@@ -5,7 +5,7 @@ import { adminApi, AdminStore } from '@/lib/admin';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { StatusText } from '@/components/admin/StatusText';
-import { Search, CheckCircle, XCircle, Eye, X, AlertCircle } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Eye, X } from 'lucide-react';
 
 export default function AdminStoresPage() {
   const [stores, setStores] = useState<AdminStore[]>([]);
@@ -92,7 +92,7 @@ export default function AdminStoresPage() {
 
   const columns: Column<AdminStore>[] = [
     {
-      header: 'Nama Toko',
+      header: 'Nama toko',
       accessor: (item) => (
         <div>
           <div className="font-semibold text-slate-900">{item.name}</div>
@@ -101,20 +101,20 @@ export default function AdminStoresPage() {
       ),
     },
     {
-      header: 'Pemilik (Owner)',
+      header: 'Pemilik (owner)',
       accessor: (item) => (
         <div>
           <div className="text-slate-800 font-medium">{item.owner?.name || '-'}</div>
-          <div className="text-[11px] text-slate-500">{item.owner?.phone || item.owner?.email || ''}</div>
+          <div className="text-[11px] text-slate-500 font-mono">{item.owner?.phone || item.owner?.email || ''}</div>
         </div>
       ),
     },
     {
-      header: 'Status Persetujuan',
+      header: 'Status persetujuan',
       accessor: (item) => <StatusText status={item.approval_status.toUpperCase()} />,
     },
     {
-      header: 'Status Operasional',
+      header: 'Status operasional',
       accessor: (item) => (
         <span className="font-mono text-xs text-slate-600 uppercase">
           {item.operational_status}
@@ -122,7 +122,7 @@ export default function AdminStoresPage() {
       ),
     },
     {
-      header: 'Tanggal Diajukan',
+      header: 'Tanggal diajukan',
       accessor: (item) => (
         <span className="font-mono text-slate-500">
           {new Date(item.created_at).toLocaleDateString('id-ID', {
@@ -148,22 +148,22 @@ export default function AdminStoresPage() {
               }
               setDetailModalOpen(true);
             }}
-            className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-            title="Lihat Detail"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-navy-950 hover:bg-slate-100 transition-colors cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+            title="Lihat detail"
             aria-label="Lihat detail toko"
           >
-            <Eye className="w-4 h-4" strokeWidth={1.5} />
+            <Eye className="w-4 h-4" strokeWidth={1.75} />
           </button>
           {item.approval_status === 'pending' && (
             <>
               <button
                 onClick={() => handleApprove(item)}
                 disabled={actionLoading}
-                className="p-1 rounded text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
-                title="Setujui Toko"
+                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+                title="Setujui toko"
                 aria-label="Setujui toko"
               >
-                <CheckCircle className="w-4 h-4" strokeWidth={1.5} />
+                <CheckCircle className="w-4 h-4" strokeWidth={1.75} />
               </button>
               <button
                 onClick={() => {
@@ -171,11 +171,11 @@ export default function AdminStoresPage() {
                   setRejectModalOpen(true);
                 }}
                 disabled={actionLoading}
-                className="p-1 rounded text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                title="Tolak Toko"
+                className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+                title="Tolak toko"
                 aria-label="Tolak toko"
               >
-                <XCircle className="w-4 h-4" strokeWidth={1.5} />
+                <XCircle className="w-4 h-4" strokeWidth={1.75} />
               </button>
             </>
           )}
@@ -185,9 +185,9 @@ export default function AdminStoresPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <AdminHeader
-        title="Persetujuan & Manajemen Toko"
+        title="Persetujuan & manajemen toko"
         subtitle="Verifikasi pendaftaran gerai toko baru dan tata kelola outlet laundry"
         onRefresh={() => fetchStores(true)}
         refreshing={refreshing}
@@ -195,24 +195,24 @@ export default function AdminStoresPage() {
 
       {feedback && (
         <div
-          className={`p-3 rounded-md text-xs flex items-center justify-between ${
+          className={`p-3.5 rounded-xl text-xs flex items-center justify-between shadow-2xs ${
             feedback.type === 'success'
               ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border border-rose-200 text-rose-800'
           }`}
         >
           <span>{feedback.message}</span>
-          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-700">
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1" aria-label="Tutup notifikasi">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
       {/* Filter bar */}
-      <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between bg-white border border-slate-200 rounded-lg p-3">
+      <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs">
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" strokeWidth={1.5} />
+          <div className="relative flex-1 sm:w-72">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={1.75} />
             <input
               type="text"
               placeholder="Cari nama toko, alamat, pemilik..."
@@ -221,7 +221,7 @@ export default function AdminStoresPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-400"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50/70 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-900"
             />
           </div>
 
@@ -231,12 +231,12 @@ export default function AdminStoresPage() {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-slate-400 cursor-pointer"
+            className="py-2 px-3 text-xs bg-slate-50/70 border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-navy-900 cursor-pointer font-medium"
           >
-            <option value="pending">Menunggu Persetujuan</option>
+            <option value="pending">Menunggu persetujuan</option>
             <option value="approved">Disetujui (Approved)</option>
             <option value="rejected">Ditolak (Rejected)</option>
-            <option value="all">Semua Status</option>
+            <option value="all">Semua status</option>
           </select>
         </div>
       </div>
@@ -258,16 +258,16 @@ export default function AdminStoresPage() {
 
       {/* Detail Modal */}
       {detailModalOpen && selectedStore && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-slate-200 max-w-lg w-full p-5 space-y-4 shadow-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200/90 max-w-lg w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">{selectedStore.name}</h3>
-                <p className="text-xs text-slate-500">{selectedStore.address_text}</p>
+                <h3 className="text-sm font-bold text-navy-950">{selectedStore.name}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{selectedStore.address_text}</p>
               </div>
               <button
                 onClick={() => setDetailModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
                 aria-label="Tutup"
               >
                 <X className="w-4 h-4" />
@@ -276,71 +276,68 @@ export default function AdminStoresPage() {
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <span className="text-slate-500">Status Persetujuan:</span>
-                <div className="mt-0.5"><StatusText status={selectedStore.approval_status.toUpperCase()} /></div>
+                <span className="text-slate-500 font-medium">Status persetujuan:</span>
+                <div className="mt-1"><StatusText status={selectedStore.approval_status.toUpperCase()} /></div>
               </div>
               <div>
-                <span className="text-slate-500">Radius Layanan:</span>
-                <div className="font-mono text-slate-800 font-medium">{selectedStore.service_radius_km} KM</div>
+                <span className="text-slate-500 font-medium">Status operasional:</span>
+                <div className="mt-1 font-mono font-semibold uppercase text-slate-700">{selectedStore.operational_status}</div>
               </div>
               <div>
-                <span className="text-slate-500">Nama Pemilik:</span>
-                <div className="font-medium text-slate-800">{selectedStore.owner?.name || '-'}</div>
+                <span className="text-slate-500 font-medium">Radius layanan:</span>
+                <div className="mt-1 font-mono font-semibold text-slate-800">{selectedStore.service_radius_km} km</div>
               </div>
               <div>
-                <span className="text-slate-500">Kontak:</span>
-                <div className="font-mono text-slate-800">{selectedStore.owner?.phone || selectedStore.owner?.email || '-'}</div>
+                <span className="text-slate-500 font-medium">Pemilik gerai:</span>
+                <div className="mt-1 font-semibold text-slate-900">{selectedStore.owner?.name || '-'}</div>
+                <div className="text-[11px] text-slate-500 font-mono">{selectedStore.owner?.phone || selectedStore.owner?.email || ''}</div>
               </div>
             </div>
 
+            {selectedStore.description && (
+              <div className="text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <span className="text-slate-500 font-medium block mb-1">Deskripsi gerai:</span>
+                <p className="text-slate-700 leading-relaxed">{selectedStore.description}</p>
+              </div>
+            )}
+
             {selectedStore.rejection_reason && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded text-xs text-rose-800">
-                <span className="font-semibold block mb-0.5">Alasan Penolakan:</span>
-                {selectedStore.rejection_reason}
+              <div className="text-xs bg-rose-50 p-3.5 rounded-xl border border-rose-200">
+                <span className="text-rose-700 font-semibold block mb-1">Alasan penolakan sebelumnya:</span>
+                <p className="text-rose-900">{selectedStore.rejection_reason}</p>
               </div>
             )}
 
-            {selectedStore.services && selectedStore.services.length > 0 && (
-              <div className="pt-2 border-t border-slate-100">
-                <span className="text-xs font-semibold text-slate-700 block mb-2">Layanan yang Ditawarkan:</span>
-                <div className="space-y-1">
-                  {selectedStore.services.map((srv) => (
-                    <div key={srv.id} className="text-xs flex justify-between p-1.5 bg-slate-50 rounded">
-                      <span className="text-slate-700">{srv.name} ({srv.pricing_unit})</span>
-                      <span className="font-mono font-medium text-slate-900">Rp {srv.price_per_unit.toLocaleString('id-ID')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDetailModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer min-h-[38px]"
+              >
+                Tutup
+              </button>
               {selectedStore.approval_status === 'pending' && (
                 <>
                   <button
+                    type="button"
                     onClick={() => {
                       setRejectModalOpen(true);
                     }}
                     disabled={actionLoading}
-                    className="px-3 py-1.5 border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-medium rounded-md transition-colors cursor-pointer"
+                    className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 cursor-pointer min-h-[38px]"
                   >
-                    Tolak Pengajuan
+                    Tolak pengajuan
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleApprove(selectedStore)}
                     disabled={actionLoading}
-                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                    className="px-4 py-2 text-xs font-semibold rounded-xl bg-navy-900 text-white hover:bg-navy-800 cursor-pointer shadow-2xs min-h-[38px]"
                   >
-                    Setujui Toko
+                    Setujui gerai
                   </button>
                 </>
               )}
-              <button
-                onClick={() => setDetailModalOpen(false)}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-md transition-colors cursor-pointer"
-              >
-                Tutup
-              </button>
             </div>
           </div>
         </div>
@@ -348,52 +345,59 @@ export default function AdminStoresPage() {
 
       {/* Reject Modal */}
       {rejectModalOpen && selectedStore && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-slate-200 max-w-md w-full p-5 space-y-4 shadow-lg">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-900">Tolak Pengajuan Toko</h3>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleRejectSubmit}
+            className="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 space-y-4 shadow-xl"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-rose-900">Tolak pengajuan toko</h3>
               <button
+                type="button"
                 onClick={() => setRejectModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
                 aria-label="Tutup"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleRejectSubmit} className="space-y-3">
-              <p className="text-xs text-slate-600">
-                Berikan alasan penolakan yang jelas agar pemilik toko dapat memperbaiki permohonannya.
-              </p>
-              <div>
-                <textarea
-                  rows={3}
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Contoh: Dokumen perizinan tidak terbaca atau lokasi di luar jangkauan operasional."
-                  required
-                  className="w-full text-xs p-2.5 border border-slate-300 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-400"
-                />
-              </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Tuliskan alasan penolakan permohonan toko <strong>{selectedStore.name}</strong>. Alasan ini akan tercatat dalam audit log dan dikirimkan ke pemilik toko.
+            </p>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setRejectModalOpen(false)}
-                  className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-200 cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium rounded-md disabled:opacity-50 cursor-pointer"
-                >
-                  {actionLoading ? 'Memproses...' : 'Konfirmasi Penolakan'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Alasan penolakan <span className="text-rose-500">* (minimal 5 karakter)</span>
+              </label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Contoh: Dokumen izin usaha tidak valid atau alamat belum terverifikasi."
+                rows={3}
+                required
+                className="w-full p-3 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-900"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                disabled={actionLoading}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer min-h-[38px]"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-2xs min-h-[38px]"
+              >
+                {actionLoading ? 'Menolak...' : 'Konfirmasi tolak'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
