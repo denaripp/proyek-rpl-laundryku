@@ -158,11 +158,11 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Brand Wordmark Logo */}
           <Link href={isAuthenticated ? '/stores' : '/'} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-md bg-[#1A3A5C] flex items-center justify-center text-white font-bold text-sm tracking-wider">
+            <div className="w-8 h-8 rounded-lg bg-navy-700 flex items-center justify-center text-white font-bold text-sm tracking-wider shadow-xs">
               LK
             </div>
             <span className="font-semibold text-lg tracking-tight text-slate-900">
-              Laundry<span className="text-[#1A3A5C]">Ku</span>
+              Laundry<span className="text-navy-700">Ku</span>
             </span>
           </Link>
 
@@ -174,7 +174,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   href="/"
                   className={cn(
                     'text-xs font-medium transition-colors',
-                    pathname === '/' ? 'text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    pathname === '/' ? 'text-navy-700 font-semibold' : 'text-slate-600 hover:text-navy-700'
                   )}
                 >
                   Beranda
@@ -183,7 +183,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   href="/stores"
                   className={cn(
                     'text-xs font-medium transition-colors',
-                    pathname === '/stores' ? 'text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    pathname === '/stores' ? 'text-navy-700 font-semibold' : 'text-slate-600 hover:text-navy-700'
                   )}
                 >
                   Cari Toko
@@ -192,7 +192,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   href="/upgrade"
                   className={cn(
                     'text-xs font-medium transition-colors',
-                    pathname === '/upgrade' ? 'text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    pathname === '/upgrade' ? 'text-navy-700 font-semibold' : 'text-slate-600 hover:text-navy-700'
                   )}
                 >
                   Gabung Mitra
@@ -204,7 +204,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   href="/stores"
                   className={cn(
                     'text-xs font-medium transition-colors flex items-center gap-1.5',
-                    pathname === '/stores' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    pathname === '/stores' ? 'text-navy-700 font-semibold' : 'text-slate-600 hover:text-navy-700'
                   )}
                 >
                   <Store className="w-4 h-4" strokeWidth={1.5} />
@@ -215,8 +215,8 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                   className={cn(
                     'text-xs font-medium transition-colors flex items-center gap-1.5',
                     pathname === '/orders' || pathname.startsWith('/orders/')
-                      ? 'text-[#1A3A5C] font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'text-navy-700 font-semibold'
+                      : 'text-slate-600 hover:text-navy-700'
                   )}
                 >
                   <Package className="w-4 h-4" strokeWidth={1.5} />
@@ -227,7 +227,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                     href="/upgrade"
                     className={cn(
                       'text-xs font-medium transition-colors flex items-center gap-1.5',
-                      pathname === '/upgrade' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-600 hover:text-slate-900'
+                      pathname === '/upgrade' ? 'text-navy-700 font-semibold' : 'text-slate-600 hover:text-navy-700'
                     )}
                   >
                     <Briefcase className="w-4 h-4" strokeWidth={1.5} />
@@ -238,7 +238,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                     href="/upgrade"
                     className={cn(
                       'text-xs font-medium transition-colors flex items-center gap-1.5',
-                      pathname === '/upgrade' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-600 hover:text-slate-900'
+                      pathname === '/upgrade' ? 'text-navy-700 font-semibold' : 'text-slate-600 hover:text-navy-700'
                     )}
                   >
                     <Briefcase className="w-4 h-4" strokeWidth={1.5} />
@@ -303,7 +303,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                     onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
                     onKeyDown={handleTriggerKeyDown}
                     className={cn(
-                      'flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-md border text-xs font-medium cursor-pointer transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#1A3A5C]/20',
+                      'flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-md border text-xs font-medium cursor-pointer transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-navy-600/20',
                       accountDropdownOpen
                         ? 'bg-slate-100 border-slate-300 text-slate-900 shadow-2xs'
                         : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300'
@@ -331,8 +331,8 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                       onKeyDown={handleMenuKeyDown}
                       className="absolute right-0 mt-2 w-72 bg-white rounded-[10px] border border-slate-200 shadow-lg z-50 overflow-hidden animate-menu-slide text-xs"
                     >
-                      {/* Header panel aksen gelap #1A3A5C */}
-                      <div className="bg-[#1A3A5C] text-white p-3.5 border-b border-slate-800/20">
+                      {/* Header panel aksen gelap navy-900 */}
+                      <div className="bg-navy-900 text-white p-3.5 border-b border-navy-800/30">
                         <div className="flex items-start gap-3">
                           <Avatar
                             src={user.avatar_url}
@@ -452,13 +452,13 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
               <div className="flex items-center gap-2">
                 <Link
                   href="/auth"
-                  className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-md border border-slate-200 transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-navy-700 hover:bg-slate-50 rounded-xl border border-slate-200 transition-colors"
                 >
                   Masuk
                 </Link>
                 <Link
                   href="/auth"
-                  className="px-3 py-1.5 text-xs font-medium text-white bg-[#1A3A5C] hover:bg-[#132d47] rounded-md transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-white bg-navy-700 hover:bg-navy-800 rounded-xl transition-colors shadow-xs"
                 >
                   Daftar
                 </Link>
@@ -560,13 +560,13 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 <div className="flex gap-2">
                   <Link
                     href="/auth"
-                    className="flex-1 py-2 text-center text-xs font-medium text-slate-700 bg-slate-100 rounded-md"
+                    className="flex-1 py-2 text-center text-xs font-medium text-slate-700 bg-slate-100 rounded-xl"
                   >
                     Masuk
                   </Link>
                   <Link
                     href="/auth"
-                    className="flex-1 py-2 text-center text-xs font-medium text-white bg-[#1A3A5C] rounded-md"
+                    className="flex-1 py-2 text-center text-xs font-medium text-white bg-navy-700 hover:bg-navy-800 rounded-xl shadow-xs"
                   >
                     Daftar
                   </Link>
@@ -581,13 +581,13 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
       <main className="flex-1">{children}</main>
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-300 pt-12 pb-20 md:pb-12 border-t border-slate-800 text-xs">
+      <footer className="bg-navy-950 text-slate-300 pt-12 pb-20 md:pb-12 border-t border-navy-900 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-slate-800">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-navy-900">
             {/* Brand Column */}
             <div className="md:col-span-4 space-y-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-white font-bold text-xs">
+                <div className="w-7 h-7 rounded-lg bg-navy-900 border border-navy-700 flex items-center justify-center text-white font-bold text-xs shadow-xs">
                   LK
                 </div>
                 <span className="font-semibold text-base text-white tracking-tight">LaundryKu</span>
@@ -676,7 +676,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/"
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  pathname === '/' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  pathname === '/' ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <Store className="w-4 h-4 mb-0.5" strokeWidth={1.5} />
@@ -686,7 +686,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/stores"
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  pathname === '/stores' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  pathname === '/stores' ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <Store className="w-4 h-4 mb-0.5" strokeWidth={1.5} />
@@ -696,7 +696,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/upgrade"
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  pathname === '/upgrade' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  pathname === '/upgrade' ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <Briefcase className="w-4 h-4 mb-0.5" strokeWidth={1.5} />
@@ -706,7 +706,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/auth"
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  pathname === '/auth' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  pathname === '/auth' ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <User className="w-4 h-4 mb-0.5" strokeWidth={1.5} />
@@ -719,7 +719,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/stores"
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  pathname === '/stores' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  pathname === '/stores' ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <Store className="w-4 h-4 mb-0.5" strokeWidth={1.5} />
@@ -730,7 +730,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
                   pathname === '/orders' || pathname.startsWith('/orders/')
-                    ? 'text-[#1A3A5C] font-semibold'
+                    ? 'text-navy-700 font-semibold'
                     : 'text-slate-500'
                 )}
               >
@@ -741,7 +741,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/chat"
                 className={cn(
                   'relative flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  isChatActive ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  isChatActive ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <MessageSquare className="w-4 h-4 mb-0.5" strokeWidth={1.5} />
@@ -754,7 +754,7 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
                 href="/profile"
                 className={cn(
                   'flex flex-col items-center justify-center py-1.5 px-3 rounded-md transition-colors min-h-[44px]',
-                  pathname === '/profile' ? 'text-[#1A3A5C] font-semibold' : 'text-slate-500'
+                  pathname === '/profile' ? 'text-navy-700 font-semibold' : 'text-slate-500'
                 )}
               >
                 <User className="w-4 h-4 mb-0.5" strokeWidth={1.5} />

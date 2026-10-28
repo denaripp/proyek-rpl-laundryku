@@ -11,9 +11,17 @@ import {
   MapPin,
   Loader2,
   AlertCircle,
+  Truck,
+  Scale,
+  Wallet,
+  CalendarCheck,
+  CheckCircle2,
+  Mail,
 } from 'lucide-react';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { StoreCard } from '@/components/store/StoreCard';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { getStores, StoreItem } from '@/lib/store';
 import { useAuth } from '@/lib/AuthContext';
 import { getHomePathForRole } from '@/lib/auth';
@@ -27,17 +35,17 @@ const FAQ_SECTIONS = [
       {
         question: 'Bagaimana cara memesan?',
         answer:
-          'Pilih toko di sekitar lokasi Anda, tentukan jenis layanan laundry yang dibutuhkan, lalu masukkan alamat dan jadwal penjemputan cucian.',
+          'Pilih laundry terdekat, tentukan paket cuci yang diinginkan, lalu atur alamat dan jadwal jemput pakaian.',
       },
       {
         question: 'Bagaimana cara mendaftarkan laundry?',
         answer:
-          'Klik tautan "Daftarkan laundry", buat akun baru, isi data dan alamat outlet Anda, lalu tunggu proses verifikasi persetujuan admin.',
+          'Klik "Gabung jadi mitra laundry", buat akun, lengkapi alamat usaha Anda, lalu tunggu persetujuan dari tim kami.',
       },
       {
         question: 'Bagaimana jika cucian rusak atau hilang?',
         answer:
-          'Ajukan komplain langsung dari halaman rincian pesanan terkait. Penanganan kendala dilakukan oleh pihak toko dan seluruh catatan tersimpan di sistem.',
+          'Ajukan keluhan langsung lewat halaman rincian pesanan Anda. Pihak laundry akan memeriksa dan membantu menyelesaikannya.',
       },
     ],
   },
@@ -47,32 +55,32 @@ const FAQ_SECTIONS = [
       {
         question: 'Metode pembayaran apa saja yang tersedia?',
         answer:
-          'Pembayaran online melalui Xendit, termasuk QRIS dan transfer bank, serta bayar di tempat (COD) jika toko mengaktifkannya.',
+          'Anda bisa bayar lewat QRIS, transfer bank, atau bayar tunai di tempat jika laundry menyediakan pilihan tersebut.',
       },
       {
         question: 'Berapa lama batas pembayaran online?',
         answer:
-          'Batas waktu pembayaran adalah 1 jam sejak tagihan dibuat. Jika lewat, status pembayaran kedaluwarsa dan Anda bisa membuat pembayaran baru dari rincian pesanan.',
+          'Waktu pembayaran adalah 1 jam sejak tagihan keluar. Jika terlewat, Anda cukup buat pembayaran baru di halaman pesanan.',
       },
     ],
   },
   {
-    category: 'Pengiriman & Harga',
+    category: 'Biaya & Pengantaran',
     items: [
       {
         question: 'Apakah harga bisa berubah?',
         answer:
-          'Harga estimasi bisa berubah setelah cucian ditimbang di outlet. Anda akan menerima notifikasi rincian harga final dan dapat menyetujui atau membatalkan sebelum cucian diproses.',
+          'Perkiraan harga bisa berubah setelah cucian ditimbang laundry. Anda akan menerima rincian harga pasti untuk disetujui atau dibatalkan sebelum cucian diproses.',
       },
       {
         question: 'Apakah ada layanan antar jemput?',
         answer:
-          'Ya, jika outlet yang dipilih menyediakan layanan antar-jemput. Jika toko tidak menyediakan kurir, Anda dapat mengantar dan mengambil cucian sendiri langsung ke outlet.',
+          'Ya, selama laundry yang dipilih menyediakan kurir. Jika tidak ada kurir, Anda bisa mengantar dan mengambil cucian sendiri.',
       },
       {
         question: 'Sampai jarak berapa toko melayani?',
         answer:
-          'Setiap toko menentukan radius layanannya masing-masing pada sistem, dengan jangkauan maksimal hingga 10 km dari lokasi toko.',
+          'Setiap laundry menentukan jarak antar-jemputnya masing-masing, dengan jarak paling jauh hingga 10 km.',
       },
     ],
   },
@@ -180,7 +188,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="w-5 h-5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-navy-700 border-t-transparent rounded-full animate-spin" />
           <span className="text-xs text-slate-500 font-medium">Memuat halaman...</span>
         </div>
       </div>
@@ -190,149 +198,196 @@ export default function Home() {
   return (
     <PublicLayout>
       {/* 1. Hero Section */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-24">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-5">
-          <h1 className="text-[30px] sm:text-4xl md:text-[44px] font-semibold text-slate-900 tracking-tight leading-[1.18] max-w-3xl mx-auto">
-            Layanan laundry antar-jemput terpercaya di sekitar Anda
-          </h1>
+      <section className="bg-gradient-to-b from-navy-50/70 via-sky-50/30 to-white border-b border-navy-100/60 py-16 sm:py-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
+          <div className="space-y-4">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-navy-900 tracking-tight leading-[1.15] max-w-3xl mx-auto">
+              Laundry antar jemput praktis di sekitar Anda
+            </h1>
 
-          <p className="text-xs sm:text-sm md:text-base text-slate-600 max-w-xl mx-auto leading-relaxed">
-            Pesan jasa laundry kiloan, satuan, dan dry clean dari outlet terverifikasi. Kurir menjemput cucian dan mengantar kembali dalam kondisi bersih.
-          </p>
+            <p className="text-sm sm:text-base text-slate-600 max-w-xl mx-auto leading-relaxed">
+              Pesan cuci kiloan, satuan, atau dry clean dari laundry terdekat. Kurir siap jemput cucian Anda, lalu antar kembali dalam keadaan bersih.
+            </p>
+          </div>
 
-          {/* Primary Action: Location Search Bar */}
-          <div className="max-w-lg mx-auto pt-3 space-y-2">
+          {/* Primary Action: Location Search Card */}
+          <div className="max-w-xl mx-auto pt-2 space-y-2.5">
             <form onSubmit={handleSearchSubmit}>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 border border-slate-300 rounded-lg shadow-xs">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-2 border border-navy-200 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-navy-600 focus-within:border-transparent transition-all">
                 <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" strokeWidth={1.5} />
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" strokeWidth={1.5} />
                   <input
                     type="text"
                     value={searchLocation}
                     onChange={(e) => setSearchLocation(e.target.value)}
-                    placeholder="Masukkan alamat atau area..."
-                    aria-label="Masukkan alamat atau area"
-                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-transparent border-0 focus:outline-hidden text-slate-900 placeholder-slate-400"
+                    placeholder="Tulis alamat atau area Anda..."
+                    aria-label="Tulis alamat atau area Anda"
+                    className="w-full pl-10 pr-3 py-2 text-sm bg-transparent border-0 focus:outline-hidden text-navy-900 placeholder-slate-400 font-medium"
                   />
                 </div>
-                <button
+                <Button
                   type="submit"
-                  className="px-5 py-2.5 bg-[#1A3A5C] hover:bg-[#132d47] text-white text-xs sm:text-sm font-medium rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#1A3A5C] focus-visible:ring-offset-2"
+                  size="md"
+                  className="rounded-xl px-6 w-full sm:w-auto shrink-0"
+                  rightIcon={<ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />}
                 >
-                  <span>Cari toko</span>
-                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
-                </button>
+                  <span>Cari laundry</span>
+                </Button>
               </div>
             </form>
 
-            <div className="flex items-center justify-between px-1 text-xs">
+            <div className="flex items-center justify-between px-2 text-xs">
               <button
                 type="button"
                 onClick={handleCurrentLocation}
                 disabled={isLocating}
-                className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 text-slate-600 hover:text-navy-700 font-medium transition-colors cursor-pointer disabled:opacity-60 py-1"
               >
                 {isLocating ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-navy-700" />
                 ) : (
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
+                  <MapPin className="w-3.5 h-3.5 text-navy-700" strokeWidth={1.5} />
                 )}
-                <span>Gunakan lokasi saat ini</span>
+                <span>Pakai lokasi saya</span>
               </button>
 
               <Link
                 href="/upgrade"
-                className="inline-flex items-center gap-1 text-[#1A3A5C] font-semibold hover:underline"
+                className="inline-flex items-center gap-1.5 text-navy-700 font-semibold hover:text-navy-800 hover:underline py-1 transition-colors"
               >
-                <span>Daftarkan laundry Anda</span>
+                <span>Gabung jadi mitra laundry</span>
                 <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
               </Link>
+            </div>
+          </div>
+
+          {/* Value Props Bar (No Emojis, Pure Lucide Icons) */}
+          <div className="pt-6 sm:pt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs text-slate-700 font-medium">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-navy-100 shadow-2xs">
+              <Truck className="w-4 h-4 text-navy-700 shrink-0" strokeWidth={1.75} />
+              <span>Antar jemput</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-navy-100 shadow-2xs">
+              <Scale className="w-4 h-4 text-navy-700 shrink-0" strokeWidth={1.75} />
+              <span>Harga sesuai timbangan</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-navy-100 shadow-2xs">
+              <Wallet className="w-4 h-4 text-navy-700 shrink-0" strokeWidth={1.75} />
+              <span>Bayar QRIS atau tunai</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 2. Cara Kerja (4 Langkah Bernomor) */}
-      <section className="py-14 sm:py-20 bg-white border-b border-slate-200">
+      {/* 2. Cara Kerja (4 Langkah Bernomor & Berikon Lucide) */}
+      <section className="py-16 sm:py-20 bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-xl mb-10">
-            <h2 className="text-lg sm:text-2xl font-semibold text-slate-900 tracking-tight">
-              Cara kerja
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">
+              Cara mudah pesan laundry
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 mt-1">
-              Alur pemesanan dari penjemputan hingga cucian kembali bersih.
+            <p className="text-xs sm:text-sm text-slate-600 mt-1.5">
+              Empat langkah praktis dari cucian kotor dijemput sampai diantar bersih.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="p-4 border border-slate-200 rounded-lg bg-slate-50/50 space-y-2">
-              <span className="tabular-nums font-mono text-xs sm:text-sm font-semibold text-slate-400">
-                01
-              </span>
-              <h3 className="font-semibold text-xs sm:text-sm text-slate-900">Cari toko</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Cari dan pilih outlet laundry terdekat yang melayani area dan jenis pakaian Anda.
-              </p>
-            </div>
+            <Card variant="flat" className="p-6 space-y-4 border border-slate-200 hover:border-navy-300 rounded-2xl bg-white hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-navy-50 text-navy-700 flex items-center justify-center">
+                    <MapPin className="w-5 h-5" strokeWidth={1.75} />
+                  </div>
+                  <span className="tabular-nums font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-navy-100 text-navy-800">
+                    01
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm sm:text-base text-navy-900 leading-snug">Pilih laundry terdekat</h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Cari dan pilih tempat laundry yang paling dekat dengan lokasi Anda.
+                </p>
+              </div>
+            </Card>
 
-            <div className="p-4 border border-slate-200 rounded-lg bg-slate-50/50 space-y-2">
-              <span className="tabular-nums font-mono text-xs sm:text-sm font-semibold text-slate-400">
-                02
-              </span>
-              <h3 className="font-semibold text-xs sm:text-sm text-slate-900">Pesan dan pilih layanan</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Tentukan jenis layanan, perkiraan berat atau jumlah cucian, serta jadwal penjemputan.
-              </p>
-            </div>
+            <Card variant="flat" className="p-6 space-y-4 border border-slate-200 hover:border-navy-300 rounded-2xl bg-white hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-navy-50 text-navy-700 flex items-center justify-center">
+                    <CalendarCheck className="w-5 h-5" strokeWidth={1.75} />
+                  </div>
+                  <span className="tabular-nums font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-navy-100 text-navy-800">
+                    02
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm sm:text-base text-navy-900 leading-snug">Tentukan layanan & jadwal</h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Pilih jenis cuci, perkiraan berat pakaian, dan tentukan waktu penjemputan.
+                </p>
+              </div>
+            </Card>
 
-            <div className="p-4 border border-slate-200 rounded-lg bg-slate-50/50 space-y-2">
-              <span className="tabular-nums font-mono text-xs sm:text-sm font-semibold text-slate-400">
-                03
-              </span>
-              <h3 className="font-semibold text-xs sm:text-sm text-slate-900">Kurir jemput dan toko menimbang</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Kurir mengambil cucian dan toko melakukan penimbangan nyata untuk rincian harga final.
-              </p>
-            </div>
+            <Card variant="flat" className="p-6 space-y-4 border border-slate-200 hover:border-navy-300 rounded-2xl bg-white hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-navy-50 text-navy-700 flex items-center justify-center">
+                    <Scale className="w-5 h-5" strokeWidth={1.75} />
+                  </div>
+                  <span className="tabular-nums font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-navy-100 text-navy-800">
+                    03
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm sm:text-base text-navy-900 leading-snug">Kurir jemput & timbang</h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Kurir mengambil cucian Anda, lalu laundry menimbang ulang agar harga pasti.
+                </p>
+              </div>
+            </Card>
 
-            <div className="p-4 border border-slate-200 rounded-lg bg-slate-50/50 space-y-2">
-              <span className="tabular-nums font-mono text-xs sm:text-sm font-semibold text-slate-400">
-                04
-              </span>
-              <h3 className="font-semibold text-xs sm:text-sm text-slate-900">Bayar lalu cucian diantar</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Setujui harga, lakukan pembayaran online atau COD, lalu pakaian bersih diantar kembali.
-              </p>
-            </div>
+            <Card variant="flat" className="p-6 space-y-4 border border-slate-200 hover:border-navy-300 rounded-2xl bg-white hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-navy-50 text-navy-700 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5" strokeWidth={1.75} />
+                  </div>
+                  <span className="tabular-nums font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-navy-100 text-navy-800">
+                    04
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm sm:text-base text-navy-900 leading-snug">Bayar & terima cucian bersih</h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Setujui total biaya, bayar online (QRIS/transfer) atau tunai, lalu cucian diantar pulang.
+                </p>
+              </div>
+            </Card>
           </div>
         </div>
       </section>
 
       {/* 3. Toko Terdekat / Toko Aktif */}
-      <section id="toko-terdekat" className="py-14 sm:py-20 bg-slate-50 border-b border-slate-200">
+      <section id="toko-terdekat" className="py-16 sm:py-20 bg-navy-50/40 border-b border-navy-100/60">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-8">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-2xl font-semibold text-slate-900 tracking-tight">
-                  Toko terdekat
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">
+                  Laundry di sekitar Anda
                 </h2>
                 {userCoords && (
-                  <span className="inline-flex items-center text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                    Dari lokasi Anda
+                  <span className="inline-flex items-center text-xs font-semibold text-navy-800 bg-navy-100 border border-navy-200 px-2.5 py-0.5 rounded-full">
+                    Dekat lokasi Anda
                   </span>
                 )}
               </div>
               <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                Pilih toko untuk melihat layanan dan harga
+                Pilih laundry untuk melihat daftar harga dan paket layanannya.
               </p>
             </div>
 
             <Link
               href="/stores"
-              className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-[#1A3A5C] hover:underline shrink-0"
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-navy-700 hover:text-navy-800 hover:underline shrink-0"
             >
-              <span>Lihat semua toko</span>
+              <span>Lihat semua laundry</span>
               <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
             </Link>
           </div>
@@ -342,11 +397,11 @@ export default function Home() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="snap-start w-[280px] sm:w-auto shrink-0 sm:shrink bg-white border border-slate-200 rounded-[8px] p-4 flex flex-col justify-between h-44 animate-pulse"
+                  className="snap-start w-[280px] sm:w-auto shrink-0 sm:shrink bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between h-44 animate-pulse shadow-2xs"
                 >
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-md bg-slate-200 shrink-0" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0" />
                       <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="h-4 bg-slate-200 rounded w-3/4" />
                         <div className="h-3 bg-slate-100 rounded w-1/2" />
@@ -365,31 +420,38 @@ export default function Home() {
               ))}
             </div>
           ) : storesError ? (
-            <div className="bg-white border border-slate-200 rounded-[8px] p-8 text-center max-w-md mx-auto">
-              <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" strokeWidth={1.5} />
-              <p className="text-xs sm:text-sm text-slate-800 font-medium mb-3">Toko belum bisa dimuat.</p>
-              <button
-                type="button"
-                onClick={() => loadStores()}
-                className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#132d47] text-white text-xs font-medium rounded-md transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#1A3A5C]"
-              >
-                Coba lagi
-              </button>
-            </div>
+            <Card variant="flat" className="p-8 text-center max-w-md mx-auto space-y-3 bg-white border-slate-200 rounded-2xl shadow-xs">
+              <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" strokeWidth={1.5} />
+              <p className="text-xs sm:text-sm text-slate-800 font-medium">
+                Daftar laundry belum berhasil dimuat.
+              </p>
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => loadStores()}
+                  className="rounded-xl px-5"
+                >
+                  Muat ulang
+                </Button>
+              </div>
+            </Card>
           ) : featuredStores.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-[8px] p-8 text-center max-w-lg mx-auto">
-              <StoreIcon className="w-8 h-8 text-slate-400 mx-auto mb-2.5" strokeWidth={1.5} />
-              <p className="text-xs sm:text-sm text-slate-700 font-medium">Belum ada toko yang aktif di area ini.</p>
+            <Card variant="flat" className="p-8 text-center max-w-lg mx-auto bg-white border-slate-200 rounded-2xl shadow-xs space-y-2">
+              <StoreIcon className="w-8 h-8 text-slate-400 mx-auto mb-1" strokeWidth={1.5} />
+              <p className="text-xs sm:text-sm text-slate-700 font-medium">
+                Belum ada laundry yang tersedia di area ini.
+              </p>
               <div className="mt-4 flex items-center justify-center gap-4 text-xs">
-                <Link href="/stores" className="text-[#1A3A5C] font-semibold hover:underline">
-                  Cari di semua area
+                <Link href="/stores" className="text-navy-700 font-semibold hover:underline">
+                  Cari di area lain
                 </Link>
                 <span className="text-slate-300">•</span>
-                <Link href="/upgrade" className="text-[#1A3A5C] font-semibold hover:underline">
-                  Daftarkan laundry Anda
+                <Link href="/upgrade" className="text-navy-700 font-semibold hover:underline">
+                  Gabung jadi mitra laundry
                 </Link>
               </div>
-            </div>
+            </Card>
           ) : (
             <div className="flex overflow-x-auto snap-x snap-mandatory sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-2 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               {featuredStores.map((store) => (
@@ -406,47 +468,60 @@ export default function Home() {
       <section id="faq" className="py-16 sm:py-24 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
-            {/* Left Column: Heading & CS Contact */}
-            <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-3">
-              <h2 className="text-lg sm:text-2xl font-semibold text-slate-900 tracking-tight">
-                Pertanyaan umum
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Jawaban ringkas seputar pemesanan, pembayaran, dan operasional layanan LaundryKu.
-              </p>
-              <div className="pt-2 text-xs sm:text-sm text-slate-600">
-                Tidak menemukan jawaban? Hubungi kami di{' '}
-                <a
-                  href={`mailto:${CS_EMAIL}`}
-                  className="text-[#1A3A5C] font-semibold underline underline-offset-2 hover:text-[#132d47]"
-                >
-                  {CS_EMAIL}
-                </a>
+            {/* Left Column: Heading & CS Contact Card */}
+            <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-4">
+              <div className="space-y-2">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">
+                  Pertanyaan yang sering ditanyakan
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Jawaban singkat seputar cara pesan, bayar, dan layanan di LaundryKu.
+                </p>
+              </div>
+
+              <div className="p-4 sm:p-5 rounded-2xl bg-navy-50 border border-navy-200/80 space-y-2.5 text-xs">
+                <div className="flex items-center gap-2 text-navy-900 font-bold text-sm">
+                  <Mail className="w-4 h-4 text-navy-700" strokeWidth={1.75} />
+                  <span>Masih butuh bantuan?</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed">
+                  Tim customer care kami siap membantu kendala pesanan atau pendaftaran Anda.
+                </p>
+                <div>
+                  <a
+                    href={`mailto:${CS_EMAIL}`}
+                    className="inline-flex items-center gap-1 font-semibold text-navy-700 hover:text-navy-800 underline underline-offset-2 break-all"
+                  >
+                    {CS_EMAIL}
+                  </a>
+                </div>
               </div>
             </div>
 
             {/* Right Column: Categorized Accordion */}
             <div className="lg:col-span-8 space-y-8">
               {FAQ_SECTIONS.map((section) => (
-                <div key={section.category} className="space-y-3">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                    {section.category}
+                <div key={section.category} className="space-y-3.5">
+                  <div>
+                    <span className="text-[11px] uppercase tracking-wider font-bold text-navy-800 bg-navy-100/70 border border-navy-200/60 px-2.5 py-1 rounded-md inline-block">
+                      {section.category}
+                    </span>
                   </div>
 
                   <div className="space-y-2.5">
                     {section.items.map((item, idx) => (
                       <details
                         key={idx}
-                        className="group border border-slate-200 rounded-lg bg-slate-50/40 open:bg-white transition-colors"
+                        className="group border border-slate-200 rounded-2xl bg-white open:border-navy-300 open:bg-navy-50/20 hover:border-navy-200 transition-all shadow-2xs"
                       >
-                        <summary className="flex items-center justify-between p-3.5 sm:p-4 cursor-pointer select-none font-medium text-xs sm:text-sm text-slate-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#1A3A5C] rounded-lg">
-                          <span className="pr-3">{item.question}</span>
+                        <summary className="flex items-center justify-between p-4 cursor-pointer select-none font-semibold text-xs sm:text-sm text-navy-900 focus:outline-hidden focus:ring-2 focus:ring-navy-600 rounded-2xl">
+                          <span className="pr-3 leading-snug">{item.question}</span>
                           <ChevronDown
-                            className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform duration-200 shrink-0"
+                            className="w-4 h-4 text-slate-400 group-open:rotate-180 group-open:text-navy-700 transition-transform duration-200 shrink-0"
                             strokeWidth={1.5}
                           />
                         </summary>
-                        <div className="px-3.5 sm:px-4 pb-3.5 sm:pb-4 pt-1 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100">
+                        <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100">
                           {item.answer}
                         </div>
                       </details>
