@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  Card,
   Badge,
   Button,
   Tabs,
@@ -28,8 +26,6 @@ import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
   Truck,
-  Store,
-  UserPlus,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -38,7 +34,6 @@ import {
   Mail,
   ShieldCheck,
   UserX,
-  ChevronRight,
   UserCheck,
 } from 'lucide-react';
 
@@ -156,12 +151,12 @@ export default function StoreAdminCouriersPage() {
   const tabs = [
     {
       id: 'assigned',
-      label: 'Kurir Terdaftar Toko',
+      label: 'Kurir terdaftar toko',
       count: storeData?.assigned_couriers?.filter((c) => c.status === 'active').length,
     },
     {
       id: 'candidates',
-      label: 'Pelamar Kurir Toko Ini',
+      label: 'Pelamar kurir toko ini',
       count: storeData?.available_candidates?.length,
     },
   ];
@@ -173,16 +168,12 @@ export default function StoreAdminCouriersPage() {
       userEmail={currentUser?.email || 'admin@toko.id'}
       onLogout={handleLogout}
     >
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200/60 w-fit mb-2">
-              <Truck className="w-3.5 h-3.5" />
-              <span>Manajemen Kurir Outlet</span>
-            </div>
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-navy-900">
-              Kurir Toko ({storeData?.store?.name || 'Outlet'})
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Kurir toko ({storeData?.store?.name || 'Outlet'})
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
               Rekrut dan kelola armada kurir jemput/antar. Sesuai ketentuan, satu kurir hanya boleh terikat pada 1 toko aktif.
@@ -194,33 +185,33 @@ export default function StoreAdminCouriersPage() {
             size="sm"
             onClick={loadCouriers}
             disabled={loading}
-            className="rounded-xl flex items-center gap-1.5 self-start sm:self-auto"
+            className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1.5 self-start sm:self-auto min-h-[38px] px-3.5 text-xs font-semibold"
           >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} strokeWidth={1.75} />
             <span>Segarkan</span>
           </Button>
         </div>
 
         {/* Feedback Alerts */}
         {actionSuccessMsg && (
-          <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex items-center gap-3 text-teal-900 text-xs font-semibold">
-            <CheckCircle2 className="w-5 h-5 text-teal-600 shrink-0" />
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-emerald-900 text-xs font-semibold shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" strokeWidth={2} />
             <span>{actionSuccessMsg}</span>
           </div>
         )}
         {actionErrorMsg && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-900 text-xs font-semibold">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-rose-900 text-xs font-semibold shadow-2xs">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" strokeWidth={2} />
             <span>{actionErrorMsg}</span>
           </div>
         )}
 
         {/* Policy Info Callout */}
-        <div className="p-4 bg-sky-50 rounded-2xl border border-sky-200 flex items-start gap-3 text-xs text-slate-700">
-          <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-start gap-3 text-xs text-slate-700 shadow-2xs">
+          <ShieldCheck className="w-4 h-4 text-navy-800 shrink-0 mt-0.5" strokeWidth={1.75} />
           <div>
-            <strong className="block font-bold text-navy-900 mb-0.5">Ketentuan Kemitraan Kurir (Single-Store Binding)</strong>
-            <span>
+            <strong className="block font-semibold text-navy-950 mb-0.5">Ketentuan kemitraan kurir (single-store binding)</strong>
+            <span className="leading-relaxed text-slate-600">
               Kurir yang Anda rekrut akan terikat secara eksklusif pada toko Anda dan hanya dapat menerima tugas pickup/delivery dari toko ini. Jika kurir sudah terikat pada toko lain, sistem akan otomatis menolak rekrutmen.
             </span>
           </div>
@@ -239,65 +230,64 @@ export default function StoreAdminCouriersPage() {
 
         {/* Loading State */}
         {loading && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             {[1, 2, 3].map((i) => (
-              <Card key={i} variant="default" className="p-6 bg-white rounded-3xl border border-slate-200">
-                <div className="flex justify-between items-center mb-4">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-7 w-24 rounded-full" />
+              <div key={i} className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-6 w-20 rounded-lg" />
                 </div>
-                <Skeleton className="h-16 w-full rounded-2xl" />
-              </Card>
+                <Skeleton className="h-14 w-full rounded-xl" />
+              </div>
             ))}
           </div>
         )}
 
         {/* Error State */}
         {!loading && error && (
-          <Card variant="default" className="p-8 text-center bg-white rounded-3xl border border-red-200">
+          <div className="p-8 text-center bg-white rounded-2xl border border-rose-200/80 shadow-2xs">
             <ErrorState
-              title="Gagal Memuat Kurir"
+              title="Gagal memuat kurir"
               message={error}
-              retryText="Coba Lagi"
+              retryText="Coba lagi"
               onRetry={loadCouriers}
             />
-          </Card>
+          </div>
         )}
 
         {/* Tab 1: Assigned Couriers List */}
         {!loading && !error && activeTab === 'assigned' && (
           <div>
             {storeData?.assigned_couriers?.length === 0 ? (
-              <Card variant="default" className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+              <div className="p-10 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
                 <EmptyState
-                  title="Belum Ada Kurir Terikat pada Toko Ini"
-                  description="Outlet Anda belum memiliki kurir yang aktif. Buka tab 'Kandidat Kurir Tersedia' untuk merekrut kurir ke toko Anda."
-                  actionText="Cari Kandidat Kurir"
+                  title="Belum ada kurir terikat pada toko ini"
+                  description="Outlet Anda belum memiliki kurir yang aktif. Buka tab 'Pelamar kurir toko ini' untuk menyetujui pengajuan kurir."
+                  actionText="Cari kandidat kurir"
                   onAction={() => setActiveTab('candidates')}
                 />
-              </Card>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {storeData?.assigned_couriers?.map((courier) => {
                   const isActive = courier.status === 'active';
                   const isActionLoading = actionLoadingId === courier.assignment_id;
 
                   return (
-                    <Card
+                    <div
                       key={courier.assignment_id}
-                      variant="bento"
                       className={cn(
-                        'p-6 transition-all',
-                        isActive ? 'border-teal-300 bg-white' : 'opacity-70 bg-slate-50'
+                        'p-5 rounded-2xl border transition-all shadow-2xs space-y-4',
+                        isActive ? 'border-slate-200/80 bg-white hover:border-slate-300' : 'opacity-70 bg-slate-50 border-slate-200'
                       )}
                     >
-                      <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                      <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-heading font-extrabold text-lg border border-teal-200/60">
+                          <div className="w-10 h-10 rounded-xl bg-navy-50 text-navy-800 flex items-center justify-center font-bold text-base border border-navy-100">
                             {courier.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <h3 className="font-heading font-extrabold text-base text-navy-900">
+                            <h3 className="font-bold text-sm text-navy-950">
                               {courier.name}
                             </h3>
                             <span className="text-xs text-slate-500 capitalize">
@@ -306,44 +296,44 @@ export default function StoreAdminCouriersPage() {
                           </div>
                         </div>
 
-                        <Badge variant={isActive ? 'success' : 'secondary'}>
-                          {isActive ? 'Aktif di Toko' : 'Tidak Aktif'}
+                        <Badge variant={isActive ? 'success' : 'secondary'} className="px-2.5 py-0.5 text-[11px] rounded-md font-semibold">
+                          {isActive ? 'Aktif di toko' : 'Tidak aktif'}
                         </Badge>
                       </div>
 
-                      <div className="py-4 space-y-2 text-xs text-slate-600">
+                      <div className="space-y-1.5 text-xs text-slate-600">
                         {courier.phone && (
                           <div className="flex items-center gap-2">
-                            <Phone className="w-3.5 h-3.5 text-teal-600" />
-                            <span>{courier.phone}</span>
+                            <Phone className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                            <span className="font-mono">{courier.phone}</span>
                           </div>
                         )}
                         {courier.email && (
                           <div className="flex items-center gap-2">
-                            <Mail className="w-3.5 h-3.5 text-teal-600" />
+                            <Mail className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
                             <span>{courier.email}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Mulai terikat: {formatDate(courier.started_at, 'DD MMMM YYYY')}</span>
+                          <Clock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                          <span className="font-mono">Mulai terikat: {formatDate(courier.started_at, 'DD MMMM YYYY')}</span>
                         </div>
                       </div>
 
                       {isActive && (
-                        <div className="pt-4 border-t border-slate-100 flex justify-end">
+                        <div className="pt-3 border-t border-slate-100 flex justify-end">
                           <Button
                             variant="outline"
                             onClick={() => setTerminatingCourier(courier)}
                             disabled={isActionLoading}
-                            className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[38px] rounded-xl"
+                            className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[36px] rounded-xl px-3 font-semibold"
                           >
-                            <UserX className="w-3.5 h-3.5 mr-1.5" />
-                            <span>Nonaktifkan Penugasan</span>
+                            <UserX className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} />
+                            <span>Nonaktifkan penugasan</span>
                           </Button>
                         </div>
                       )}
-                    </Card>
+                    </div>
                   );
                 })}
               </div>
@@ -355,30 +345,29 @@ export default function StoreAdminCouriersPage() {
         {!loading && !error && activeTab === 'candidates' && (
           <div>
             {storeData?.available_candidates?.length === 0 ? (
-              <Card variant="default" className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+              <div className="p-10 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
                 <EmptyState
-                  title="Belum Ada Pengajuan Kurir Baru"
-                  description="Saat ini tidak ada pendaftar kurir baru yang belum terikat toko. Calon kurir dapat mengajukan diri melalui aplikasi customer."
+                  title="Belum ada pengajuan kurir baru"
+                  description="Saat ini tidak ada pendaftar kurir baru yang belum terikat toko. Calon kurir dapat mengajukan diri melalui aplikasi pelanggan."
                 />
-              </Card>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {storeData?.available_candidates?.map((candidate) => {
                   const isActionLoading = actionLoadingId === candidate.courier_profile_id;
 
                   return (
-                    <Card
+                    <div
                       key={candidate.courier_profile_id}
-                      variant="bento"
-                      className="p-6 transition-all hover:border-teal-300"
+                      className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors space-y-4"
                     >
-                      <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                      <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-2xl bg-sky-50 text-navy-900 flex items-center justify-center font-heading font-extrabold text-lg border border-sky-200/60">
+                          <div className="w-10 h-10 rounded-xl bg-sky-50 text-navy-900 flex items-center justify-center font-bold text-base border border-sky-100">
                             {candidate.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <h3 className="font-heading font-extrabold text-base text-navy-900">
+                            <h3 className="font-bold text-sm text-navy-950">
                               {candidate.name}
                             </h3>
                             <span className="text-xs text-slate-500 capitalize">
@@ -387,29 +376,31 @@ export default function StoreAdminCouriersPage() {
                           </div>
                         </div>
 
-                        <Badge variant="warning">Tersedia</Badge>
+                        <Badge variant="warning" className="px-2.5 py-0.5 text-[11px] rounded-md font-semibold">
+                          Tersedia
+                        </Badge>
                       </div>
 
-                      <div className="py-4 space-y-2 text-xs text-slate-600">
+                      <div className="space-y-1.5 text-xs text-slate-600">
                         {candidate.phone && (
                           <div className="flex items-center gap-2">
-                            <Phone className="w-3.5 h-3.5 text-teal-600" />
-                            <span>{candidate.phone}</span>
+                            <Phone className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                            <span className="font-mono">{candidate.phone}</span>
                           </div>
                         )}
                         {candidate.email && (
                           <div className="flex items-center gap-2">
-                            <Mail className="w-3.5 h-3.5 text-teal-600" />
+                            <Mail className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
                             <span>{candidate.email}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Mendaftar: {formatDate(candidate.applied_at, 'DD MMMM YYYY')}</span>
+                          <Clock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                          <span className="font-mono">Mendaftar: {formatDate(candidate.applied_at, 'DD MMMM YYYY')}</span>
                         </div>
                       </div>
 
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                         <Button
                           variant="outline"
                           onClick={() => {
@@ -418,22 +409,22 @@ export default function StoreAdminCouriersPage() {
                             setActionErrorMsg(null);
                           }}
                           disabled={isActionLoading}
-                          className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl min-h-[40px]"
+                          className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl min-h-[38px] px-3 font-semibold"
                         >
-                          <UserX className="w-3.5 h-3.5 mr-1 text-rose-500" />
+                          <UserX className="w-3.5 h-3.5 mr-1 text-rose-500" strokeWidth={1.75} />
                           <span>Tolak</span>
                         </Button>
 
                         <Button
                           onClick={() => handleRecruit(candidate)}
                           disabled={isActionLoading}
-                          className="bg-navy-900 hover:bg-navy-800 text-white font-bold text-xs py-2 px-4 rounded-xl min-h-[40px]"
+                          className="bg-navy-900 hover:bg-navy-800 text-white font-semibold text-xs py-2 px-4 rounded-xl min-h-[38px] shadow-2xs"
                         >
-                          <UserCheck className="w-3.5 h-3.5 mr-1.5 text-teal-400" />
-                          <span>{isActionLoading ? 'Memproses...' : 'Setujui & Rekrut'}</span>
+                          <UserCheck className="w-3.5 h-3.5 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>{isActionLoading ? 'Memproses...' : 'Setujui & rekrut'}</span>
                         </Button>
                       </div>
-                    </Card>
+                    </div>
                   );
                 })}
               </div>
@@ -449,89 +440,73 @@ export default function StoreAdminCouriersPage() {
               setRejectingCandidate(null);
             }
           }}
-          title="Tolak Pengajuan Kurir"
+          title="Tolak lamaran kurir"
+          description={`Anda akan menolak pengajuan kurir dari ${rejectingCandidate?.name || 'Kandidat'}. Lamaran akan dihapus dari antrean toko Anda.`}
         >
-          <div className="space-y-4 text-xs">
-            <p className="text-slate-600">
-              Apakah Anda yakin ingin menolak pengajuan kurir dari <b>{rejectingCandidate?.name}</b> untuk toko ini?
-            </p>
-
-            {actionErrorMsg && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-900 text-xs font-medium">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{actionErrorMsg}</span>
-              </div>
-            )}
-
+          <div className="space-y-4 py-2">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Alasan Penolakan (Opsional)
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Alasan penolakan (opsional)
               </label>
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Contoh: Kuota kurir untuk outlet ini sudah penuh..."
+                placeholder="Contoh: Kuota kurir untuk area ini sudah mencukupi."
                 rows={3}
-                disabled={actionLoadingId === rejectingCandidate?.courier_profile_id}
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none disabled:opacity-50"
+                className="w-full text-xs rounded-xl border border-slate-300 p-3 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-900"
               />
             </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => setRejectingCandidate(null)}
                 disabled={actionLoadingId === rejectingCandidate?.courier_profile_id}
-                className="rounded-xl text-xs min-h-[40px]"
+                className="rounded-xl text-xs font-semibold"
               >
                 Batal
               </Button>
               <Button
-                variant="danger"
+                size="sm"
                 onClick={handleRejectConfirm}
-                isLoading={actionLoadingId === rejectingCandidate?.courier_profile_id}
                 disabled={actionLoadingId === rejectingCandidate?.courier_profile_id}
-                className="rounded-xl text-xs min-h-[40px]"
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold min-h-[38px] px-4"
               >
-                {actionLoadingId === rejectingCandidate?.courier_profile_id ? 'Memproses...' : 'Tolak Pengajuan'}
+                {actionLoadingId === rejectingCandidate?.courier_profile_id ? 'Memproses...' : 'Tolak lamaran'}
               </Button>
             </div>
           </div>
         </Modal>
 
-        {/* Modal: Confirm Deactivation */}
+        {/* Modal: Confirm Terminate */}
         <Modal
           isOpen={!!terminatingCourier}
-          onClose={() => setTerminatingCourier(null)}
-          title="Konfirmasi Penonaktifan Kurir"
+          onClose={() => {
+            if (actionLoadingId !== terminatingCourier?.assignment_id) {
+              setTerminatingCourier(null);
+            }
+          }}
+          title="Nonaktifkan penugasan kurir"
+          description={`Apakah Anda yakin ingin menonaktifkan ikatan tugas kurir ${terminatingCourier?.name || 'ini'} dari toko Anda? Kurir tidak akan menerima pesanan jemput/antar dari gerai ini lagi.`}
         >
-          <div className="space-y-4 text-xs">
-            <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-rose-900 flex items-start gap-2.5">
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <strong className="block font-bold">Perhatian:</strong>
-                <span>
-                  Apakah Anda yakin ingin menonaktifkan kurir <b>{terminatingCourier?.name}</b> dari toko Anda? Kurir ini tidak akan dapat mengambil tugas baru sampai direkrut kembali. Riwayat tugas sebelumnya tetap tersimpan aman.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                variant="outline"
-                onClick={() => setTerminatingCourier(null)}
-                className="rounded-xl text-xs min-h-[40px]"
-              >
-                Batal
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleTerminateConfirm}
-                className="rounded-xl text-xs min-h-[40px]"
-              >
-                Ya, Nonaktifkan
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTerminatingCourier(null)}
+              disabled={actionLoadingId === terminatingCourier?.assignment_id}
+              className="rounded-xl text-xs font-semibold"
+            >
+              Batal
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleTerminateConfirm}
+              disabled={actionLoadingId === terminatingCourier?.assignment_id}
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold min-h-[38px] px-4"
+            >
+              {actionLoadingId === terminatingCourier?.assignment_id ? 'Memproses...' : 'Ya, nonaktifkan'}
+            </Button>
           </div>
         </Modal>
       </div>
