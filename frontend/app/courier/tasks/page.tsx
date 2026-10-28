@@ -81,6 +81,17 @@ export default function CourierTasksPage() {
 
   useEffect(() => {
     loadTasks();
+
+    const intervalId = setInterval(async () => {
+      try {
+        const tasksData = await getCourierTasks(activeTab);
+        setTasks(tasksData || []);
+      } catch {
+        // Silent catch for background auto-refresh
+      }
+    }, 10000);
+
+    return () => clearInterval(intervalId);
   }, [activeTab]);
 
   const handleLogout = async () => {
@@ -89,17 +100,24 @@ export default function CourierTasksPage() {
   };
 
   // Claim Task Handler
-  const handleClaim = async (taskId: string) => {
-    setActionLoadingId(taskId);
+  const handleClaim = async (orderId: string) => {
+    setActionLoadingId(orderId);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await claimCourierTask(taskId);
+      await claimCourierTask(orderId);
       setActionSuccessMsg('Tugas berhasil diambil! Silakan segera jalankan tugas.');
       loadTasks();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal mengambil tugas.');
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal mengambil tugas.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoadingId(null);
     }
@@ -122,11 +140,11 @@ export default function CourierTasksPage() {
     if (!selectedTaskForNote) return;
     const { task, to_status } = selectedTaskForNote;
 
-    setActionLoadingId(task.id);
+    setActionLoadingId(task.order_id);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await transitionCourierTask(task.id, {
+      await transitionCourierTask(task.order_id, {
         to_status,
         note: transitionNote.trim() || undefined,
       });
@@ -134,25 +152,39 @@ export default function CourierTasksPage() {
       setActionSuccessMsg(`Status tugas ${task.order_number} berhasil diperbarui.`);
       loadTasks();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal memperbarui status tugas.');
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal memperbarui status tugas.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoadingId(null);
     }
   };
 
   // Courier confirms COD cash received
-  const handleConfirmCod = async (taskId: string) => {
-    setActionLoadingId(taskId);
+  const handleConfirmCod = async (orderId: string) => {
+    setActionLoadingId(orderId);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await confirmCourierCod(taskId);
+      await confirmCourierCod(orderId);
       setActionSuccessMsg('Penerimaan uang COD berhasil dikonfirmasi dan dicatat ke sistem!');
       loadTasks();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal mengonfirmasi penerimaan COD.');
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal mengonfirmasi penerimaan COD.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoadingId(null);
     }
@@ -386,11 +418,11 @@ export default function CourierTasksPage() {
                     {isClaimable && (
                       <Button
                         size="sm"
-                        onClick={() => handleClaim(task.id)}
-                        disabled={actionLoadingId === task.id}
+                        onClick={() => handleClaim(task.order_id)}
+                        disabled={actionLoadingId === task.order_id}
                         className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
                       >
-                        {actionLoadingId === task.id ? 'Memproses...' : 'Ambil Tugas Ini'}
+                        {actionLoadingId === task.order_id ? 'Memproses...' : 'Ambil Tugas Ini'}
                       </Button>
                     )}
 
@@ -406,7 +438,7 @@ export default function CourierTasksPage() {
                             'Pastikan cucian telah diterima dari pelanggan dan ditandai dengan benar.'
                           )
                         }
-                        disabled={actionLoadingId === task.id}
+                        disabled={actionLoadingId === task.order_id}
                         className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
                       >
                         Selesai Jemput Cucian
@@ -424,7 +456,7 @@ export default function CourierTasksPage() {
                             'Serahkan cucian kepada admin outlet untuk penimbangan nota.'
                           )
                         }
-                        disabled={actionLoadingId === task.id}
+                        disabled={actionLoadingId === task.order_id}
                         className="bg-emerald-600 text-white hover:bg-emerald-700"
                       >
                         Tiba di Outlet
@@ -443,7 +475,7 @@ export default function CourierTasksPage() {
                             'Mulai perjalanan mengantarkan cucian bersih ke alamat pelanggan.'
                           )
                         }
-                        disabled={actionLoadingId === task.id}
+                        disabled={actionLoadingId === task.order_id}
                         className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
                       >
                         Mulai Pengantaran
@@ -461,7 +493,7 @@ export default function CourierTasksPage() {
                             'Pastikan pakaian bersih telah diterima dengan baik oleh pelanggan.'
                           )
                         }
-                        disabled={actionLoadingId === task.id}
+                        disabled={actionLoadingId === task.order_id}
                         className="bg-emerald-600 text-white hover:bg-emerald-700"
                       >
                         Selesaikan Pengantaran
@@ -475,8 +507,8 @@ export default function CourierTasksPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleConfirmCod(task.id)}
-                          disabled={actionLoadingId === task.id}
+                          onClick={() => handleConfirmCod(task.order_id)}
+                          disabled={actionLoadingId === task.order_id}
                           className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
                         >
                           <CreditCard className="w-3.5 h-3.5 mr-1 text-emerald-600" />
