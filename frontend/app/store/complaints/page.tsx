@@ -4,12 +4,10 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  Card,
   Badge,
   Button,
   Modal,
   Select,
-  Textarea,
   Skeleton,
   EmptyState,
   ErrorState,
@@ -29,13 +27,7 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
-  XCircle,
   Search,
-  Filter,
-  Image as ImageIcon,
-  MessageSquare,
-  ArrowRight,
-  ShieldAlert,
   ExternalLink,
 } from 'lucide-react';
 
@@ -143,10 +135,10 @@ export default function StoreAdminComplaintsPage() {
   };
 
   const statusOptions = [
-    { value: 'all', label: 'Semua Status' },
-    { value: 'OPEN', label: 'Baru (Menunggu Tanggapan)' },
-    { value: 'IN_INVESTIGATION', label: 'Sedang Diinvestigasi' },
-    { value: 'RESOLVED', label: 'Selesai Ditangani' },
+    { value: 'all', label: 'Semua status' },
+    { value: 'OPEN', label: 'Baru (menunggu tanggapan)' },
+    { value: 'IN_INVESTIGATION', label: 'Sedang diinvestigasi' },
+    { value: 'RESOLVED', label: 'Selesai ditangani' },
     { value: 'REJECTED', label: 'Ditolak' },
   ];
 
@@ -158,31 +150,21 @@ export default function StoreAdminComplaintsPage() {
       onLogout={logout}
     >
       <div className="space-y-6">
-        {/* Header Banner */}
-        <Card variant="bento" className="p-6 sm:p-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="amber" className="text-xs px-3 py-1 font-semibold rounded-full flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Manajemen Komplain Pelanggan</span>
-                </Badge>
-              </div>
-              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-navy-900 tracking-tight">
-                Pusat Penyelesaian Sengketa Toko
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
-                Tangani laporan kendala pakaian, keterlambatan pengantaran, atau masalah tagihan secara profesional. Berikan catatan penyelesaian yang transparan kepada pelanggan.
-              </p>
-            </div>
-          </div>
-        </Card>
+        {/* Header */}
+        <div className="pb-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            Pusat komplain pelanggan
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Tangani laporan kendala pakaian, keterlambatan pengantaran, atau masalah tagihan secara profesional.
+          </p>
+        </div>
 
         {/* Filters and Search Bar */}
-        <Card variant="bento" className="p-4 sm:p-6 space-y-4">
+        <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Status Filter Tabs */}
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
               {statusOptions.map((opt) => (
                 <button
                   key={opt.value}
@@ -192,9 +174,9 @@ export default function StoreAdminComplaintsPage() {
                     setCurrentPage(1);
                   }}
                   className={cn(
-                    'px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all min-h-[44px]',
+                    'px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all min-h-[36px] cursor-pointer',
                     statusFilter === opt.value
-                      ? 'bg-navy-900 text-white border-navy-900 shadow-xs'
+                      ? 'bg-navy-900 text-white border-navy-900 shadow-2xs'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                   )}
                 >
@@ -210,58 +192,60 @@ export default function StoreAdminComplaintsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari no. order / nama..."
-                  className="text-xs pl-9 pr-3 min-h-[44px]"
+                  className="text-xs pl-9 pr-3 min-h-[38px] rounded-xl"
                 />
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={1.75} />
               </div>
-              <Button type="submit" variant="outline" size="sm" className="rounded-xl min-h-[44px] text-xs">
+              <Button type="submit" variant="outline" size="sm" className="rounded-xl min-h-[38px] text-xs font-semibold px-3.5">
                 Cari
               </Button>
             </form>
           </div>
-        </Card>
+        </div>
 
         {/* Loading State */}
         {loading && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             {[1, 2, 3].map((i) => (
-              <Card key={i} variant="default" className="p-6 bg-white rounded-3xl border border-slate-200 animate-pulse space-y-3">
+              <div key={i} className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs animate-pulse space-y-3">
                 <div className="flex justify-between items-center">
-                  <div className="h-5 bg-slate-200 rounded w-1/4"></div>
-                  <div className="h-5 bg-slate-100 rounded w-20"></div>
+                  <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-slate-100 rounded w-20"></div>
                 </div>
-                <div className="h-16 bg-slate-100 rounded-2xl"></div>
-              </Card>
+                <div className="h-14 bg-slate-100 rounded-xl"></div>
+              </div>
             ))}
           </div>
         )}
 
         {/* Error State */}
         {!loading && error && (
-          <ErrorState
-            title="Gagal Memuat Komplain"
-            message={error}
-            onRetry={fetchComplaints}
-            className="p-8 bg-white rounded-3xl border border-slate-200"
-          />
+          <div className="p-8 bg-white rounded-2xl border border-rose-200/80 shadow-2xs">
+            <ErrorState
+              title="Gagal memuat komplain"
+              message={error}
+              onRetry={fetchComplaints}
+            />
+          </div>
         )}
 
         {/* Empty State */}
         {!loading && !error && complaints.length === 0 && (
-          <EmptyState
-            title="Tidak Ada Komplain"
-            description={
-              statusFilter !== 'all' || searchQuery
-                ? 'Tidak ada data komplain yang cocok dengan filter.'
-                : 'Bagus! Toko Anda saat ini tidak memiliki komplain dari pelanggan.'
-            }
-            className="p-12 bg-white rounded-3xl border border-slate-200"
-          />
+          <div className="p-10 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <EmptyState
+              title="Tidak ada komplain"
+              description={
+                statusFilter !== 'all' || searchQuery
+                  ? 'Tidak ada data komplain yang cocok dengan filter.'
+                  : 'Bagus! Toko Anda saat ini tidak memiliki komplain dari pelanggan.'
+              }
+            />
+          </div>
         )}
 
         {/* Complaints List */}
         {!loading && !error && complaints.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             {complaints.map((item) => {
               const statusMeta = COMPLAINT_STATUS_LABELS[item.status] || {
                 label: item.status,
@@ -270,42 +254,41 @@ export default function StoreAdminComplaintsPage() {
               const categoryLabel = COMPLAINT_CATEGORY_LABELS[item.category] || item.category;
 
               return (
-                <Card
+                <div
                   key={item.id}
-                  variant="bento"
-                  className="p-6 space-y-4 hover:border-teal-300 transition-all"
+                  className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-4 hover:border-slate-300 transition-colors"
                 >
                   {/* Card Header */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <Badge variant={statusMeta.variant} className="text-xs px-3 py-1 font-semibold rounded-full">
+                      <Badge variant={statusMeta.variant} className="text-[11px] px-2.5 py-0.5 font-semibold rounded-md">
                         {statusMeta.label}
                       </Badge>
 
-                      <span className="font-heading font-extrabold text-sm text-navy-900">
+                      <span className="font-mono font-bold text-xs text-navy-900 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
                         Pesanan #{item.order_number}
                       </span>
 
-                      <span className="text-slate-400 text-xs">•</span>
+                      <span className="text-slate-300 text-xs">•</span>
 
-                      <span className="text-xs font-semibold text-slate-600">
+                      <span className="text-xs font-semibold text-slate-700">
                         Pelanggan: {item.customer_name}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400 tabular-nums">
-                      <Clock className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
                       <span>{formatDate(item.created_at)}</span>
                     </div>
                   </div>
 
                   {/* Category & Description */}
                   <div className="space-y-2 text-xs">
-                    <div className="inline-block px-2.5 py-1 rounded-lg bg-sky-50 text-navy-900 font-bold border border-slate-200/80">
+                    <div className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200">
                       Kategori: {categoryLabel}
                     </div>
 
-                    <p className="text-slate-700 leading-relaxed bg-slate-50/60 p-4 rounded-2xl border border-slate-100 whitespace-pre-line text-xs">
+                    <p className="text-slate-700 leading-relaxed bg-slate-50/60 p-3.5 rounded-xl border border-slate-100 whitespace-pre-line text-xs">
                       {item.description}
                     </p>
                   </div>
@@ -314,7 +297,7 @@ export default function StoreAdminComplaintsPage() {
                   {item.attachments && item.attachments.length > 0 && (
                     <div className="space-y-1.5 pt-1">
                       <span className="text-[11px] font-semibold text-slate-500 block">
-                        Lampiran Foto Bukti ({item.attachments.length}):
+                        Lampiran foto bukti ({item.attachments.length}):
                       </span>
                       <div className="flex flex-wrap gap-2">
                         {item.attachments.map((att) => (
@@ -322,7 +305,7 @@ export default function StoreAdminComplaintsPage() {
                             key={att.id}
                             type="button"
                             onClick={() => setPreviewPhoto(att.url)}
-                            className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-white hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-white hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-navy-900"
                           >
                             <img
                               src={att.url}
@@ -337,23 +320,23 @@ export default function StoreAdminComplaintsPage() {
 
                   {/* Resolution Note if present */}
                   {item.resolution_note && (
-                    <div className="p-3.5 bg-teal-50/80 rounded-2xl border border-teal-200 text-xs space-y-1">
+                    <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 text-xs space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-teal-900 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-teal-600" />
-                          Catatan Penyelesaian Toko:
+                        <span className="font-semibold text-emerald-900 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2} />
+                          Catatan penyelesaian toko:
                         </span>
                         {item.resolved_at && (
-                          <span className="text-[10px] text-teal-700 tabular-nums">
+                          <span className="text-[10px] text-emerald-700 font-mono">
                             {formatDate(item.resolved_at)}
                           </span>
                         )}
                       </div>
-                      <p className="text-teal-950 font-medium whitespace-pre-line pl-5">
+                      <p className="text-emerald-950 font-medium whitespace-pre-line pl-5 leading-relaxed">
                         {item.resolution_note}
                       </p>
                       {item.resolver_name && (
-                        <span className="text-[10px] text-teal-700 block pl-5">
+                        <span className="text-[10px] text-emerald-700 block pl-5">
                           Ditangani oleh: {item.resolver_name}
                         </span>
                       )}
@@ -364,22 +347,22 @@ export default function StoreAdminComplaintsPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
                     <Link
                       href={`/orders/${item.order_id}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-navy-900 min-h-[44px]"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-navy-950 min-h-[38px]"
                     >
-                      <ExternalLink className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Buka Detail Pesanan #{item.order_number}</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-navy-800" strokeWidth={1.75} />
+                      <span>Buka detail pesanan #{item.order_number}</span>
                     </Link>
 
                     <Button
                       variant="primary"
                       size="sm"
                       onClick={() => handleOpenUpdateModal(item)}
-                      className="rounded-xl text-xs min-h-[44px] bg-navy-900 hover:bg-navy-800"
+                      className="rounded-xl text-xs min-h-[38px] bg-navy-900 hover:bg-navy-800 text-white font-semibold shadow-2xs"
                     >
-                      <span>Tanggapi / Perbarui Status</span>
+                      <span>Tanggapi / perbarui status</span>
                     </Button>
                   </div>
-                </Card>
+                </div>
               );
             })}
 
@@ -391,11 +374,11 @@ export default function StoreAdminComplaintsPage() {
                   size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="rounded-xl text-xs min-h-[44px]"
+                  className="rounded-xl text-xs min-h-[38px] font-semibold"
                 >
                   Sebelumnya
                 </Button>
-                <span className="text-xs text-slate-500 font-semibold px-3">
+                <span className="text-xs text-slate-500 font-semibold px-3 font-mono">
                   Halaman {currentPage} dari {totalPages}
                 </span>
                 <Button
@@ -403,7 +386,7 @@ export default function StoreAdminComplaintsPage() {
                   size="sm"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="rounded-xl text-xs min-h-[44px]"
+                  className="rounded-xl text-xs min-h-[38px] font-semibold"
                 >
                   Selanjutnya
                 </Button>
@@ -417,100 +400,79 @@ export default function StoreAdminComplaintsPage() {
           <Modal
             isOpen={selectedComplaint !== null}
             onClose={() => setSelectedComplaint(null)}
-            title={`Tindak Lanjut Komplain #${selectedComplaint.order_number}`}
+            title={`Tindak lanjut komplain #${selectedComplaint.order_number}`}
             maxWidth="lg"
           >
             <form onSubmit={handleSaveStatus} className="space-y-4 text-xs">
-              <div className="p-3 bg-sky-50 rounded-2xl border border-sky-200 space-y-1">
-                <span className="text-slate-500 block text-[11px]">Keluhan Pelanggan:</span>
-                <p className="font-semibold text-navy-900">{selectedComplaint.description}</p>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                <span className="text-slate-500 block text-[11px]">Keluhan pelanggan:</span>
+                <p className="font-semibold text-navy-950">{selectedComplaint.description}</p>
               </div>
 
               {updateError && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={2} />
                   <span>{updateError}</span>
                 </div>
               )}
 
               {updateSuccess && (
                 <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={2} />
                   <span>{updateSuccess}</span>
                 </div>
               )}
 
               {/* Status Selector */}
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 block">
-                  Perbarui Status Penanganan <span className="text-red-500">*</span>
+                <label className="font-semibold text-slate-700 block">
+                  Perbarui status penanganan <span className="text-rose-500">*</span>
                 </label>
                 <Select
                   options={[
-                    { value: 'OPEN', label: 'OPEN — Menunggu Tanggapan Toko' },
-                    { value: 'IN_INVESTIGATION', label: 'IN_INVESTIGATION — Sedang Diinvestigasi Toko' },
-                    { value: 'RESOLVED', label: 'RESOLVED — Selesai Ditangani (Wajib Catatan)' },
-                    { value: 'REJECTED', label: 'REJECTED — Ditolak (Wajib Catatan)' },
+                    { value: 'OPEN', label: 'OPEN — Menunggu tanggapan toko' },
+                    { value: 'IN_INVESTIGATION', label: 'IN_INVESTIGATION — Sedang diinvestigasi' },
+                    { value: 'RESOLVED', label: 'RESOLVED — Selesai ditangani' },
+                    { value: 'REJECTED', label: 'REJECTED — Ditolak' },
                   ]}
                   value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value as 'OPEN' | 'IN_INVESTIGATION' | 'RESOLVED' | 'REJECTED')}
-                  className="w-full text-xs min-h-[44px]"
+                  onChange={(val) => setNewStatus(val as any)}
+                  className="text-xs"
                 />
               </div>
 
-              {/* Resolution Note */}
+              {/* Resolution Note Input */}
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 flex items-center justify-between">
-                  <span>
-                    Catatan Penyelesaian Toko{' '}
-                    {['RESOLVED', 'REJECTED'].includes(newStatus) ? (
-                      <span className="text-red-500 font-bold">(WAJIB DIISI *)</span>
-                    ) : (
-                      <span className="text-slate-400 font-normal">(Opsional)</span>
-                    )}
-                  </span>
+                <label className="font-semibold text-slate-700 block">
+                  Catatan penyelesaian / tanggapan toko {['RESOLVED', 'REJECTED'].includes(newStatus) && <span className="text-rose-500">* (wajib)</span>}
                 </label>
-                <Textarea
-                  rows={4}
+                <textarea
                   value={resolutionNote}
                   onChange={(e) => setResolutionNote(e.target.value)}
-                  placeholder={
-                    ['RESOLVED', 'REJECTED'].includes(newStatus)
-                      ? 'Wajib jelaskan solusi atau alasan penolakan kepada pelanggan (contoh: Pakaian telah diganti dengan kompensasi, atau kendala telah diselesaikan secara damai)...'
-                      : 'Catatan internal atau catatan progres investigasi...'
-                  }
-                  className={cn(
-                    'text-xs',
-                    ['RESOLVED', 'REJECTED'].includes(newStatus) && !resolutionNote.trim()
-                      ? 'border-amber-400 focus:ring-amber-400'
-                      : ''
-                  )}
-                  required={['RESOLVED', 'REJECTED'].includes(newStatus)}
+                  placeholder="Tuliskan solusi atau tindak lanjut (mis. penggantian biaya cuci, penjelasan kendala)..."
+                  rows={4}
+                  className="w-full text-xs rounded-xl border border-slate-300 p-3 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-900"
                 />
-                <span className="text-[11px] text-slate-400 block">
-                  Catatan ini akan langsung dapat dilihat oleh pelanggan di detail pesanan mereka.
-                </span>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={() => setSelectedComplaint(null)}
                   disabled={updating}
-                  className="rounded-xl text-xs min-h-[44px]"
+                  className="rounded-xl text-xs font-semibold"
                 >
                   Batal
                 </Button>
                 <Button
                   type="submit"
-                  variant="primary"
-                  isLoading={updating}
+                  size="sm"
                   disabled={updating}
-                  className="rounded-xl text-xs min-h-[44px] bg-navy-900 hover:bg-navy-800"
+                  className="bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-semibold min-h-[38px] px-4 shadow-2xs"
                 >
-                  Simpan Pembaruan
+                  {updating ? 'Menyimpan...' : 'Simpan tanggapan'}
                 </Button>
               </div>
             </form>
@@ -518,33 +480,22 @@ export default function StoreAdminComplaintsPage() {
         )}
 
         {/* Modal: Photo Preview */}
-        <Modal
-          isOpen={previewPhoto !== null}
-          onClose={() => setPreviewPhoto(null)}
-          title="Bukti Foto Komplain"
-          maxWidth="xl"
-        >
-
-          <div className="flex flex-col items-center">
-            {previewPhoto && (
+        {previewPhoto && (
+          <Modal
+            isOpen={previewPhoto !== null}
+            onClose={() => setPreviewPhoto(null)}
+            title="Bukti foto komplain"
+            maxWidth="xl"
+          >
+            <div className="flex justify-center p-2">
               <img
                 src={previewPhoto}
-                alt="Foto Bukti"
-                className="max-h-[70vh] w-auto rounded-2xl object-contain border border-slate-200"
+                alt="Pratinjau Bukti"
+                className="max-h-[80vh] w-auto rounded-xl object-contain"
               />
-            )}
-            <div className="pt-4 flex justify-end w-full">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPreviewPhoto(null)}
-                className="rounded-xl text-xs min-h-[44px]"
-              >
-                Tutup
-              </Button>
             </div>
-          </div>
-        </Modal>
+          </Modal>
+        )}
       </div>
     </DashboardLayout>
   );

@@ -5,13 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  Card,
   Badge,
   Button,
   Input,
   Skeleton,
-  ErrorState,
-  EmptyState,
 } from '@/components/ui';
 import {
   getConversations,
@@ -32,10 +29,8 @@ import {
   CheckCheck,
   Check,
   RotateCw,
-  Clock,
   Sparkles,
   X,
-  Phone,
 } from 'lucide-react';
 
 export default function StoreChatPage() {
@@ -136,7 +131,7 @@ export default function StoreChatPage() {
             return prev;
           });
         }
-      } catch (e) {
+      } catch {
         // Ignore polling error
       }
     }, 3000);
@@ -203,14 +198,13 @@ export default function StoreChatPage() {
     >
       <div className="space-y-6">
         {/* Header Title */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pb-1">
           <div>
-            <h1 className="font-heading font-extrabold text-2xl text-navy-900 flex items-center gap-2.5">
-              <MessageSquare className="w-6 h-6 text-teal-600" />
-              <span>Chat Pelanggan Outlet</span>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Pesan & chat pelanggan
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Komunikasi langsung dengan customer untuk konfirmasi noda pakaian, penjemputan, atau instruksi khusus.
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+              Komunikasi langsung dengan pelanggan untuk konfirmasi noda pakaian, penjemputan, atau instruksi khusus.
             </p>
           </div>
 
@@ -218,47 +212,44 @@ export default function StoreChatPage() {
             variant="outline"
             onClick={() => loadConversations(false)}
             disabled={loadingList}
-            className="rounded-xl text-xs font-bold min-h-[44px]"
+            className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1.5 min-h-[38px] px-3.5 text-xs font-semibold"
           >
-            <RotateCw className={cn('w-4 h-4 mr-2', loadingList && 'animate-spin')} />
+            <RotateCw className={cn('w-3.5 h-3.5', loadingList && 'animate-spin')} strokeWidth={1.75} />
             <span>Segarkan</span>
           </Button>
         </div>
 
         {/* 2-Column Chat Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[72vh]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[74vh]">
           {/* Left Column: Conversations List (4 cols) */}
-          <Card
-            variant="bento"
-            className="lg:col-span-4 p-4 flex flex-col h-full overflow-hidden bg-white shadow-sm"
-          >
+          <div className="lg:col-span-4 p-4 flex flex-col h-full overflow-hidden bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="pb-3 mb-3 border-b border-slate-100 flex items-center justify-between">
-              <span className="font-heading font-bold text-sm text-navy-900">Daftar Percakapan</span>
-              <Badge variant="secondary" className="text-[10px]">
-                {conversations.length} Chat
-              </Badge>
+              <span className="font-bold text-xs text-navy-950">Daftar percakapan</span>
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                {conversations.length} chat
+              </span>
             </div>
 
             {loadingList && (
-              <div className="space-y-3 p-2">
-                <Skeleton className="h-16 rounded-2xl" />
-                <Skeleton className="h-16 rounded-2xl" />
-                <Skeleton className="h-16 rounded-2xl" />
+              <div className="space-y-2.5 p-1">
+                <Skeleton className="h-14 rounded-xl" />
+                <Skeleton className="h-14 rounded-xl" />
+                <Skeleton className="h-14 rounded-xl" />
               </div>
             )}
 
             {!loadingList && conversations.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                <MessageSquare className="w-8 h-8 text-slate-300 mb-2" />
+                <MessageSquare className="w-8 h-8 text-slate-300 mb-2" strokeWidth={1.5} />
                 <span className="text-xs font-semibold text-slate-600">Belum ada chat masuk</span>
                 <span className="text-[11px] text-slate-400 mt-0.5">
-                  Percakapan dari customer akan muncul di sini.
+                  Percakapan dari pelanggan akan muncul di sini.
                 </span>
               </div>
             )}
 
             {!loadingList && conversations.length > 0 && (
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
                 {conversations.map((conv) => {
                   const isSelected = selectedConvId === conv.id;
 
@@ -268,19 +259,19 @@ export default function StoreChatPage() {
                       type="button"
                       onClick={() => selectConversation(conv.id)}
                       className={cn(
-                        'w-full p-3 rounded-2xl text-left transition-all flex items-start justify-between gap-3 min-h-[44px]',
+                        'w-full p-3 rounded-xl text-left transition-all flex items-start justify-between gap-2.5 min-h-[44px] cursor-pointer',
                         isSelected
-                          ? 'bg-sky-50 border border-teal-400 ring-2 ring-teal-100'
-                          : 'bg-slate-50/60 hover:bg-slate-100 border border-transparent'
+                          ? 'bg-navy-50/80 border border-navy-200/90 shadow-2xs'
+                          : 'bg-slate-50/50 hover:bg-slate-100/70 border border-transparent'
                       )}
                     >
-                      <div className="flex items-start gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 font-bold">
-                          <User className="w-5 h-5" />
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-navy-100 text-navy-800 flex items-center justify-center shrink-0 font-bold text-xs border border-navy-200/60">
+                          {conv.other_party_name.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="font-bold text-xs text-navy-900 truncate block">
+                            <span className="font-semibold text-xs text-navy-950 truncate block">
                               {conv.other_party_name}
                             </span>
                             {conv.order_number && (
@@ -291,18 +282,18 @@ export default function StoreChatPage() {
                           </div>
                           <p className="text-[11px] text-slate-500 truncate">
                             {conv.last_message?.message_type === 'image'
-                              ? '📷 Mengirimkan foto'
+                              ? 'Foto terkirim'
                               : conv.last_message?.body || 'Belum ada pesan.'}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-slate-400 font-mono">
                           {formatDate(conv.last_message_at || conv.created_at, 'HH:mm')}
                         </span>
                         {conv.unread_count > 0 && (
-                          <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-teal-500 text-navy-900 text-[10px] font-black flex items-center justify-center shadow-xs animate-pulse">
+                          <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-navy-900 text-white text-[10px] font-bold flex items-center justify-center shadow-xs font-mono">
                             {conv.unread_count > 9 ? '9+' : conv.unread_count}
                           </span>
                         )}
@@ -312,24 +303,21 @@ export default function StoreChatPage() {
                 })}
               </div>
             )}
-          </Card>
+          </div>
 
           {/* Right Column: Active Chat Feed (8 cols) */}
-          <Card
-            variant="default"
-            className="lg:col-span-8 bg-slate-50/80 rounded-3xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden"
-          >
+          <div className="lg:col-span-8 bg-slate-50/60 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col h-full overflow-hidden">
             {/* When No Conversation Selected */}
             {!selectedConvId && (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-400">
-                <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-3">
-                  <Sparkles className="w-7 h-7" />
+                <div className="w-12 h-12 rounded-xl bg-navy-50 text-navy-800 border border-navy-100 flex items-center justify-center mb-3">
+                  <Sparkles className="w-6 h-6 text-navy-700" strokeWidth={1.75} />
                 </div>
-                <h3 className="font-heading font-bold text-base text-navy-900">
-                  Pilih Percakapan
+                <h3 className="font-bold text-sm text-navy-950">
+                  Pilih percakapan
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm">
-                  Pilih salah satu customer dari daftar di sebelah kiri untuk melihat dan membalas pesan.
+                  Pilih salah satu percakapan dari daftar di sebelah kiri untuk membaca dan membalas pesan.
                 </p>
               </div>
             )}
@@ -338,17 +326,17 @@ export default function StoreChatPage() {
             {selectedConvId && (
               <>
                 {/* Chat Top Header */}
-                <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-700 shrink-0 font-bold">
-                      <User className="w-5 h-5" />
+                <div className="p-3.5 sm:p-4 bg-white border-b border-slate-100 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-navy-50 border border-navy-100 flex items-center justify-center text-navy-800 shrink-0 font-bold text-xs">
+                      {selectedConv?.other_party_name?.charAt(0).toUpperCase() || 'P'}
                     </div>
                     <div>
-                      <h2 className="font-heading font-bold text-sm text-navy-900">
+                      <h2 className="font-bold text-xs sm:text-sm text-navy-950">
                         {selectedConv?.other_party_name || 'Pelanggan'}
                       </h2>
-                      <span className="text-[11px] text-teal-700 font-semibold block">
-                        Pelanggan Aktif
+                      <span className="text-[10px] text-slate-500 font-medium block">
+                        Pelanggan aktif
                       </span>
                     </div>
                   </div>
@@ -356,20 +344,20 @@ export default function StoreChatPage() {
                   {selectedConv?.order_id && (
                     <Link
                       href={`/store/orders/${selectedConv.order_id}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-navy-900 bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200 hover:bg-sky-100 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy-950 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors shadow-2xs"
                     >
-                      <ShoppingBag className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Order: {selectedConv.order_number}</span>
+                      <ShoppingBag className="w-3.5 h-3.5 text-navy-800" strokeWidth={1.75} />
+                      <span className="font-mono">Order: {selectedConv.order_number}</span>
                     </Link>
                   )}
                 </div>
 
                 {/* Messages Feed */}
-                <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4">
+                <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3">
                   {loadingChat ? (
                     <div className="space-y-3">
-                      <Skeleton className="h-12 w-2/3 rounded-2xl" />
-                      <Skeleton className="h-16 w-1/2 ml-auto rounded-2xl" />
+                      <Skeleton className="h-10 w-2/3 rounded-xl" />
+                      <Skeleton className="h-14 w-1/2 ml-auto rounded-xl" />
                     </div>
                   ) : messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
@@ -386,25 +374,25 @@ export default function StoreChatPage() {
                         >
                           <div
                             className={cn(
-                              'max-w-[85%] sm:max-w-[70%] p-3.5 sm:p-4 rounded-3xl text-xs space-y-2 shadow-sm',
+                              'max-w-[85%] sm:max-w-[70%] p-3 sm:p-3.5 text-xs space-y-1.5 shadow-2xs',
                               isMe
-                                ? 'bg-navy-900 text-white rounded-tr-none'
-                                : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
+                                ? 'bg-navy-900 text-white rounded-2xl rounded-tr-none'
+                                : 'bg-white text-slate-800 border border-slate-200/80 rounded-2xl rounded-tl-none'
                             )}
                           >
                             {!isMe && msg.sender_name && (
-                              <span className="font-bold text-[11px] text-teal-600 block">
+                              <span className="font-bold text-[10px] text-navy-700 block">
                                 {msg.sender_name}
                               </span>
                             )}
 
                             {msg.attachment_url && (
-                              <div className="rounded-2xl overflow-hidden border border-white/20 my-1">
+                              <div className="rounded-xl overflow-hidden border border-white/20 my-1">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={msg.attachment_url}
-                                  alt="Lampiran Foto"
-                                  className="w-full max-h-60 object-cover rounded-xl hover:opacity-95 transition-opacity cursor-pointer"
+                                  alt="Lampiran foto"
+                                  className="w-full max-h-60 object-cover rounded-lg hover:opacity-95 transition-opacity cursor-pointer"
                                   onClick={() => window.open(msg.attachment_url || '', '_blank')}
                                 />
                               </div>
@@ -414,12 +402,12 @@ export default function StoreChatPage() {
                               <p className="leading-relaxed whitespace-pre-wrap">{msg.body}</p>
                             )}
 
-                            <div className="flex items-center justify-end gap-1.5 text-[10px] pt-1 text-slate-400">
+                            <div className="flex items-center justify-end gap-1.5 text-[10px] pt-0.5 text-slate-400 font-mono">
                               <span>{formatDate(msg.created_at, 'HH:mm')}</span>
                               {isMe && (
                                 <span>
                                   {msg.is_read ? (
-                                    <CheckCheck className="w-3.5 h-3.5 text-teal-400" />
+                                    <CheckCheck className="w-3.5 h-3.5 text-sky-300" />
                                   ) : (
                                     <Check className="w-3.5 h-3.5 text-slate-400" />
                                   )}
@@ -439,7 +427,7 @@ export default function StoreChatPage() {
                   <div className="px-4 py-2 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={imagePreview} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-slate-300" />
+                      <img src={imagePreview} alt="Preview" className="w-9 h-9 rounded-lg object-cover border border-slate-300" />
                       <span className="text-[11px] text-slate-600 truncate max-w-[200px]">
                         {selectedImage?.name}
                       </span>
@@ -447,7 +435,8 @@ export default function StoreChatPage() {
                     <button
                       type="button"
                       onClick={removeSelectedImage}
-                      className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500"
+                      className="p-1 rounded-full hover:bg-slate-200 text-slate-500 cursor-pointer"
+                      aria-label="Hapus pratinjau foto"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -455,7 +444,7 @@ export default function StoreChatPage() {
                 )}
 
                 {/* Input Bar */}
-                <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white border-t border-slate-200 flex items-center gap-2">
+                <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-slate-100 flex items-center gap-2">
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -468,10 +457,11 @@ export default function StoreChatPage() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={sending}
-                    className="w-11 h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors shrink-0 min-h-[44px]"
-                    title="Kirim Foto"
+                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors shrink-0 min-h-[40px] cursor-pointer"
+                    title="Kirim foto"
+                    aria-label="Lampirkan foto"
                   >
-                    <Paperclip className="w-5 h-5 text-teal-600" />
+                    <Paperclip className="w-4 h-4 text-slate-600" strokeWidth={1.75} />
                   </button>
 
                   <Input
@@ -480,20 +470,20 @@ export default function StoreChatPage() {
                     onChange={(e) => setInputText(e.target.value)}
                     placeholder="Balas pesan customer..."
                     disabled={sending}
-                    className="flex-1 text-xs"
+                    className="flex-1 text-xs rounded-xl"
                   />
 
                   <Button
                     type="submit"
                     disabled={sending || (!inputText.trim() && !selectedImage)}
-                    className="bg-navy-900 hover:bg-navy-800 text-white font-bold rounded-2xl px-5 min-h-[44px] shrink-0"
+                    className="bg-navy-900 hover:bg-navy-800 text-white font-semibold rounded-xl px-4 min-h-[40px] shrink-0 shadow-2xs"
                   >
-                    <Send className="w-4 h-4 text-teal-400" />
+                    <Send className="w-4 h-4 text-sky-300" strokeWidth={1.75} />
                   </Button>
                 </form>
               </>
             )}
-          </Card>
+          </div>
         </div>
       </div>
     </DashboardLayout>
