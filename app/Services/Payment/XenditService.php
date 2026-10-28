@@ -389,6 +389,22 @@ class XenditService
 
                 // Tahap 15: queued side-effect notification
                 NotificationTrigger::paymentSuccess($order->customer, $order);
+
+                // Untuk pembayaran QR, transisikan status order dan catat ke riwayat status
+                if ($isQr && in_array(strtolower($order->status), ['awaiting_payment', 'payment_required'])) {
+                    try {
+                        $orderService = app(\App\Services\Order\OrderService::class);
+                        $actor = $order->store?->owner 
+                            ?? ($order->store?->owner_user_id ? \App\Models\User::find($order->store->owner_user_id) : null)
+                            ?? \App\Models\User::role('platform_admin')->first();
+                        $orderService->transition($order, \App\Enums\OrderStatus::PAID->value, $actor, 'Pembayaran QRIS berhasil dikonfirmasi');
+                    } catch (\Throwable $e) {
+                        Log::warning('Failed to transition order status after QR payment', [
+                            'order_id' => $order->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
 
         } elseif ($xenditStatus === 'EXPIRED') {
