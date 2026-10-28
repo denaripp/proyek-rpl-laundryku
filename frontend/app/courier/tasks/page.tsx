@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  Card,
   Badge,
   Button,
   Tabs,
@@ -13,7 +12,6 @@ import {
   EmptyState,
   ErrorState,
   Modal,
-  Textarea,
 } from '@/components/ui';
 import {
   getCourierTasks,
@@ -27,15 +25,14 @@ import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
 import {
   Truck,
+  Store,
   MapPin,
   Phone,
+  Calendar,
   CheckCircle2,
   AlertCircle,
-  Clock,
   RefreshCw,
   ShoppingBag,
-  ExternalLink,
-  ChevronRight,
   Send,
   CreditCard,
 } from 'lucide-react';
@@ -96,6 +93,7 @@ export default function CourierTasksPage() {
 
   const handleLogout = async () => {
     await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
+    if (typeof window !== 'undefined') localStorage.removeItem('laundryku_courier_user');
     router.push('/courier/login');
   };
 
@@ -139,12 +137,13 @@ export default function CourierTasksPage() {
   const handleSubmitTransition = async () => {
     if (!selectedTaskForNote) return;
     const { task, to_status } = selectedTaskForNote;
+    const targetOrderId = task.order_id;
 
-    setActionLoadingId(task.order_id);
+    setActionLoadingId(targetOrderId);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await transitionCourierTask(task.order_id, {
+      await transitionCourierTask(targetOrderId, {
         to_status,
         note: transitionNote.trim() || undefined,
       });
@@ -193,19 +192,22 @@ export default function CourierTasksPage() {
   const tabs = [
     {
       id: 'active',
-      label: 'Tugas Aktif Saya',
+      label: 'Tugas aktif saya',
+      count: tasks.filter((t) => t.is_assigned_to_me && t.status !== 'COMPLETED').length,
     },
     {
       id: 'available',
-      label: 'Tugas Tersedia',
-    },
-    {
-      id: 'all',
-      label: 'Semua Tugas',
+      label: 'Tugas tersedia',
+      count: tasks.filter((t) => !t.courier_id).length,
     },
     {
       id: 'completed',
-      label: 'Riwayat Selesai',
+      label: 'Riwayat selesai',
+      count: tasks.filter((t) => t.status === 'COMPLETED').length,
+    },
+    {
+      id: 'all',
+      label: 'Semua',
     },
   ];
 
@@ -217,18 +219,14 @@ export default function CourierTasksPage() {
       onLogout={handleLogout}
     >
       <div className="space-y-6">
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 mb-1">
-              <Truck className="w-4 h-4 text-[#1A3A5C]" />
-              <span>Operasional Kurir</span>
-            </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Tugas Pengantaran & Penjemputan
+              Tugas pengantaran
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Kelola proses penjemputan dari pelanggan dan pengantaran cucian kembali ke alamat tujuan.
+              Daftar penjemputan cucian kotor dari pelanggan ke toko dan pengantaran cucian bersih kembali ke pelanggan.
             </p>
           </div>
 
@@ -237,284 +235,341 @@ export default function CourierTasksPage() {
             size="sm"
             onClick={loadTasks}
             disabled={loading}
-            className="flex items-center gap-1.5 self-start sm:self-auto"
+            className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1.5 self-start sm:self-auto min-h-[38px] px-3.5 text-xs font-semibold"
           >
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} strokeWidth={1.75} />
             <span>Segarkan</span>
           </Button>
         </div>
 
-        {/* Action feedback banners */}
+        {/* Action Alerts */}
         {actionSuccessMsg && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs flex items-center justify-between animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{actionSuccessMsg}</span>
-            </div>
-            <button
-              onClick={() => setActionSuccessMsg(null)}
-              className="text-emerald-600 hover:text-emerald-900 font-bold ml-2 text-sm"
-              aria-label="Tutup pesan sukses"
-            >
-              &times;
-            </button>
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-emerald-900 text-xs font-semibold shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" strokeWidth={2} />
+            <span>{actionSuccessMsg}</span>
           </div>
         )}
-
         {actionErrorMsg && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-md text-xs flex items-center justify-between animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{actionErrorMsg}</span>
-            </div>
-            <button
-              onClick={() => setActionErrorMsg(null)}
-              className="text-rose-600 hover:text-rose-900 font-bold ml-2 text-sm"
-              aria-label="Tutup pesan error"
-            >
-              &times;
-            </button>
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-rose-900 text-xs font-semibold shadow-2xs">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" strokeWidth={2} />
+            <span>{actionErrorMsg}</span>
           </div>
         )}
 
         {/* Filter Tabs */}
-        <div className="border-b border-slate-200">
+        <div className="overflow-x-auto pb-1 [scrollbar-width:none]">
           <Tabs
             tabs={tabs}
             activeTab={activeTab}
-            onChange={(tabId) => setActiveTab(tabId as typeof activeTab)}
+            onChange={(tabId) => setActiveTab(tabId as any)}
+            variant="boxed"
+            className="min-w-max"
           />
         </div>
 
-        {/* Content Section: Loading Skeleton / Error / Empty / List */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white border border-slate-200 rounded-[8px] p-5 space-y-4 animate-pulse">
+        {/* Loading State */}
+        {loading && (
+          <div className="space-y-3.5">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
                 <div className="flex justify-between items-center">
-                  <div className="h-4 bg-slate-200 rounded w-1/3" />
-                  <div className="h-5 bg-slate-200 rounded w-16" />
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-6 w-24 rounded-lg" />
                 </div>
-                <div className="space-y-2">
-                  <div className="h-3 bg-slate-100 rounded w-3/4" />
-                  <div className="h-3 bg-slate-100 rounded w-1/2" />
-                </div>
-                <div className="h-9 bg-slate-100 rounded" />
+                <Skeleton className="h-16 w-full rounded-xl" />
               </div>
             ))}
           </div>
-        ) : error ? (
-          <div className="bg-white border border-slate-200 rounded-[8px] p-8 text-center max-w-md mx-auto space-y-4">
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Tugas belum bisa dimuat</h3>
-              <p className="text-xs text-slate-500 mt-1">{error}</p>
-            </div>
-            <Button size="sm" onClick={loadTasks} className="bg-[#1A3A5C] text-white hover:bg-[#132d47]">
-              Coba lagi
-            </Button>
+        )}
+
+        {/* Error State */}
+        {!loading && error && (
+          <div className="p-8 text-center bg-white rounded-2xl border border-rose-200/80 shadow-2xs">
+            <ErrorState
+              title="Terjadi kendala memuat tugas"
+              message={error}
+              retryText="Coba lagi"
+              onRetry={loadTasks}
+            />
           </div>
-        ) : tasks.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-[8px] p-12 text-center max-w-md mx-auto space-y-3">
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-semibold text-slate-900">Belum ada tugas yang ditugaskan.</h3>
-            <p className="text-xs text-slate-500">
-              {activeTab === 'available'
-                ? 'Saat ini belum ada tugas baru yang menunggu untuk diambil.'
-                : 'Tugas yang Anda ambil atau ditugaskan akan tampil di halaman ini.'}
-            </p>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && tasks.length === 0 && (
+          <div className="p-10 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <EmptyState
+              title={
+                activeTab === 'available'
+                  ? 'Tidak ada tugas tersedia saat ini'
+                  : activeTab === 'active'
+                  ? 'Anda tidak memiliki tugas aktif'
+                  : 'Belum ada riwayat tugas'
+              }
+              description={
+                activeTab === 'available'
+                  ? 'Semua order pickup dan delivery saat ini sudah ditugaskan atau sedang diproses oleh toko.'
+                  : activeTab === 'active'
+                  ? 'Pilih tab "Tugas tersedia" untuk mengambil order penjemputan atau pengantaran baru.'
+                  : 'Riwayat tugas yang telah selesai akan tercatat di sini.'
+              }
+              actionText={activeTab !== 'available' ? 'Lihat tugas tersedia' : 'Segarkan'}
+              onAction={() => (activeTab !== 'available' ? setActiveTab('available') : loadTasks())}
+            />
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        )}
+
+        {/* Tasks List */}
+        {!loading && !error && tasks.length > 0 && (
+          <div className="space-y-4">
             {tasks.map((task) => {
-              const meta = ORDER_STATUS_META[task.status as OrderStatus] || {
+              const statusMeta = ORDER_STATUS_META[task.status] || {
                 label: task.status,
-                variant: 'neutral' as const,
+                badgeVariant: 'secondary',
+                description: '',
               };
-              const isAssignedToMe = task.is_assigned_to_me;
-              const isClaimable = !task.courier_id && (task.status === 'PENDING_PICKUP' || task.status === 'READY_FOR_DELIVERY');
+
+              const isPickup = task.task_type === 'pickup';
+              const isAvailableToClaim = !task.courier_id && (task.status === 'PENDING_PICKUP' || task.status === 'READY_FOR_DELIVERY');
+              const isMyActiveTask = task.is_assigned_to_me;
+              const isActionLoading = actionLoadingId === task.order_id;
+
+              // Customer phone formatted for WhatsApp
+              const cleanPhone = (task.customer_phone || '').replace(/[^0-9]/g, '');
+              const waNumber = cleanPhone.startsWith('0') ? `62${cleanPhone.slice(1)}` : cleanPhone;
+              const waUrl = cleanPhone ? `https://wa.me/${waNumber}?text=Halo%20${encodeURIComponent(task.customer_name || 'Kak')},%20saya%20kurir%20LaundryKu%20dari%20${encodeURIComponent(task.store_name || 'Outlet')}%20untuk%20pesanan%20${task.order_number}` : null;
 
               return (
                 <div
                   key={task.id}
-                  className="bg-white border border-slate-200 hover:border-slate-300 rounded-[8px] p-5 flex flex-col justify-between transition-colors shadow-xs"
+                  className={cn(
+                    'p-5 bg-white rounded-2xl border transition-all shadow-2xs space-y-4',
+                    isMyActiveTask ? 'border-navy-900/60 ring-1 ring-navy-900/10' : 'border-slate-200/80 hover:border-slate-300'
+                  )}
                 >
-                  <div className="space-y-4">
-                    {/* Header: Order Number & Status Badge */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-[#1A3A5C]">
-                            {task.order_number}
-                          </span>
-                          <span
-                            className={cn(
-                              'text-[10px] font-semibold px-2 py-0.5 rounded-[4px] uppercase tracking-wider',
-                              task.task_type === 'pickup'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-sky-50 text-sky-700 border border-sky-200'
-                            )}
-                          >
-                            {task.task_type === 'pickup' ? 'Penjemputan' : 'Pengantaran'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span>{formatDate(task.created_at)}</span>
-                        </div>
+                  {/* Task Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        {/* Task Type Tag */}
+                        <span
+                          className={cn(
+                            'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
+                            isPickup
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-sky-50 text-navy-900 border-sky-200'
+                          )}
+                        >
+                          {isPickup ? 'Tugas penjemputan' : 'Tugas pengantaran'}
+                        </span>
+
+                        <span className="font-mono font-bold text-xs text-navy-900 bg-sky-50 px-2.5 py-0.5 rounded-md border border-sky-100">
+                          {task.order_number}
+                        </span>
+
+                        <span className="text-xs text-slate-300">•</span>
+                        <span className="text-xs text-slate-500 flex items-center gap-1 font-mono">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                          {formatDate(task.created_at, 'DD MMM YYYY, HH:mm')}
+                        </span>
                       </div>
 
-                      <Badge variant={meta.badgeVariant} size="sm">
-                        {meta.label}
+                      <h3 className="font-bold text-sm sm:text-base text-navy-950 flex items-center gap-2">
+                        <span>{task.customer_name || 'Pelanggan'}</span>
+                      </h3>
+                    </div>
+
+                    {/* Status Badges */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={statusMeta.badgeVariant} className="px-2.5 py-0.5 text-[11px] rounded-md font-semibold">
+                        {statusMeta.label}
                       </Badge>
-                    </div>
-
-                    {/* Customer & Address Details */}
-                    <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                        <div className="text-slate-700 leading-snug">
-                          <span className="font-medium text-slate-900">{task.customer_name || 'Pelanggan'}</span>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            {task.task_type === 'pickup'
-                              ? task.pickup_address?.address_text || '-'
-                              : task.delivery_address?.address_text || '-'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {task.customer_phone && (
-                        <div className="flex items-center gap-2 pl-5.5 text-[11px] text-slate-600">
-                          <Phone className="w-3 h-3 text-slate-400" />
-                          <span>{task.customer_phone}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Order Metrics summary */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
-                      <div>
-                        <span className="text-[11px] text-slate-400 block">Estimasi Biaya:</span>
-                        <span className="font-semibold text-slate-900 tabular-nums">
-                          {formatRupiah(task.estimated_amount)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-slate-400 block">Status Bayar:</span>
-                        <span className="font-medium text-slate-700">
-                          {task.payment_status === 'PAID' ? 'Lunas' : 'Belum Lunas'}
-                        </span>
-                      </div>
+                      <Badge
+                        variant={task.payment_status === 'PAID' ? 'success' : 'warning'}
+                        className="px-2 py-0.5 text-[11px] rounded-md font-semibold"
+                      >
+                        {task.payment_status === 'PAID' ? 'Lunas' : 'Belum bayar (COD/VA)'}
+                      </Badge>
                     </div>
                   </div>
 
-                  {/* Actions according to courier state machine */}
-                  <div className="pt-4 mt-4 border-t border-slate-100 flex flex-wrap gap-2 justify-end">
-                    {/* Claim task if available */}
-                    {isClaimable && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleClaim(task.order_id)}
-                        disabled={actionLoadingId === task.order_id}
-                        className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
-                      >
-                        {actionLoadingId === task.order_id ? 'Memproses...' : 'Ambil Tugas Ini'}
-                      </Button>
-                    )}
+                  {/* Task Body Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    {/* Address & Navigation */}
+                    <div className="space-y-2.5">
+                      <div>
+                        <span className="text-slate-400 font-medium text-[11px] flex items-center gap-1 mb-1">
+                          <MapPin className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.75} />
+                          <span>{isPickup ? 'Alamat penjemputan (pelanggan):' : 'Alamat pengantaran (pelanggan):'}</span>
+                        </span>
+                        <p className="font-semibold text-navy-950 text-sm">
+                          {task.pickup_address?.address_text || '-'}
+                        </p>
+                        {task.pickup_address?.notes && (
+                          <p className="text-slate-500 mt-1 italic">
+                            Patokan: {task.pickup_address.notes}
+                          </p>
+                        )}
+                      </div>
 
-                    {/* Pickup Task State Machine */}
-                    {isAssignedToMe && task.status === 'PICKUP_ASSIGNED' && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleInitiateTransition(
-                            task,
-                            'PICKED_UP',
-                            'Konfirmasi Penjemputan Selesai',
-                            'Pastikan cucian telah diterima dari pelanggan dan ditandai dengan benar.'
-                          )
-                        }
-                        disabled={actionLoadingId === task.order_id}
-                        className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
-                      >
-                        Selesai Jemput Cucian
-                      </Button>
-                    )}
+                      {/* Contact Actions */}
+                      <div className="flex items-center gap-2 pt-1">
+                        {task.customer_phone && (
+                          <a
+                            href={`tel:${task.customer_phone}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold transition-colors min-h-[36px] text-xs"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-slate-600" strokeWidth={1.75} />
+                            <span className="font-mono">{task.customer_phone}</span>
+                          </a>
+                        )}
 
-                    {isAssignedToMe && task.status === 'PICKED_UP' && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleInitiateTransition(
-                            task,
-                            'AT_STORE',
-                            'Konfirmasi Tiba di Outlet',
-                            'Serahkan cucian kepada admin outlet untuk penimbangan nota.'
-                          )
-                        }
-                        disabled={actionLoadingId === task.order_id}
-                        className="bg-emerald-600 text-white hover:bg-emerald-700"
-                      >
-                        Tiba di Outlet
-                      </Button>
-                    )}
+                        {waUrl && (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-semibold transition-colors min-h-[36px] text-xs"
+                          >
+                            <Send className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.75} />
+                            <span>WhatsApp</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
 
-                    {/* Delivery Task State Machine */}
-                    {isAssignedToMe && task.status === 'DELIVERY_ASSIGNED' && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleInitiateTransition(
-                            task,
-                            'OUT_FOR_DELIVERY',
-                            'Mulai Pengantaran ke Pelanggan',
-                            'Mulai perjalanan mengantarkan cucian bersih ke alamat pelanggan.'
-                          )
-                        }
-                        disabled={actionLoadingId === task.order_id}
-                        className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
-                      >
-                        Mulai Pengantaran
-                      </Button>
-                    )}
+                    {/* Order Meta & Laundry Details */}
+                    <div className="space-y-2.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
+                      <div className="flex justify-between items-center text-slate-600 pb-2 border-b border-slate-200/70">
+                        <span>Estimasi / tagihan:</span>
+                        <span className="font-mono font-bold text-sm text-navy-950 tabular-nums">
+                          {formatRupiah(task.final_amount !== null ? task.final_amount : task.estimated_amount)}
+                        </span>
+                      </div>
 
-                    {isAssignedToMe && task.status === 'OUT_FOR_DELIVERY' && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleInitiateTransition(
-                            task,
-                            'COMPLETED',
-                            'Selesaikan Pengantaran',
-                            'Pastikan pakaian bersih telah diterima dengan baik oleh pelanggan.'
-                          )
-                        }
-                        disabled={actionLoadingId === task.order_id}
-                        className="bg-emerald-600 text-white hover:bg-emerald-700"
-                      >
-                        Selesaikan Pengantaran
-                      </Button>
-                    )}
+                      <div className="text-slate-600 space-y-1">
+                        <p>
+                          Berat: <b className="font-mono text-slate-900">{task.actual_weight_kg ? `${task.actual_weight_kg} kg (aktual)` : `${task.estimated_weight_kg || 0} kg (estimasi)`}</b>
+                        </p>
+                        <p>
+                          Layanan: <b className="font-mono text-slate-900">{task.items_count} item layanan</b>
+                        </p>
+                      </div>
 
-                    {/* Confirm COD Payment button if applicable */}
-                    {isAssignedToMe &&
-                      task.payment_status === 'UNPAID' &&
-                      (task.status === 'OUT_FOR_DELIVERY' || task.status === 'COMPLETED') && (
+                      {task.customer_notes && (
+                        <p className="p-2.5 bg-white rounded-lg text-slate-700 italic border border-slate-200/80">
+                          Catatan: &ldquo;{task.customer_notes}&rdquo;
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Task Action Bar */}
+                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <span className="text-[11px] text-slate-400 order-2 sm:order-1 line-clamp-1">
+                      {statusMeta.description}
+                    </span>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
+                      {/* Action 1: Available to claim */}
+                      {isAvailableToClaim && (
                         <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleConfirmCod(task.order_id)}
-                          disabled={actionLoadingId === task.order_id}
-                          className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                          onClick={() => handleClaim(task.order_id)}
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
                         >
-                          <CreditCard className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                          Terima Uang COD
+                          <Truck className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>{isActionLoading ? 'Mengambil tugas...' : 'Ambil tugas ini'}</span>
                         </Button>
                       )}
+
+                      {/* Action 2: PICKUP_ASSIGNED -> PICKED_UP */}
+                      {isMyActiveTask && task.status === 'PICKUP_ASSIGNED' && (
+                        <Button
+                          onClick={() =>
+                            handleInitiateTransition(
+                              task,
+                              'PICKED_UP',
+                              'Konfirmasi cucian dijemput',
+                              'Pastikan cucian sudah Anda terima dari pelanggan sebelum mengonfirmasi status.'
+                            )
+                          }
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>Cucian sudah dijemput</span>
+                        </Button>
+                      )}
+
+                      {/* Action 3: PICKED_UP -> AT_STORE */}
+                      {isMyActiveTask && task.status === 'PICKED_UP' && (
+                        <Button
+                          onClick={() =>
+                            handleInitiateTransition(
+                              task,
+                              'AT_STORE',
+                              'Konfirmasi tiba di outlet',
+                              'Konfirmasi bahwa cucian pelanggan telah Anda serahkan ke outlet toko laundry.'
+                            )
+                          }
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
+                        >
+                          <Store className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>Tiba di outlet</span>
+                        </Button>
+                      )}
+
+                      {/* Action 4: DELIVERY_ASSIGNED -> OUT_FOR_DELIVERY */}
+                      {isMyActiveTask && task.status === 'DELIVERY_ASSIGNED' && (
+                        <Button
+                          onClick={() =>
+                            handleInitiateTransition(
+                              task,
+                              'OUT_FOR_DELIVERY',
+                              'Mulai pengantaran cucian',
+                              'Konfirmasi saat Anda mulai berangkat mengantarkan pakaian bersih ke pelanggan.'
+                            )
+                          }
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
+                        >
+                          <Send className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>Mulai pengantaran</span>
+                        </Button>
+                      )}
+
+                      {/* Action 5: OUT_FOR_DELIVERY -> COMPLETED */}
+                      {isMyActiveTask && task.status === 'OUT_FOR_DELIVERY' && (
+                        <Button
+                          onClick={() =>
+                            handleInitiateTransition(
+                              task,
+                              'COMPLETED',
+                              'Selesaikan pengantaran',
+                              'Pastikan pakaian bersih telah diserahkan dan diterima oleh pelanggan dengan baik.'
+                            )
+                          }
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+                          <span>Serah terima selesai</span>
+                        </Button>
+                      )}
+
+                      {/* Action 6: Confirm COD if needed */}
+                      {isMyActiveTask && (task.status === 'OUT_FOR_DELIVERY' || task.status === 'COMPLETED') && task.payment_status !== 'PAID' && (
+                        <Button
+                          onClick={() => handleConfirmCod(task.id)}
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-xl text-xs min-h-[38px] shadow-2xs"
+                        >
+                          <CreditCard className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+                          <span>Konfirmasi COD tunai</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -522,28 +577,25 @@ export default function CourierTasksPage() {
           </div>
         )}
 
-        {/* Modal Note / Transition Confirmation */}
+        {/* Modal: Transition Note Input */}
         {showNoteModal && selectedTaskForNote && (
           <Modal
             isOpen={showNoteModal}
             onClose={() => setShowNoteModal(false)}
             title={selectedTaskForNote.title}
+            description={selectedTaskForNote.description}
           >
-            <div className="space-y-4">
-              <p className="text-xs text-slate-600">
-                {selectedTaskForNote.description}
-              </p>
-
+            <div className="space-y-4 py-2">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Catatan Pengantaran (Opsional):
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Catatan perjalanan / serah terima (opsional)
                 </label>
-                <Textarea
+                <textarea
                   value={transitionNote}
                   onChange={(e) => setTransitionNote(e.target.value)}
-                  placeholder="Contoh: Diterima oleh satpam / Cucian dalam kantong rapat"
+                  placeholder="Contoh: Diterima oleh Pak RT / diserahkan ke resepsionis kos."
                   rows={3}
-                  className="text-xs"
+                  className="w-full text-xs rounded-xl border border-slate-300 p-3 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-900"
                 />
               </div>
 
@@ -552,17 +604,18 @@ export default function CourierTasksPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowNoteModal(false)}
-                  disabled={Boolean(actionLoadingId)}
+                  disabled={actionLoadingId === selectedTaskForNote.task.order_id}
+                  className="rounded-xl text-xs font-semibold"
                 >
                   Batal
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleSubmitTransition}
-                  disabled={Boolean(actionLoadingId)}
-                  className="bg-[#1A3A5C] text-white hover:bg-[#132d47]"
+                  disabled={actionLoadingId === selectedTaskForNote.task.order_id}
+                  className="bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-semibold min-h-[38px] px-4 shadow-2xs"
                 >
-                  {actionLoadingId ? 'Menyimpan...' : 'Konfirmasi Update'}
+                  {actionLoadingId === selectedTaskForNote.task.order_id ? 'Memproses...' : 'Konfirmasi status'}
                 </Button>
               </div>
             </div>

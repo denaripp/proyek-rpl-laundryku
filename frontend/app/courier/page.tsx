@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  Card,
   Badge,
   Button,
   Tabs,
@@ -13,7 +12,6 @@ import {
   EmptyState,
   ErrorState,
   Modal,
-  Textarea,
 } from '@/components/ui';
 import {
   getCourierProfile,
@@ -35,15 +33,10 @@ import {
   Calendar,
   CheckCircle2,
   AlertCircle,
-  Clock,
   RefreshCw,
   ShoppingBag,
-  ExternalLink,
   ChevronRight,
   Send,
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
   CreditCard,
 } from 'lucide-react';
 
@@ -88,6 +81,22 @@ export default function CourierDashboardPage() {
 
       setCourierProfile(profileData);
       setTasks(tasksData || []);
+      if (profileData?.name && (!user || !user.name)) {
+        setCurrentUser((prev) =>
+          prev
+            ? { ...prev, name: profileData.name! }
+            : ({
+                id: profileData.courier_profile_id || '',
+                name: profileData.name!,
+                email: profileData.email || '',
+                phone: profileData.phone || '',
+                role: 'courier',
+                roles: ['courier'],
+                status: 'active',
+                verified_at: profileData.started_at || null,
+              } as AuthUser)
+        );
+      }
     } catch (err: unknown) {
       setError(formatFriendlyErrorMessage(err, 'Gagal memuat dashboard kurir.'));
     } finally {
@@ -106,17 +115,24 @@ export default function CourierDashboardPage() {
   };
 
   // Claim Task Handler (Atomic)
-  const handleClaim = async (taskId: string) => {
-    setActionLoadingId(taskId);
+  const handleClaim = async (orderId: string) => {
+    setActionLoadingId(orderId);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await claimCourierTask(taskId);
+      await claimCourierTask(orderId);
       setActionSuccessMsg('Tugas berhasil diambil! Silakan segera jalankan penjemputan/pengantaran.');
       loadData();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal mengambil tugas.');
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal mengambil tugas.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoadingId(null);
     }
@@ -138,12 +154,13 @@ export default function CourierDashboardPage() {
   const handleSubmitTransition = async () => {
     if (!selectedTaskForNote) return;
     const { task, to_status } = selectedTaskForNote;
+    const targetOrderId = task.order_id;
 
-    setActionLoadingId(task.id);
+    setActionLoadingId(targetOrderId);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await transitionCourierTask(task.id, {
+      await transitionCourierTask(targetOrderId, {
         to_status,
         note: transitionNote.trim() || undefined,
       });
@@ -151,25 +168,39 @@ export default function CourierDashboardPage() {
       setActionSuccessMsg(`Status tugas ${task.order_number} berhasil diperbarui.`);
       loadData();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal memperbarui status tugas.');
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal memperbarui status tugas.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoadingId(null);
     }
   };
 
   // Courier confirms COD cash received
-  const handleConfirmCod = async (taskId: string) => {
-    setActionLoadingId(taskId);
+  const handleConfirmCod = async (orderId: string) => {
+    setActionLoadingId(orderId);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await confirmCourierCod(taskId);
+      await confirmCourierCod(orderId);
       setActionSuccessMsg('Penerimaan uang COD berhasil dikonfirmasi dan dicatat ke sistem!');
       loadData();
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      setActionErrorMsg(errObj.response?.data?.error?.message || 'Gagal mengonfirmasi penerimaan COD.');
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal mengonfirmasi penerimaan COD.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoadingId(null);
     }
@@ -178,17 +209,17 @@ export default function CourierDashboardPage() {
   const tabs = [
     {
       id: 'available',
-      label: 'Tugas Tersedia',
+      label: 'Tugas tersedia',
       count: courierProfile?.stats?.available_tasks,
     },
     {
       id: 'active',
-      label: 'Tugas Aktif Saya',
+      label: 'Tugas aktif saya',
       count: courierProfile?.stats?.active_tasks,
     },
     {
       id: 'completed',
-      label: 'Riwayat Selesai',
+      label: 'Riwayat selesai',
       count: courierProfile?.stats?.completed_tasks,
     },
     {
@@ -200,23 +231,19 @@ export default function CourierDashboardPage() {
   return (
     <DashboardLayout
       userRole="courier"
-      userName={currentUser?.name || 'Kurir LaundryKu'}
-      userEmail={currentUser?.email || 'kurir@laundryku.id'}
+      userName={courierProfile?.name || currentUser?.name || 'Kurir LaundryKu'}
+      userEmail={courierProfile?.email || currentUser?.email || 'kurir@laundryku.id'}
       onLogout={handleLogout}
     >
-      <div className="space-y-8">
-        {/* Header & Store Info Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200/60 w-fit mb-2">
-              <Truck className="w-3.5 h-3.5" />
-              <span>Operasional Kurir Laundry</span>
-            </div>
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-navy-900">
-              Dashboard Tugas Kurir
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Dashboard tugas kurir
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Ambil tugas penjemputan & pengantaran, perbarui status pengiriman cucian secara realtime.
+              Ambil tugas penjemputan & pengantaran, perbarui status pengiriman cucian secara berkala.
             </p>
           </div>
 
@@ -225,106 +252,106 @@ export default function CourierDashboardPage() {
             size="sm"
             onClick={loadData}
             disabled={loading}
-            className="rounded-xl flex items-center gap-1.5 self-start sm:self-auto"
+            className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1.5 self-start sm:self-auto min-h-[38px] px-3.5 text-xs font-semibold"
           >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} strokeWidth={1.75} />
             <span>Segarkan</span>
           </Button>
         </div>
 
         {/* Action Alerts */}
         {actionSuccessMsg && (
-          <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex items-center gap-3 text-teal-900 text-xs font-semibold">
-            <CheckCircle2 className="w-5 h-5 text-teal-600 shrink-0" />
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-emerald-900 text-xs font-semibold shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" strokeWidth={2} />
             <span>{actionSuccessMsg}</span>
           </div>
         )}
         {actionErrorMsg && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-900 text-xs font-semibold">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-rose-900 text-xs font-semibold shadow-2xs">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" strokeWidth={2} />
             <span>{actionErrorMsg}</span>
           </div>
         )}
 
         {/* Assigned Store Banner & Quick Stats */}
         {courierProfile && courierProfile.is_assigned && courierProfile.store && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Store Information Card */}
-            <Card variant="bento" className="p-6 lg:col-span-2 bg-gradient-to-br from-navy-900 to-navy-950 text-white border-0 shadow-xl">
-              <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="p-5 lg:col-span-2 bg-navy-950 text-white rounded-2xl border border-navy-900 shadow-2xs space-y-4">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                    <Store className="w-4 h-4" />
-                    <span>Toko Laundry Tempat Anda Terikat (1 Kurir 1 Toko)</span>
+                  <div className="flex items-center gap-2 text-[10px] font-semibold text-sky-300 uppercase tracking-wider mb-1">
+                    <Store className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>Toko laundry tempat terikat (1 kurir 1 toko)</span>
                   </div>
-                  <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-white">
+                  <h2 className="font-bold text-lg sm:text-xl text-white">
                     {courierProfile.store.name}
                   </h2>
                 </div>
-                <Badge variant="teal" className="text-xs">
-                  Kurir Aktif
-                </Badge>
+                <span className="inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-md bg-white/10 text-sky-200 border border-white/10">
+                  Kurir aktif
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-slate-300 border-t border-navy-800 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300 border-t border-white/10 pt-3">
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Alamat Outlet:</span>
+                  <span className="text-slate-400 block mb-0.5 text-[11px]">Alamat outlet:</span>
                   <p className="font-medium text-white line-clamp-2">
                     {courierProfile.store.address_text}
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Kendaraan & Radius Layanan:</span>
-                  <p className="font-medium text-white capitalize">
+                  <span className="text-slate-400 block mb-0.5 text-[11px]">Kendaraan & radius layanan:</span>
+                  <p className="font-medium text-white capitalize font-mono">
                     {courierProfile.vehicle_type || 'Motor'} • Maks. {courierProfile.store.service_radius_km} km
                   </p>
                 </div>
               </div>
-            </Card>
+            </div>
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
-              <Card variant="default" className="p-4 bg-white rounded-2xl border border-slate-200 flex items-center justify-between">
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-2.5">
+              <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Tugas Tersedia</span>
-                  <span className="font-heading font-extrabold text-2xl text-teal-600">
+                  <span className="text-[11px] font-medium text-slate-500 block">Tugas tersedia</span>
+                  <span className="font-mono font-bold text-xl sm:text-2xl text-navy-950 tabular-nums">
                     {courierProfile.stats?.available_tasks || 0}
                   </span>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
-                  <ShoppingBag className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-xl bg-sky-50 text-navy-800 flex items-center justify-center border border-sky-100">
+                  <ShoppingBag className="w-4 h-4" strokeWidth={1.75} />
                 </div>
-              </Card>
+              </div>
 
-              <Card variant="default" className="p-4 bg-white rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Tugas Aktif Saya</span>
-                  <span className="font-heading font-extrabold text-2xl text-navy-900">
+                  <span className="text-[11px] font-medium text-slate-500 block">Tugas aktif saya</span>
+                  <span className="font-mono font-bold text-xl sm:text-2xl text-navy-950 tabular-nums">
                     {courierProfile.stats?.active_tasks || 0}
                   </span>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-sky-50 text-navy-900 flex items-center justify-center">
-                  <Truck className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-xl bg-navy-50 text-navy-800 flex items-center justify-center border border-navy-100">
+                  <Truck className="w-4 h-4" strokeWidth={1.75} />
                 </div>
-              </Card>
+              </div>
 
-              <Card variant="default" className="p-4 bg-white rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Riwayat Selesai</span>
-                  <span className="font-heading font-extrabold text-2xl text-emerald-600">
+                  <span className="text-[11px] font-medium text-slate-500 block">Riwayat selesai</span>
+                  <span className="font-mono font-bold text-xl sm:text-2xl text-navy-950 tabular-nums">
                     {courierProfile.stats?.completed_tasks || 0}
                   </span>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
+                  <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} />
                 </div>
-              </Card>
+              </div>
             </div>
           </div>
         )}
 
         {/* Filter Tabs */}
-        <div className="overflow-x-auto pb-2">
+        <div className="overflow-x-auto pb-1 [scrollbar-width:none]">
           <Tabs
             tabs={tabs}
             activeTab={activeTab}
@@ -336,58 +363,58 @@ export default function CourierDashboardPage() {
 
         {/* Loading State */}
         {loading && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             {[1, 2, 3].map((i) => (
-              <Card key={i} variant="default" className="p-6 bg-white rounded-3xl border border-slate-200">
-                <div className="flex justify-between items-center mb-4">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-7 w-28 rounded-full" />
+              <div key={i} className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-6 w-24 rounded-lg" />
                 </div>
-                <Skeleton className="h-20 w-full rounded-2xl" />
-              </Card>
+                <Skeleton className="h-16 w-full rounded-xl" />
+              </div>
             ))}
           </div>
         )}
 
         {/* Error State */}
         {!loading && error && (
-          <Card variant="default" className="p-8 text-center bg-white rounded-3xl border border-red-200">
+          <div className="p-8 text-center bg-white rounded-2xl border border-rose-200/80 shadow-2xs">
             <ErrorState
-              title="Terjadi Kendala Memuat Tugas"
+              title="Terjadi kendala memuat tugas"
               message={error}
-              retryText="Coba Lagi"
+              retryText="Coba lagi"
               onRetry={loadData}
             />
-          </Card>
+          </div>
         )}
 
         {/* Empty State */}
         {!loading && !error && tasks.length === 0 && (
-          <Card variant="default" className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+          <div className="p-10 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
             <EmptyState
               title={
                 activeTab === 'available'
-                  ? 'Tidak Ada Tugas Tersedia Saat Ini'
+                  ? 'Tidak ada tugas tersedia saat ini'
                   : activeTab === 'active'
-                  ? 'Anda Tidak Memiliki Tugas Aktif'
-                  : 'Belum Ada Riwayat Tugas'
+                  ? 'Anda tidak memiliki tugas aktif'
+                  : 'Belum ada riwayat tugas'
               }
               description={
                 activeTab === 'available'
                   ? 'Semua pesanan pickup dan delivery saat ini sudah ditugaskan atau sedang diproses oleh toko.'
                   : activeTab === 'active'
-                  ? 'Pilih tab "Tugas Tersedia" untuk mengambil order penjemputan atau pengantaran baru.'
+                  ? 'Pilih tab "Tugas tersedia" untuk mengambil order penjemputan atau pengantaran baru.'
                   : 'Riwayat tugas yang telah selesai akan tercatat di sini.'
               }
-              actionText={activeTab !== 'available' ? 'Lihat Tugas Tersedia' : 'Segarkan'}
+              actionText={activeTab !== 'available' ? 'Lihat tugas tersedia' : 'Segarkan'}
               onAction={() => (activeTab !== 'available' ? setActiveTab('available') : loadData())}
             />
-          </Card>
+          </div>
         )}
 
         {/* Tasks List */}
         {!loading && !error && tasks.length > 0 && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {tasks.map((task) => {
               const statusMeta = ORDER_STATUS_META[task.status] || {
                 label: task.status,
@@ -398,7 +425,7 @@ export default function CourierDashboardPage() {
               const isPickup = task.task_type === 'pickup';
               const isAvailableToClaim = !task.courier_id && (task.status === 'PENDING_PICKUP' || task.status === 'READY_FOR_DELIVERY');
               const isMyActiveTask = task.is_assigned_to_me;
-              const isActionLoading = actionLoadingId === task.id;
+              const isActionLoading = actionLoadingId === task.order_id;
 
               // Customer phone formatted for WhatsApp
               const cleanPhone = (task.customer_phone || '').replace(/[^0-9]/g, '');
@@ -406,70 +433,69 @@ export default function CourierDashboardPage() {
               const waUrl = cleanPhone ? `https://wa.me/${waNumber}?text=Halo%20${encodeURIComponent(task.customer_name || 'Kak')},%20saya%20kurir%20LaundryKu%20dari%20${encodeURIComponent(task.store_name || 'Outlet')}%20untuk%20pesanan%20${task.order_number}` : null;
 
               return (
-                <Card
+                <div
                   key={task.id}
-                  variant="bento"
                   className={cn(
-                    'p-6 transition-all duration-300',
-                    isMyActiveTask ? 'border-teal-400 bg-sky-50/20' : 'hover:border-slate-300'
+                    'p-5 bg-white rounded-2xl border transition-all shadow-2xs space-y-4',
+                    isMyActiveTask ? 'border-navy-900/60 ring-1 ring-navy-900/10' : 'border-slate-200/80 hover:border-slate-300'
                   )}
                 >
                   {/* Task Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-slate-100">
                     <div>
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         {/* Task Type Tag */}
                         <span
                           className={cn(
-                            'px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider',
+                            'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
                             isPickup
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                              : 'bg-teal-100 text-teal-900 border border-teal-300'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-sky-50 text-navy-900 border-sky-200'
                           )}
                         >
-                          {isPickup ? 'Tugas Penjemputan' : 'Tugas Pengantaran'}
+                          {isPickup ? 'Tugas penjemputan' : 'Tugas pengantaran'}
                         </span>
 
-                        <span className="font-mono font-bold text-xs text-navy-900 bg-sky-50 px-2.5 py-0.5 rounded-md border border-slate-200/80">
+                        <span className="font-mono font-bold text-xs text-navy-900 bg-sky-50 px-2.5 py-0.5 rounded-md border border-sky-100">
                           {task.order_number}
                         </span>
 
-                        <span className="text-xs text-slate-400">•</span>
-                        <span className="text-xs text-slate-500 flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />
+                        <span className="text-xs text-slate-300">•</span>
+                        <span className="text-xs text-slate-500 flex items-center gap-1 font-mono">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
                           {formatDate(task.created_at, 'DD MMM YYYY, HH:mm')}
                         </span>
                       </div>
 
-                      <h3 className="font-heading font-extrabold text-lg text-navy-900 flex items-center gap-2">
+                      <h3 className="font-bold text-sm sm:text-base text-navy-950 flex items-center gap-2">
                         <span>{task.customer_name || 'Pelanggan'}</span>
                       </h3>
                     </div>
 
                     {/* Status Badges */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant={statusMeta.badgeVariant} className="px-3 py-1 text-xs">
+                      <Badge variant={statusMeta.badgeVariant} className="px-2.5 py-0.5 text-[11px] rounded-md font-semibold">
                         {statusMeta.label}
                       </Badge>
                       <Badge
                         variant={task.payment_status === 'PAID' ? 'success' : 'warning'}
-                        className="px-2.5 py-0.5 text-[11px]"
+                        className="px-2 py-0.5 text-[11px] rounded-md font-semibold"
                       >
-                        {task.payment_status === 'PAID' ? 'Lunas' : 'Belum Bayar (COD/VA)'}
+                        {task.payment_status === 'PAID' ? 'Lunas' : 'Belum bayar (COD/VA)'}
                       </Badge>
                     </div>
                   </div>
 
                   {/* Task Body Details */}
-                  <div className="py-4 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                     {/* Address & Navigation */}
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       <div>
-                        <span className="text-slate-400 font-semibold flex items-center gap-1 mb-1">
-                          <MapPin className="w-3.5 h-3.5 text-teal-600" />
-                          <span>{isPickup ? 'Alamat Penjemputan (Customer):' : 'Alamat Pengantaran (Customer):'}</span>
+                        <span className="text-slate-400 font-medium text-[11px] flex items-center gap-1 mb-1">
+                          <MapPin className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.75} />
+                          <span>{isPickup ? 'Alamat penjemputan (pelanggan):' : 'Alamat pengantaran (pelanggan):'}</span>
                         </span>
-                        <p className="font-bold text-navy-900 text-sm">
+                        <p className="font-semibold text-navy-950 text-sm">
                           {task.pickup_address?.address_text || '-'}
                         </p>
                         {task.pickup_address?.notes && (
@@ -480,14 +506,14 @@ export default function CourierDashboardPage() {
                       </div>
 
                       {/* Contact Actions */}
-                      <div className="flex items-center gap-3 pt-1">
+                      <div className="flex items-center gap-2 pt-1">
                         {task.customer_phone && (
                           <a
                             href={`tel:${task.customer_phone}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-colors min-h-[38px]"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-semibold transition-colors min-h-[36px] text-xs"
                           >
-                            <Phone className="w-3.5 h-3.5 text-teal-600" />
-                            <span>Telepon: {task.customer_phone}</span>
+                            <Phone className="w-3.5 h-3.5 text-slate-600" strokeWidth={1.75} />
+                            <span className="font-mono">{task.customer_phone}</span>
                           </a>
                         )}
 
@@ -496,9 +522,9 @@ export default function CourierDashboardPage() {
                             href={waUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-bold transition-colors min-h-[38px]"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-semibold transition-colors min-h-[36px] text-xs"
                           >
-                            <Send className="w-3.5 h-3.5 text-emerald-600" />
+                            <Send className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.75} />
                             <span>WhatsApp</span>
                           </a>
                         )}
@@ -506,25 +532,25 @@ export default function CourierDashboardPage() {
                     </div>
 
                     {/* Order Meta & Laundry Details */}
-                    <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-100">
-                      <div className="flex justify-between items-center text-slate-600 pb-2 border-b border-slate-100">
-                        <span>Estimasi / Tagihan:</span>
-                        <span className="font-heading font-extrabold text-base text-teal-600 tabular-nums">
+                    <div className="space-y-2.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
+                      <div className="flex justify-between items-center text-slate-600 pb-2 border-b border-slate-200/70">
+                        <span>Estimasi / tagihan:</span>
+                        <span className="font-mono font-bold text-sm text-navy-950 tabular-nums">
                           {formatRupiah(task.final_amount !== null ? task.final_amount : task.estimated_amount)}
                         </span>
                       </div>
 
-                      <div className="text-slate-500 space-y-1">
+                      <div className="text-slate-600 space-y-1">
                         <p>
-                          Berat: <b>{task.actual_weight_kg ? `${task.actual_weight_kg} kg (Aktual)` : `${task.estimated_weight_kg || 0} kg (Estimasi)`}</b>
+                          Berat: <b className="font-mono text-slate-900">{task.actual_weight_kg ? `${task.actual_weight_kg} kg (aktual)` : `${task.estimated_weight_kg || 0} kg (estimasi)`}</b>
                         </p>
                         <p>
-                          Layanan: <b>{task.items_count} item layanan</b>
+                          Layanan: <b className="font-mono text-slate-900">{task.items_count} item layanan</b>
                         </p>
                       </div>
 
                       {task.customer_notes && (
-                        <p className="p-2.5 bg-sky-50 rounded-xl text-slate-700 italic border border-slate-200/60">
+                        <p className="p-2.5 bg-white rounded-lg text-slate-700 italic border border-slate-200/80">
                           Catatan: &ldquo;{task.customer_notes}&rdquo;
                         </p>
                       )}
@@ -532,21 +558,21 @@ export default function CourierDashboardPage() {
                   </div>
 
                   {/* Task Action Bar */}
-                  <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <span className="text-[11px] text-slate-400 order-2 sm:order-1">
+                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <span className="text-[11px] text-slate-400 order-2 sm:order-1 line-clamp-1">
                       {statusMeta.description}
                     </span>
 
-                    <div className="flex items-center gap-3 w-full sm:w-auto order-1 sm:order-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
                       {/* Action 1: Available to claim */}
                       {isAvailableToClaim && (
                         <Button
-                          onClick={() => handleClaim(task.id)}
+                          onClick={() => handleClaim(task.order_id)}
                           disabled={isActionLoading}
-                          className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs min-h-[44px]"
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
                         >
-                          <Truck className="w-4 h-4 mr-2" />
-                          <span>{isActionLoading ? 'Mengambil Tugas...' : 'Ambil Tugas Ini'}</span>
+                          <Truck className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>{isActionLoading ? 'Mengambil tugas...' : 'Ambil tugas ini'}</span>
                         </Button>
                       )}
 
@@ -557,15 +583,15 @@ export default function CourierDashboardPage() {
                             handleInitiateTransition(
                               task,
                               'PICKED_UP',
-                              'Konfirmasi Cucian Dijemput',
+                              'Konfirmasi cucian dijemput',
                               'Pastikan cucian sudah Anda terima dari pelanggan sebelum mengonfirmasi status.'
                             )
                           }
                           disabled={isActionLoading}
-                          className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs min-h-[44px]"
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
                         >
-                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                          <span>Cucian Sudah Dijemput (PICKED_UP)</span>
+                          <CheckCircle2 className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>Cucian sudah dijemput</span>
                         </Button>
                       )}
 
@@ -576,15 +602,15 @@ export default function CourierDashboardPage() {
                             handleInitiateTransition(
                               task,
                               'AT_STORE',
-                              'Konfirmasi Tiba di Toko Laundry',
-                              'Serahkan cucian ke pihak toko untuk penimbangan dan proses cuci.'
+                              'Konfirmasi tiba di outlet',
+                              'Konfirmasi bahwa cucian pelanggan telah Anda serahkan ke outlet toko laundry.'
                             )
                           }
                           disabled={isActionLoading}
-                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-bold py-2.5 px-6 rounded-xl text-xs min-h-[44px]"
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
                         >
-                          <Store className="w-4 h-4 mr-2 text-teal-400" />
-                          <span>Serahkan Cucian ke Toko (AT_STORE)</span>
+                          <Store className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>Tiba di outlet</span>
                         </Button>
                       )}
 
@@ -595,102 +621,100 @@ export default function CourierDashboardPage() {
                             handleInitiateTransition(
                               task,
                               'OUT_FOR_DELIVERY',
-                              'Mulai Perjalanan Pengantaran',
-                              'Pastikan pakaian bersih dan rapi sudah Anda bawa dari toko menuju alamat pelanggan.'
+                              'Mulai pengantaran cucian',
+                              'Konfirmasi saat Anda mulai berangkat mengantarkan pakaian bersih ke pelanggan.'
                             )
                           }
                           disabled={isActionLoading}
-                          className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs min-h-[44px]"
+                          className="w-full sm:w-auto bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
                         >
-                          <Send className="w-4 h-4 mr-2" />
-                          <span>Mulai Pengantaran (OUT_FOR_DELIVERY)</span>
+                          <Send className="w-4 h-4 mr-1.5 text-sky-300" strokeWidth={1.75} />
+                          <span>Mulai pengantaran</span>
                         </Button>
                       )}
 
-                      {/* Action 5: COD Confirmation if unpaid */}
-                      {isMyActiveTask && (task.status === 'OUT_FOR_DELIVERY' || task.status === 'COMPLETED') && task.payment_status !== 'PAID' && (
-                        <Button
-                          onClick={() => handleConfirmCod(task.id)}
-                          disabled={isActionLoading}
-                          className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-5 rounded-xl text-xs min-h-[44px]"
-                        >
-                          <CreditCard className="w-4 h-4 mr-2" />
-                          <span>Terima Uang COD ({formatRupiah(task.final_amount || task.estimated_amount)})</span>
-                        </Button>
-                      )}
-
-                      {/* Action 6: OUT_FOR_DELIVERY -> COMPLETED */}
+                      {/* Action 5: OUT_FOR_DELIVERY -> COMPLETED */}
                       {isMyActiveTask && task.status === 'OUT_FOR_DELIVERY' && (
                         <Button
                           onClick={() =>
                             handleInitiateTransition(
                               task,
                               'COMPLETED',
-                              'Selesaikan Pengantaran (Serah Terima)',
-                              'Konfirmasi bahwa cucian bersih telah diterima oleh customer dengan baik.'
+                              'Selesaikan pengantaran',
+                              'Pastikan pakaian bersih telah diserahkan dan diterima oleh pelanggan dengan baik.'
                             )
                           }
                           disabled={isActionLoading}
-                          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs min-h-[44px]"
+                          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[38px] shadow-2xs"
                         >
-                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                          <span>Cucian Diterima Pelanggan (COMPLETED)</span>
+                          <CheckCircle2 className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+                          <span>Serah terima selesai</span>
+                        </Button>
+                      )}
+
+                      {/* Action 6: Confirm COD if needed */}
+                      {isMyActiveTask && (task.status === 'OUT_FOR_DELIVERY' || task.status === 'COMPLETED') && task.payment_status !== 'PAID' && (
+                        <Button
+                          onClick={() => handleConfirmCod(task.id)}
+                          disabled={isActionLoading}
+                          className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-xl text-xs min-h-[38px] shadow-2xs"
+                        >
+                          <CreditCard className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+                          <span>Konfirmasi COD tunai</span>
                         </Button>
                       )}
                     </div>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
         )}
 
-        {/* Modal: Status Update Note */}
-        <Modal
-          isOpen={showNoteModal}
-          onClose={() => setShowNoteModal(false)}
-          title={selectedTaskForNote?.title || 'Perbarui Status Tugas'}
-        >
-          <div className="space-y-4 text-xs">
-            <div className="p-3.5 bg-sky-50 rounded-2xl border border-sky-200 text-slate-700">
-              <p className="font-semibold text-navy-900 mb-1">
-                Pesanan: {selectedTaskForNote?.task.order_number} ({selectedTaskForNote?.task.customer_name})
-              </p>
-              <p className="text-slate-600 leading-relaxed">
-                {selectedTaskForNote?.description}
-              </p>
-            </div>
+        {/* Modal: Transition Note Input */}
+        {showNoteModal && selectedTaskForNote && (
+          <Modal
+            isOpen={showNoteModal}
+            onClose={() => setShowNoteModal(false)}
+            title={selectedTaskForNote.title}
+            description={selectedTaskForNote.description}
+          >
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Catatan perjalanan / serah terima (opsional)
+                </label>
+                <textarea
+                  value={transitionNote}
+                  onChange={(e) => setTransitionNote(e.target.value)}
+                  placeholder="Contoh: Diterima oleh Pak RT / diserahkan ke resepsionis kos."
+                  rows={3}
+                  className="w-full text-xs rounded-xl border border-slate-300 p-3 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-900"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Catatan Kurir (Opsional)
-              </label>
-              <Textarea
-                value={transitionNote}
-                onChange={(e) => setTransitionNote(e.target.value)}
-                placeholder="Contoh: Diterima oleh kak Rina langsung, kondisi bersih dan rapi."
-                rows={3}
-                className="text-xs"
-              />
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowNoteModal(false)}
+                  disabled={actionLoadingId === selectedTaskForNote.task.order_id}
+                  className="rounded-xl text-xs font-semibold"
+                >
+                  Batal
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSubmitTransition}
+                  disabled={actionLoadingId === selectedTaskForNote.task.order_id}
+                  className="bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-semibold min-h-[38px] px-4 shadow-2xs"
+                >
+                  {actionLoadingId === selectedTaskForNote.task.order_id ? 'Memproses...' : 'Konfirmasi status'}
+                </Button>
+              </div>
             </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                variant="outline"
-                onClick={() => setShowNoteModal(false)}
-                className="rounded-xl text-xs min-h-[40px]"
-              >
-                Batal
-              </Button>
-              <Button
-                onClick={handleSubmitTransition}
-                className="bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold min-h-[40px]"
-              >
-                Konfirmasi Perubahan Status
-              </Button>
-            </div>
-          </div>
-        </Modal>
+          </Modal>
+        )}
       </div>
     </DashboardLayout>
   );
