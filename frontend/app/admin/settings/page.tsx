@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { adminApi, PlatformCommission } from '@/lib/admin';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { StatCard } from '@/components/admin/StatCard';
-import { X, Sliders, Info } from 'lucide-react';
+import { X, Sliders, Info, Clock } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const [commission, setCommission] = useState<PlatformCommission | null>(null);
@@ -77,38 +77,41 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <AdminHeader
-        title="Komisi Platform"
-        subtitle="Konfigurasi tarif flat komisi per pesanan laundry yang diselesaikan (Snapshot per order)"
+        title="Komisi platform"
+        subtitle="Konfigurasi tarif flat komisi per pesanan laundry yang diselesaikan (snapshot per order)"
         onRefresh={() => fetchCommission(true)}
         refreshing={refreshing}
       />
 
       {feedback && (
         <div
-          className={`p-3 rounded-md text-xs flex items-center justify-between ${
+          className={`p-3.5 rounded-xl text-xs flex items-center justify-between border ${
             feedback.type === 'success'
-              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border border-rose-200 text-rose-800'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
-          <span>{feedback.message}</span>
+          <span className="font-medium">{feedback.message}</span>
           <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-700">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Current Value Card */}
+      {/* Current Value Bento Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
-          label="Komisi Platform Aktif"
+          label="Komisi platform aktif"
           value={loading ? '...' : formatRupiah(commission?.amount)}
           subtext="Berlaku otomatis untuk order baru"
           tooltip="Nominal komisi ini disnapshot ke setiap order yang dibuat saat tarif ini aktif."
         />
-        <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col justify-center">
-          <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">Pembaruan Terakhir</div>
-          <div className="mt-1 text-sm font-mono text-slate-800">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-center">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Pembaruan terakhir</span>
+          </div>
+          <div className="mt-1 text-sm font-mono font-semibold text-slate-800">
             {commission?.updated_at
               ? new Date(commission.updated_at).toLocaleString('id-ID', {
                   timeZone: 'Asia/Jakarta',
@@ -121,19 +124,21 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Edit Form */}
-      <div className="bg-white border border-slate-200 rounded-lg p-5">
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100">
-          <Sliders className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
-          <h2 className="text-sm font-semibold text-slate-900">Perbarui Besaran Komisi</h2>
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-2xs space-y-5">
+        <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+          <div className="w-8 h-8 rounded-lg bg-navy-50 text-navy-700 flex items-center justify-center">
+            <Sliders className="w-4 h-4" />
+          </div>
+          <h2 className="text-sm font-semibold text-slate-900">Perbarui besaran komisi</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Nominal Komisi Flat (Rupiah)
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Nominal komisi flat (Rupiah)
             </label>
             <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-medium text-slate-500">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-semibold text-slate-500">
                 Rp
               </span>
               <input
@@ -143,27 +148,27 @@ export default function AdminSettingsPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 required
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-400 font-mono tabular-nums"
+                className="w-full pl-9 pr-3.5 py-2.5 text-xs bg-slate-50/70 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-navy-600 focus:ring-2 focus:ring-navy-600/15 font-mono tabular-nums text-slate-900 font-semibold transition-all"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Catatan / Deskripsi Konfigurasi
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Catatan / deskripsi konfigurasi
             </label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Misal: Penyesuaian biaya operasional platform 2026."
-              className="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-400"
+              className="w-full text-xs p-3 bg-slate-50/70 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-navy-600 focus:ring-2 focus:ring-navy-600/15 text-slate-800 font-medium transition-all"
             />
           </div>
 
-          <div className="p-3 rounded-md bg-slate-50 border border-slate-200 flex items-start gap-2 text-xs text-slate-600">
-            <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" strokeWidth={1.5} />
-            <span>
+          <div className="p-3.5 rounded-xl bg-navy-50/60 border border-navy-100/80 flex items-start gap-2.5 text-xs text-navy-900">
+            <Info className="w-4 h-4 text-navy-600 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">
               Perubahan komisi hanya akan diterapkan pada pesanan yang dibuat setelah waktu penyimpanan. Nilai komisi pada pesanan lama tetap tidak berubah (snapshot).
             </span>
           </div>
@@ -172,9 +177,9 @@ export default function AdminSettingsPage() {
             <button
               type="submit"
               disabled={saveLoading}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-md disabled:opacity-50 transition-colors cursor-pointer"
+              className="px-4 py-2.5 bg-navy-900 hover:bg-navy-800 text-white text-xs font-semibold rounded-xl disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
             >
-              {saveLoading ? 'Menyimpan Perubahan...' : 'Simpan Pengaturan'}
+              {saveLoading ? 'Menyimpan perubahan...' : 'Simpan pengaturan'}
             </button>
           </div>
         </form>

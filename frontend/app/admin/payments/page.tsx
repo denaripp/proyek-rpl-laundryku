@@ -56,11 +56,11 @@ export default function AdminPaymentsPage() {
 
   const columns: Column<AdminPayment>[] = [
     {
-      header: 'No. Pembayaran',
+      header: 'No. pembayaran',
       accessor: (item) => (
         <div>
-          <span className="font-mono font-medium text-slate-900">{item.payment_number}</span>
-          <div className="text-[10px] text-slate-400 font-mono">
+          <span className="font-mono font-semibold text-slate-900">{item.payment_number}</span>
+          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
             {new Date(item.created_at).toLocaleDateString('id-ID', {
               day: '2-digit',
               month: 'short',
@@ -71,13 +71,13 @@ export default function AdminPaymentsPage() {
       ),
     },
     {
-      header: 'No. Pesanan',
+      header: 'No. pesanan',
       accessor: (item) => (
-        <span className="font-mono text-slate-700">{item.order_number || '-'}</span>
+        <span className="font-mono font-medium text-slate-700">{item.order_number || '-'}</span>
       ),
     },
     {
-      header: 'Pelanggan / Toko',
+      header: 'Pelanggan & toko',
       accessor: (item) => (
         <div>
           <div className="font-medium text-slate-800">{item.customer_name || '-'}</div>
@@ -88,7 +88,7 @@ export default function AdminPaymentsPage() {
     {
       header: 'Metode',
       accessor: (item) => (
-        <span className="font-mono uppercase text-xs font-medium text-slate-700">
+        <span className="font-mono uppercase text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
           {item.method} ({item.provider})
         </span>
       ),
@@ -106,7 +106,7 @@ export default function AdminPaymentsPage() {
       ),
     },
     {
-      header: 'Ref Provider',
+      header: 'Ref provider',
       accessor: (item) => (
         <span className="font-mono text-[11px] text-slate-500" title={item.provider_reference || ''}>
           {item.provider_reference ? item.provider_reference.slice(0, 16) + '...' : '-'}
@@ -116,19 +116,19 @@ export default function AdminPaymentsPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <AdminHeader
-        title="Transaksi & Pembayaran"
-        subtitle="Daftar transaksi pembayaran masuk via Xendit VA, QRIS, dan COD (Read-Only)"
+        title="Transaksi dan pembayaran"
+        subtitle="Daftar transaksi pembayaran masuk via Xendit VA, QRIS, dan COD (mode baca)"
         onRefresh={() => fetchPayments(true)}
         refreshing={refreshing}
       />
 
       {/* Filters Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between bg-white border border-slate-200 rounded-lg p-3">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" strokeWidth={1.5} />
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-2xs">
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Cari no. bayar, referensi..."
@@ -137,7 +137,7 @@ export default function AdminPaymentsPage() {
                 setSearchQuery(e.target.value);
                 setPage(1);
               }}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-400"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50/70 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:bg-white focus:border-navy-600 focus:ring-2 focus:ring-navy-600/15 transition-all font-medium"
             />
           </div>
 
@@ -147,9 +147,9 @@ export default function AdminPaymentsPage() {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-slate-400 cursor-pointer"
+            className="w-full sm:w-auto py-2 px-3 text-xs bg-slate-50/70 border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-hidden focus:bg-white focus:border-navy-600 focus:ring-2 focus:ring-navy-600/15 transition-all cursor-pointer"
           >
-            <option value="">Semua Status</option>
+            <option value="">Semua status pembayaran</option>
             <option value="pending">Pending</option>
             <option value="paid">Paid</option>
             <option value="failed">Failed</option>
@@ -162,9 +162,9 @@ export default function AdminPaymentsPage() {
               setMethodFilter(e.target.value);
               setPage(1);
             }}
-            className="py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-slate-400 cursor-pointer"
+            className="w-full sm:w-auto py-2 px-3 text-xs bg-slate-50/70 border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-hidden focus:bg-white focus:border-navy-600 focus:ring-2 focus:ring-navy-600/15 transition-all cursor-pointer"
           >
-            <option value="">Semua Metode</option>
+            <option value="">Semua metode</option>
             <option value="va">Virtual Account</option>
             <option value="qris">QRIS</option>
             <option value="cod">COD</option>
