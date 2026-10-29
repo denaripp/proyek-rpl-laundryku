@@ -611,18 +611,17 @@ class CourierPortalController extends Controller
         }
         $order->save();
 
-        OrderStatusHistory::create([
-            'order_id' => $order->id,
-            'status' => $effectiveOrderStatus,
-            'previous_status' => $currentStatus ?? $order->getOriginal('status') ?? 'created',
-            'actor_id' => $user->id,
-            'actor_role' => $user->role ?? $user->roles()->first()?->name ?? 'courier',
-            'reason' => 'Courier task transition to ' . $effectiveOrderStatus,
-            'metadata' => [
+        OrderStatusHistory::record(
+            order: $order,
+            status: $effectiveOrderStatus,
+            previousStatus: $currentStatus,
+            actor: $user,
+            reason: 'Courier task transition to ' . $effectiveOrderStatus,
+            metadata: [
                 'task_id' => $task?->id,
                 'requested_status' => $toStatus,
-            ],
-        ]);
+            ]
+        );
 
         if ($task) {
             $taskStatusMap = [

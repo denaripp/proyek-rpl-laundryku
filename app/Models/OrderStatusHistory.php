@@ -40,4 +40,41 @@ class OrderStatusHistory extends Model
     {
         return $this->belongsTo(User::class, 'actor_id');
     }
+
+    /**
+     * Record a new order status change safely with try-catch and logging.
+     */
+    public static function record(
+        mixed $order,
+        string $status,
+        ?string $previousStatus = null,
+        ?User $actor = null,
+        ?string $reason = null,
+        array $metadata = []
+    ): ?self {
+        $orderId = null;
+        try {
+            $orderId = $order instanceof Order ? $order->id : $order;
+            $prev = $previousStatus ?? ($order instanceof Order ? ($order->getOriginal('status') ?? 'created') : 'created');
+            $actorRole = $actor?->role ?? $actor?->roles()->first()?->name ?? null;
+
+            return static::create([
+                'order_id' => $orderId,
+                'status' => $status,
+                'previous_status' => $prev,
+                'actor_id' => $actor?->id,
+                'actor_role' => $actorRole,
+                'reason' => $reason,
+                'metadata' => $metadata,
+            ]);
+        } catch (\Throwable $e) {
+            $safeOrderId = is_scalar($orderId) ? (string) $orderId : json_encode($orderId);
+            \Illuminate\Support\Facades\Log::warning("Failed to record order status history for order {$safeOrderId}: " . $e->getMessage(), [
+                'exception' => $e,
+                'order_id' => $orderId,
+                'status' => $status,
+            ]);
+            return null;
+        }
+    }
 }

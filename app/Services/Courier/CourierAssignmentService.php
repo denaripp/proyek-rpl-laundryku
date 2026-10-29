@@ -73,18 +73,17 @@ class CourierAssignmentService
             $order->save();
 
             $actor = auth()->user() ?? ($courier->user_id ? User::find($courier->user_id) : null);
-            OrderStatusHistory::create([
-                'order_id' => $order->id,
-                'status' => $statusField,
-                'previous_status' => $previousStatus ?? $order->getOriginal('status') ?? 'created',
-                'actor_id' => $actor?->id,
-                'actor_role' => $actor?->roles()->first()?->name ?? $actor?->role ?? null,
-                'reason' => "Courier assigned for {$taskType}",
-                'metadata' => [
+            OrderStatusHistory::record(
+                order: $order,
+                status: $statusField,
+                previousStatus: $previousStatus,
+                actor: $actor,
+                reason: "Courier assigned for {$taskType}",
+                metadata: [
                     'courier_id' => $courier->id,
                     'task_type' => $taskType,
-                ],
-            ]);
+                ]
+            );
 
             // Log audit
             AuditLog::create([
