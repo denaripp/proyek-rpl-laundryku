@@ -365,9 +365,8 @@ class PaymentController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $order->payment_status = 'paid';
-        $order->paid_at = now();
-        $order->save();
+        app(\App\Services\Payment\XenditService::class)->markOrderAsPaid($order, 'Simulated payment success');
+        $order->refresh();
 
         $payment = Payment::where('order_id', $order->id)->first();
         if ($payment) {

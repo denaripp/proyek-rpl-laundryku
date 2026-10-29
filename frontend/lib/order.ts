@@ -72,11 +72,18 @@ export interface OrderDetail {
   payment_status: PaymentStatus;
   estimated_weight_kg: number | null;
   actual_weight_kg: number | null;
+  actual_weight?: number | null;
+  estimated_weight?: number | null;
   estimated_amount: number;
   final_amount: number | null;
+  estimated_price?: number | null;
+  final_price?: number | null;
   total_amount?: number;
   delivery_fee: number;
+  pickup_fee?: number;
   platform_fee?: number;
+  discount?: number;
+  tax?: number;
   commission_amount: number;
   pickup_address: AddressSnapshot;
   delivery_address: AddressSnapshot;
@@ -349,6 +356,17 @@ export async function transitionOrder(
     body: JSON.stringify(payload),
   });
   return response.data;
+}
+
+export async function assignCourier(
+  id: string,
+  payload: { task_type?: 'pickup' | 'delivery' } = { task_type: 'pickup' }
+): Promise<unknown> {
+  const response = await apiClient<unknown>(`/orders/${id}/assign-courier`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return response;
 }
 
 export async function cancelOrder(

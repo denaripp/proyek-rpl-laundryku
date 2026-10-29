@@ -416,14 +416,14 @@ export default function OrderDetailPage({
                 )}
 
                 {/* Action 2: Awaiting Payment Banner */}
-                {order.status === 'AWAITING_PAYMENT' && !isPaid && (
+                {!isPaid && ['payment_required', 'awaiting_payment'].includes((order.status || (order as any).raw_status || '').toLowerCase()) && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <h3 className="font-semibold text-sm text-amber-950">
                         Menunggu Pembayaran
                       </h3>
                       <p className="text-xs text-amber-900">
-                        Total tagihan: <b className="text-slate-900">{formatRupiah(order.final_amount || order.estimated_amount)}</b>
+                        Total tagihan: <b className="text-slate-900">{formatRupiah(order.total_amount ?? (order.final_price ?? (order.final_amount ?? (order.estimated_price ?? order.estimated_amount))))}</b>
                       </p>
                     </div>
 
@@ -548,50 +548,93 @@ export default function OrderDetailPage({
                       Rincian Biaya
                     </h2>
 
-                    <table className="w-full text-xs">
-                      <tbody className="divide-y divide-slate-100">
-                        <tr>
-                          <td className="py-2 text-slate-600">Estimasi Biaya Jasa</td>
-                          <td className="py-2 text-right text-slate-900 tabular-nums">
-                            {formatRupiah(
-                              order.items && order.items.length > 0
-                                ? order.items.reduce((acc, it) => acc + (it.line_estimated_amount || ((it.unit_price || 0) * (it.quantity_estimated || 0))), 0)
-                                : Math.max(0, (order.estimated_amount || 0) - (order.delivery_fee || 0) - (order.platform_fee ?? 1000))
+                    {(() => {
+                      const finalPrice = order.final_price !== null && order.final_price !== undefined
+                        ? Number(order.final_price)
+                        : (order.final_amount !== null && order.final_amount !== undefined ? Number(order.final_amount) : null);
+                      const estimatedPrice = order.estimated_price !== null && order.estimated_price !== undefined
+                        ? Number(order.estimated_price)
+                        : (order.estimated_amount !== null && order.estimated_amount !== undefined ? Number(order.estimated_amount) : 0);
+                      const platformFee = Number(order.platform_fee ?? 1000);
+                      const deliveryFee = Number(order.delivery_fee ?? 0);
+                      const pickupFee = Number(order.pickup_fee ?? 0);
+                      const discount = Number(order.discount ?? 0);
+                      const tax = Number(order.tax ?? 0);
+                      const totalAmount = Number(order.total_amount ?? (finalPrice !== null ? finalPrice : estimatedPrice));
+
+                      const actualWeight = order.actual_weight ?? order.actual_weight_kg;
+                      const hasActualWeight = actualWeight !== null && actualWeight !== undefined && Number(actualWeight) > 0;
+
+                      let serviceFee: number;
+                      let serviceFeeLabel: string;
+
+                      if (finalPrice !== null) {
+                        serviceFee = Math.max(0, finalPrice - platformFee - deliveryFee - pickupFee);
+                        serviceFeeLabel = hasActualWeight
+                          ? `Biaya Jasa (${parseFloat(String(actualWeight))} kg)`
+                          : 'Biaya Jasa';
+                      } else {
+                        serviceFee = Math.max(0, estimatedPrice - platformFee);
+                        serviceFeeLabel = hasActualWeight
+                          ? `Biaya Jasa (${parseFloat(String(actualWeight))} kg)`
+                          : 'Estimasi Biaya Jasa';
+                      }
+
+                      return (
+                        <table className="w-full text-xs">
+                          <tbody className="divide-y divide-slate-100">
+                            <tr>
+                              <td className="py-2 text-slate-600">{serviceFeeLabel}</td>
+                              <td className="py-2 text-right text-slate-900 tabular-nums">
+                                {formatRupiah(serviceFee)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-2 text-slate-600">Biaya Platform</td>
+                              <td className="py-2 text-right text-slate-900 tabular-nums">
+                                {formatRupiah(platformFee)}
+                              </td>
+                            </tr>
+                            {pickupFee > 0 && (
+                              <tr>
+                                <td className="py-2 text-slate-600">Biaya Penjemputan</td>
+                                <td className="py-2 text-right text-slate-900 tabular-nums">
+                                  {formatRupiah(pickupFee)}
+                                </td>
+                              </tr>
                             )}
-                          </td>
-                        </tr>
-                        {order.final_amount !== null && (
-                          <tr>
-                            <td className="py-2 text-slate-600">Biaya Jasa Final</td>
-                            <td className="py-2 text-right text-slate-900 tabular-nums font-medium">
-                              {formatRupiah(
-                                order.items && order.items.length > 0
-                                  ? order.items.reduce((acc, it) => acc + (it.line_final_amount !== null ? it.line_final_amount : (it.line_estimated_amount || ((it.unit_price || 0) * ((it.quantity_actual ?? it.quantity_estimated) || 0)))), 0)
-                                  : Math.max(0, (order.final_amount || 0) - (order.delivery_fee || 0) - (order.platform_fee ?? 1000))
-                              )}
-                            </td>
-                          </tr>
-                        )}
-                        <tr>
-                          <td className="py-2 text-slate-600">Biaya Platform</td>
-                          <td className="py-2 text-right text-slate-900 tabular-nums">
-                            {formatRupiah(order.platform_fee ?? 1000)}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 text-slate-600">Ongkos Kirim</td>
-                          <td className="py-2 text-right text-slate-900 tabular-nums">
-                            {order.delivery_fee > 0 ? formatRupiah(order.delivery_fee) : 'Gratis'}
-                          </td>
-                        </tr>
-                        <tr className="font-medium text-slate-900">
-                          <td className="py-2.5 pt-3 font-semibold">Total Tagihan</td>
-                          <td className="py-2.5 pt-3 text-right text-sm font-semibold tabular-nums text-slate-900">
-                            {formatRupiah(order.final_amount !== null ? order.final_amount : order.estimated_amount)}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                            <tr>
+                              <td className="py-2 text-slate-600">Ongkos Kirim</td>
+                              <td className="py-2 text-right text-slate-900 tabular-nums">
+                                {deliveryFee > 0 ? formatRupiah(deliveryFee) : 'Gratis'}
+                              </td>
+                            </tr>
+                            {discount !== 0 && (
+                              <tr>
+                                <td className="py-2 text-emerald-600">Diskon</td>
+                                <td className="py-2 text-right text-emerald-600 tabular-nums">
+                                  -{formatRupiah(Math.abs(discount))}
+                                </td>
+                              </tr>
+                            )}
+                            {tax !== 0 && (
+                              <tr>
+                                <td className="py-2 text-slate-600">Pajak</td>
+                                <td className="py-2 text-right text-slate-900 tabular-nums">
+                                  {formatRupiah(tax)}
+                                </td>
+                              </tr>
+                            )}
+                            <tr className="font-medium text-slate-900">
+                              <td className="py-2.5 pt-3 font-semibold">Total Tagihan</td>
+                              <td className="py-2.5 pt-3 text-right text-sm font-semibold tabular-nums text-slate-900">
+                                {formatRupiah(totalAmount)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      );
+                    })()}
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                       <span>Status Pembayaran</span>

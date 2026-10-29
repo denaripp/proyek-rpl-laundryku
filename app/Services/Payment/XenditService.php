@@ -383,29 +383,11 @@ class XenditService
             // Update order payment_status
             $order = $payment->order;
             if ($order) {
-                $order->payment_status = 'paid';
-                $order->paid_at = now();
-                $order->save();
+                $this->markOrderAsPaid($order, 'Xendit payment confirmed');
 
                 // Tahap 15: queued side-effect notification
                 NotificationTrigger::paymentSuccess($order->customer, $order);
                 NotificationTrigger::orderPaidForStore($order);
-
-                // Untuk pembayaran QR, transisikan status order dan catat ke riwayat status
-                if ($isQr && in_array(strtolower($order->status), ['awaiting_payment', 'payment_required'])) {
-                    try {
-                        $orderService = app(\App\Services\Order\OrderService::class);
-                        $actor = $order->store?->owner 
-                            ?? ($order->store?->owner_user_id ? \App\Models\User::find($order->store->owner_user_id) : null)
-                            ?? \App\Models\User::role('platform_admin')->first();
-                        $orderService->transition($order, \App\Enums\OrderStatus::PAID->value, $actor, 'Pembayaran QRIS berhasil dikonfirmasi');
-                    } catch (\Throwable $e) {
-                        Log::warning('Failed to transition order status after QR payment', [
-                            'order_id' => $order->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
             }
 
         } elseif ($xenditStatus === 'EXPIRED') {
@@ -495,5 +477,41 @@ class XenditService
         NotificationTrigger::paymentSuccess($order->customer, $order);
 
         return true;
+    }
+
+    /**
+     * Mark order as paid and advance status to PAID.
+     */
+    public function markOrderAsPaid(Order $order, string $note = 'Payment confirmed'): Order
+    {
+        $order->payment_status = 'paid';
+        if (empty($order->paid_at)) {
+            $order->paid_at = now();
+        }
+        $order->saveQuietly();
+
+        if (in_array(strtolower($order->status), ['awaiting_payment', 'payment_required', 'weighed'])) {
+            if (strtolower($order->status) === 'awaiting_payment') {
+                $order->status = 'payment_required';
+                $order->saveQuietly();
+            }
+
+            try {
+                $orderService = app(\App\Services\Order\OrderService::class);
+                $actor = $order->store?->owner
+                    ?? ($order->store?->owner_user_id ? \App\Models\User::find($order->store->owner_user_id) : null)
+                    ?? \App\Models\User::role('platform_admin')->first();
+                $orderService->transition($order, \App\Enums\OrderStatus::PAID->value, $actor, $note);
+            } catch (\Throwable $e) {
+                Log::warning('markOrderAsPaid transition failed: ' . $e->getMessage(), [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $order->status = 'paid';
+                $order->saveQuietly();
+            }
+        }
+
+        return $order;
     }
 }
