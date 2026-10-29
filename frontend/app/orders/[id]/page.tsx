@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, use } from 'react';
+import React, { useEffect, useState, use, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PublicLayout } from '@/components/layout/PublicLayout';
+import { usePolling } from '@/hooks/usePolling';
 import {
   Button,
   Modal,
@@ -90,26 +91,40 @@ export default function OrderDetailPage({
     return () => clearInterval(interval);
   }, [activePaymentInfo, isPaidSuccess, qrTimer]);
 
-  // QRIS Payment Polling (every 5 seconds)
-  useEffect(() => {
-    if (!activePaymentInfo || activePaymentInfo.method !== 'qris' || isPaidSuccess) return;
-    if (qrTimer <= 0) return;
+  // QRIS Payment Polling (every 5 seconds with visibility guard and terminal status check)
+  const currentPaymentStatus = (order?.payment_status || '').toLowerCase();
+  const currentOrderStatus = (order?.status || '').toLowerCase();
+  const isTerminalStatus =
+    ['paid', 'expired', 'failed', 'cancelled', 'payment_expired', 'payment_failed'].includes(currentPaymentStatus) ||
+    currentOrderStatus === 'cancelled';
 
-    const pollInterval = setInterval(async () => {
-      try {
-        const latest = await getOrder(orderId);
-        const pStatus = (latest.payment_status || '').toLowerCase();
-        if (pStatus === 'paid') {
-          setOrder(latest);
-          setIsPaidSuccess(true);
-        }
-      } catch {
-        // silent polling failure
+  const isQrisPollingActive = Boolean(
+    activePaymentInfo &&
+    activePaymentInfo.method === 'qris' &&
+    !isPaidSuccess &&
+    !isTerminalStatus &&
+    qrTimer > 0
+  );
+
+  const pollQrisPayment = useCallback(async () => {
+    try {
+      const latest = await getOrder(orderId);
+      const pStatus = (latest.payment_status || '').toLowerCase();
+      const oStatus = (latest.status || '').toLowerCase();
+      if (pStatus === 'paid') {
+        setOrder(latest);
+        setIsPaidSuccess(true);
+      } else if (['expired', 'failed', 'cancelled', 'payment_expired', 'payment_failed'].includes(pStatus) || oStatus === 'cancelled') {
+        setOrder(latest);
       }
-    }, 5000);
+    } catch {
+      // silent polling failure
+    }
+  }, [orderId]);
 
-    return () => clearInterval(pollInterval);
-  }, [activePaymentInfo, isPaidSuccess, qrTimer, orderId]);
+  usePolling(pollQrisPayment, 5000, {
+    enabled: isQrisPollingActive,
+  });
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

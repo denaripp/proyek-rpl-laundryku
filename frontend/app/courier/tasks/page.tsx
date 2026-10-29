@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -23,6 +23,7 @@ import { ORDER_STATUS_META, OrderStatus, confirmCourierCod } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
+import { usePolling } from '@/hooks/usePolling';
 import {
   Truck,
   Store,
@@ -76,20 +77,23 @@ export default function CourierTasksPage() {
     }
   };
 
+  const fetchTasksSilent = useCallback(async () => {
+    try {
+      const tasksData = await getCourierTasks(activeTab);
+      setTasks(tasksData || []);
+    } catch {
+      // Silent catch for background auto-refresh
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     loadTasks();
-
-    const intervalId = setInterval(async () => {
-      try {
-        const tasksData = await getCourierTasks(activeTab);
-        setTasks(tasksData || []);
-      } catch {
-        // Silent catch for background auto-refresh
-      }
-    }, 10000);
-
-    return () => clearInterval(intervalId);
   }, [activeTab]);
+
+  // Polling 15s with auto-pause on background tab & refetch on refocus
+  usePolling(fetchTasksSilent, 15000, {
+    enabled: !!activeTab,
+  });
 
   const handleLogout = async () => {
     await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);

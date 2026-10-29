@@ -7,6 +7,7 @@ import { StatCard } from '@/components/admin/StatCard';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AlertCircle, ArrowUpRight } from 'lucide-react';
+import { usePolling } from '@/hooks/usePolling';
 
 export default function AdminDashboardPage() {
   const [period, setPeriod] = useState<string>('all_time');
@@ -33,12 +34,10 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchMetrics();
-    // 30s auto-refresh polling
-    const interval = setInterval(() => {
-      fetchMetrics(true);
-    }, 30000);
-    return () => clearInterval(interval);
   }, [fetchMetrics]);
+
+  // 60s auto-refresh polling with auto-pause on background tab & refetch on refocus
+  usePolling(() => fetchMetrics(true), 60000);
 
   const formatRupiah = (val: number | null | undefined) => {
     return new Intl.NumberFormat('id-ID', {

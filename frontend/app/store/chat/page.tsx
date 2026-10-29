@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { usePolling } from '@/hooks/usePolling';
 import {
   Badge,
   Button,
@@ -112,32 +113,31 @@ export default function StoreChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Polling for selected chat
-  useEffect(() => {
+  // Polling for selected chat every 5 seconds (only when tab is visible)
+  const pollStoreChat = useCallback(async () => {
     if (!selectedConvId || loadingChat) return;
+    try {
+      const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+      const newMsgs = await pollChatMessages(selectedConvId, lastMsg ? lastMsg.created_at : undefined);
 
-    const interval = setInterval(async () => {
-      try {
-        const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-        const newMsgs = await pollChatMessages(selectedConvId, lastMsg ? lastMsg.created_at : undefined);
-
-        if (newMsgs && newMsgs.length > 0) {
-          setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m.id));
-            const uniqueNew = newMsgs.filter((m) => !existingIds.has(m.id));
-            if (uniqueNew.length > 0) {
-              return [...prev, ...uniqueNew];
-            }
-            return prev;
-          });
-        }
-      } catch {
-        // Ignore polling error
+      if (newMsgs && newMsgs.length > 0) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const uniqueNew = newMsgs.filter((m) => !existingIds.has(m.id));
+          if (uniqueNew.length > 0) {
+            return [...prev, ...uniqueNew];
+          }
+          return prev;
+        });
       }
-    }, 3000);
-
-    return () => clearInterval(interval);
+    } catch {
+      // Ignore polling error
+    }
   }, [selectedConvId, messages, loadingChat]);
+
+  usePolling(pollStoreChat, 5000, {
+    enabled: !!selectedConvId && !loadingChat,
+  });
 
   const handleLogout = async () => {
     await logout();

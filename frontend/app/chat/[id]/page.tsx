@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef, use } from 'react';
+import React, { useState, useEffect, useRef, use, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PublicLayout } from '@/components/layout/PublicLayout';
+import { usePolling } from '@/hooks/usePolling';
 import {
   getConversationDetail,
   sendChatMessage,
@@ -86,32 +87,31 @@ export default function ChatDetailPage({
     scrollToBottom();
   }, [messages]);
 
-  // Polling for new messages every 3 seconds
-  useEffect(() => {
+  // Polling for new messages every 5 seconds (only when tab is visible)
+  const pollNewMessages = useCallback(async () => {
     if (!conversationId || loading || error) return;
+    try {
+      const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+      const newMsgs = await pollChatMessages(conversationId, lastMsg ? lastMsg.created_at : undefined);
 
-    const interval = setInterval(async () => {
-      try {
-        const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-        const newMsgs = await pollChatMessages(conversationId, lastMsg ? lastMsg.created_at : undefined);
-
-        if (newMsgs && newMsgs.length > 0) {
-          setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m.id));
-            const uniqueNew = newMsgs.filter((m) => !existingIds.has(m.id));
-            if (uniqueNew.length > 0) {
-              return [...prev, ...uniqueNew];
-            }
-            return prev;
-          });
-        }
-      } catch {
-        // Fail silently during polling
+      if (newMsgs && newMsgs.length > 0) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const uniqueNew = newMsgs.filter((m) => !existingIds.has(m.id));
+          if (uniqueNew.length > 0) {
+            return [...prev, ...uniqueNew];
+          }
+          return prev;
+        });
       }
-    }, 3000);
-
-    return () => clearInterval(interval);
+    } catch {
+      // Fail silently during background polling
+    }
   }, [conversationId, messages, loading, error]);
+
+  usePolling(pollNewMessages, 5000, {
+    enabled: !!conversationId && !loading && !error,
+  });
 
   // Handle Image File Selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

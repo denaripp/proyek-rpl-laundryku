@@ -24,6 +24,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { getUnreadChatCount } from '@/lib/chat';
 import { notificationApi } from '@/lib/notification';
 import { hasRole, hasApprovedStore, getUserDisplayContact } from '@/lib/auth';
+import { usePolling } from '@/hooks/usePolling';
 
 export interface PublicLayoutProps {
   children: React.ReactNode;
@@ -125,16 +126,18 @@ export const PublicLayout = ({ children }: PublicLayoutProps) => {
     }
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    fetchCounters();
-    const interval = setInterval(fetchCounters, 15000);
+  // 30s auto-refresh polling with visibility guard & immediate refocus refetch
+  usePolling(fetchCounters, 30000, {
+    enabled: isAuthenticated,
+    immediate: true,
+  });
 
+  useEffect(() => {
     const handleReadEvent = () => fetchCounters();
     window.addEventListener('laundryku_chat_read', handleReadEvent);
     window.addEventListener('laundryku_auth_change', handleReadEvent);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('laundryku_chat_read', handleReadEvent);
       window.removeEventListener('laundryku_auth_change', handleReadEvent);
     };

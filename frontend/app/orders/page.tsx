@@ -23,6 +23,7 @@ import {
   OrderSkeleton,
 } from '@/components/orders';
 import { RefreshCw, WifiOff, AlertCircle, Plus } from 'lucide-react';
+import { usePolling } from '@/hooks/usePolling';
 
 const POLLING_INTERVAL_MS = 20000; // 20 seconds
 
@@ -236,59 +237,10 @@ export default function CustomerOrdersPage() {
     return () => clearInterval(timer);
   }, [lastUpdatedTime]);
 
-  // Real-time silent polling & Visibility / Focus listeners
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let pollingInterval: NodeJS.Timeout | null = null;
-
-    const startPolling = () => {
-      if (pollingInterval) clearInterval(pollingInterval);
-      pollingInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          fetchOrdersData(true);
-        }
-      }, POLLING_INTERVAL_MS);
-    };
-
-    const stopPolling = () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchOrdersData(true);
-        startPolling();
-      } else {
-        stopPolling();
-      }
-    };
-
-    const handleWindowFocus = () => {
-      if (document.visibilityState === 'visible') {
-        fetchOrdersData(true);
-      }
-    };
-
-    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      startPolling();
-    }
-
-    if (typeof window !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('focus', handleWindowFocus);
-    }
-
-    return () => {
-      stopPolling();
-      if (typeof window !== 'undefined') {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('focus', handleWindowFocus);
-      }
-    };
-  }, [fetchOrdersData, counts.active]);
+  // Real-time silent polling with visibility guard & immediate refocus refetch
+  usePolling(() => fetchOrdersData(true), POLLING_INTERVAL_MS, {
+    enabled: isAuthenticated,
+  });
 
   // Cleanup highlight timeout on unmount
   useEffect(() => {

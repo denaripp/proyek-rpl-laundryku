@@ -47,6 +47,7 @@ import {
 } from '@/lib/auth';
 import { toggleStoreOperationalStatus, getStoreSidebarCounts, StoreSidebarCounts } from '@/lib/store';
 import { useAuth } from '@/lib/AuthContext';
+import { usePolling } from '@/hooks/usePolling';
 
 export type UserRole = 'customer' | 'courier' | 'store_admin' | 'super_admin';
 
@@ -142,15 +143,21 @@ export const DashboardLayout = ({
         }
         return counts;
       });
+      if (counts && typeof counts.unread_chat === 'number') {
+        setUnreadChatCount(counts.unread_chat);
+      }
     } catch {
       // ignore
     }
   }, [userRole, storeId]);
 
-  useEffect(() => {
-    fetchSidebarCounts();
-    const interval = setInterval(fetchSidebarCounts, 10000);
+  // Combined 30s polling with auto-pause on hidden tab & refetch on refocus
+  usePolling(fetchSidebarCounts, 30000, {
+    enabled: userRole === 'store_admin',
+    immediate: true,
+  });
 
+  useEffect(() => {
     const handleRefresh = () => {
       fetchSidebarCounts();
     };
@@ -158,12 +165,15 @@ export const DashboardLayout = ({
     window.addEventListener('laundryku_sidebar_count_refresh', handleRefresh);
     window.addEventListener('laundryku_active_store_change', handleRefresh);
     window.addEventListener('laundryku_store_changed', handleRefresh);
+    window.addEventListener('laundryku_chat_read', handleRefresh);
+    window.addEventListener('laundryku_auth_change', handleRefresh);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('laundryku_sidebar_count_refresh', handleRefresh);
       window.removeEventListener('laundryku_active_store_change', handleRefresh);
       window.removeEventListener('laundryku_store_changed', handleRefresh);
+      window.removeEventListener('laundryku_chat_read', handleRefresh);
+      window.removeEventListener('laundryku_auth_change', handleRefresh);
     };
   }, [fetchSidebarCounts]);
 
@@ -268,31 +278,6 @@ export const DashboardLayout = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [switcherOpen]);
-
-  const fetchUnread = useCallback(async () => {
-    if (userRole !== 'store_admin') return;
-    const count = await getUnreadChatCount();
-    setUnreadChatCount(count);
-  }, [userRole]);
-
-  useEffect(() => {
-    if (userRole !== 'store_admin') return;
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 10000);
-
-    const handleChatRead = () => {
-      fetchUnread();
-    };
-
-    window.addEventListener('laundryku_chat_read', handleChatRead);
-    window.addEventListener('laundryku_auth_change', handleChatRead);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('laundryku_chat_read', handleChatRead);
-      window.removeEventListener('laundryku_auth_change', handleChatRead);
-    };
-  }, [fetchUnread, userRole]);
 
   // Handle switching active store
   const handleSelectStore = (storeId: string) => {
