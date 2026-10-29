@@ -15,6 +15,7 @@
 | T009 | Courier / Order | Logika penutupan task duplikat di `CourierPortalController` dan `OrderService` | Resolved | Disatukan ke `CourierTask::closeActiveFor` di Tahap 3b (commit `2f5b327`). |
 | T010 | Enum / Model | Penundaan Eloquent `$casts` Enum untuk `OrderStatus` dan `CourierTaskStatus` | Deferred | Magic string diganti enum value di file kurir/order; `$casts` model ditunda agar tidak memecah kueri mentah. |
 | T011 | Auth / RBAC | Dua sistem role tidak sinkron: `users.role` vs tabel `roles` | Pending Refactoring | Kolom flat (`super_admin`, `store_admin`, `courier`, `customer`) vs tabel RBAC (`platform_owner`, `platform_admin`, `store_owner`, `store_staff`, `courier`, `customer`). |
+| T012 | Frontend / Store Search | frontend/app/stores/page.tsx ±700 baris setelah fix 77d7cc8. Rencana: extract logika resolusi lokasi ke hook useResolvedLocation() + komponen terpisah untuk peta dan daftar toko. Belum ada test frontend. | Pending Refactoring | Dicatat pada Tahap 1 untuk refactor mendatang. |
 
 ## Decision Log
 
@@ -424,3 +425,7 @@
      - *Langkah B (Pembersihan Skema)*: Buat migration baru untuk mendrop kolom `users.role` setelah semua lapisan kode 100% menggunakan Policy dan `$user->hasPermissionTo(...)` / `$user->hasRole(...)`.
   4. **Penyelarasan Seeder & Factory**:
      - Hilangkan field `'role'` dari `UserFactory`, `RolesAndPermissionsSeeder`, dan `SuperAdminSeeder`; cukup kaitkan id dari tabel `roles`.
+
+## [2026-10-29] Utang Teknis: Refactor Halaman Cari Toko (T012)
+- **Konteks Masalah**: `frontend/app/stores/page.tsx` mencapai ±700 baris setelah fix 77d7cc8.
+- **Rencana**: Extract logika resolusi lokasi ke hook `useResolvedLocation()` + komponen terpisah untuk peta dan daftar toko. Belum ada test frontend.
