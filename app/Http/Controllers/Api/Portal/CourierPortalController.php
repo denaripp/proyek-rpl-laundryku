@@ -573,7 +573,34 @@ class CourierPortalController extends Controller
             ], 422);
         }
 
-        $task = CourierTask::where('order_id', $order->id)->where('courier_id', $courier->id)->first();
+        // Determine whether this transition belongs to delivery or pickup
+        $isDeliveryTransition = in_array($toStatus, ['out_for_delivery', 'delivered', 'completed'], true);
+        $expectedTaskType = $isDeliveryTransition ? 'delivery' : 'pickup';
+
+        // Find the active task for this courier and task type
+        $task = CourierTask::where('order_id', $order->id)
+            ->where('courier_id', $courier->id)
+            ->where('task_type', $expectedTaskType)
+            ->whereNotIn('status', ['delivered', 'failed', 'cancelled'])
+            ->latest()
+            ->first();
+
+        // Fallback to latest task of expected type for this courier
+        if (! $task) {
+            $task = CourierTask::where('order_id', $order->id)
+                ->where('courier_id', $courier->id)
+                ->where('task_type', $expectedTaskType)
+                ->latest()
+                ->first();
+        }
+
+        // Generic fallback to any latest task for this order and courier
+        if (! $task) {
+            $task = CourierTask::where('order_id', $order->id)
+                ->where('courier_id', $courier->id)
+                ->latest()
+                ->first();
+        }
 
         $effectiveOrderStatus = ($toStatus === 'delivered') ? 'completed' : $toStatus;
         $order->status = $effectiveOrderStatus;
@@ -597,14 +624,16 @@ class CourierPortalController extends Controller
 
         if ($task) {
             $taskStatusMap = [
+                'courier_to_customer' => 'accepted',
                 'picked_up' => 'picked_up',
-                'at_store' => 'picked_up',
+                'in_transit_to_store' => 'picked_up',
+                'at_store' => 'delivered',
                 'out_for_delivery' => 'accepted',
                 'completed' => 'delivered',
                 'delivered' => 'delivered',
             ];
             $task->status = $taskStatusMap[$toStatus] ?? $task->status;
-            if (in_array($toStatus, ['completed', 'delivered'], true)) {
+            if (in_array($toStatus, ['at_store', 'completed', 'delivered'], true)) {
                 $task->completed_at = now();
             }
             $task->save();

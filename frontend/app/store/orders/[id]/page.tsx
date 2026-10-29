@@ -148,11 +148,12 @@ export default function StoreAdminOrderDetailPage({
       setActionSuccessMsg('Kurir berhasil ditugaskan untuk menjemput cucian.');
     } catch (err: unknown) {
       const anyErr = err as any;
+      const rawErrorField = anyErr?.responseData?.error ?? anyErr?.response?.data?.error;
+      const errorString = typeof rawErrorField === 'string' ? rawErrorField : rawErrorField?.message;
       const errorMsg =
         anyErr?.responseData?.message ||
-        anyErr?.responseData?.error?.message ||
+        errorString ||
         anyErr?.response?.data?.message ||
-        anyErr?.response?.data?.error?.message ||
         anyErr?.message ||
         'Gagal menugaskan kurir penjemputan.';
       setActionErrorMsg(errorMsg);
@@ -173,11 +174,12 @@ export default function StoreAdminOrderDetailPage({
       setActionSuccessMsg('Kurir berhasil ditugaskan untuk mengantar cucian.');
     } catch (err: unknown) {
       const anyErr = err as any;
+      const rawErrorField = anyErr?.responseData?.error ?? anyErr?.response?.data?.error;
+      const errorString = typeof rawErrorField === 'string' ? rawErrorField : rawErrorField?.message;
       const errorMsg =
         anyErr?.responseData?.message ||
-        anyErr?.responseData?.error?.message ||
+        errorString ||
         anyErr?.response?.data?.message ||
-        anyErr?.response?.data?.error?.message ||
         anyErr?.message ||
         'Gagal menugaskan kurir pengantaran.';
       setActionErrorMsg(errorMsg);

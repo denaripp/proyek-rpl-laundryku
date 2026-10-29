@@ -5,6 +5,7 @@ namespace App\Services\Order;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\OrderItem;
+use App\Models\CourierTask;
 use App\Models\User;
 use App\Models\Store;
 use App\Models\ServicePrice;
@@ -200,6 +201,25 @@ class OrderService
         return DB::transaction(function () use ($order, $newStatus, $actor, $reason, $metadata, $oldStatus) {
             $order->status = $newStatus;
             $order->save();
+
+            // Close corresponding courier tasks if transitioning to milestone completion
+            if (in_array($newStatus, ['at_store', 'received_by_store'], true)) {
+                CourierTask::where('order_id', $order->id)
+                    ->where('task_type', 'pickup')
+                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
+                    ->update([
+                        'status' => 'delivered',
+                        'completed_at' => now(),
+                    ]);
+            } elseif ($newStatus === 'completed') {
+                CourierTask::where('order_id', $order->id)
+                    ->where('task_type', 'delivery')
+                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
+                    ->update([
+                        'status' => 'delivered',
+                        'completed_at' => now(),
+                    ]);
+            }
 
             // Record status history
             $this->recordStatusHistory($order, $newStatus, $actor, $reason, $metadata);

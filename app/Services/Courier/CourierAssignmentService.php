@@ -116,8 +116,42 @@ class CourierAssignmentService
      */
     public function findEligibleCouriers(Order $order, string $taskType): iterable
     {
-        $originLat = $taskType === 'pickup' ? $order->pickup_latitude : $order->delivery_latitude;
-        $originLng = $taskType === 'pickup' ? $order->pickup_longitude : $order->delivery_longitude;
+        if ($taskType === 'delivery') {
+            $destLat = $order->delivery_latitude ?? $order->pickup_latitude;
+            $destLng = $order->delivery_longitude ?? $order->pickup_longitude;
+
+            if ($destLat === null || $destLng === null) {
+                $defaultAddress = $order->customer?->addresses()?->where('is_default', true)->first()
+                    ?? $order->customer?->addresses()?->first();
+                $destLat = $defaultAddress?->latitude;
+                $destLng = $defaultAddress?->longitude;
+            }
+
+            if ($destLat === null || $destLng === null) {
+                throw new Exception('Koordinat tujuan pengantaran customer belum ditentukan.');
+            }
+
+            $store = $order->store;
+            if (!$store || $store->latitude === null || $store->longitude === null) {
+                throw new Exception('Koordinat toko belum ditentukan.');
+            }
+            $originLat = $store->latitude;
+            $originLng = $store->longitude;
+        } else {
+            $originLat = $order->pickup_latitude;
+            $originLng = $order->pickup_longitude;
+
+            if ($originLat === null || $originLng === null) {
+                $defaultAddress = $order->customer?->addresses()?->where('is_default', true)->first()
+                    ?? $order->customer?->addresses()?->first();
+                $originLat = $defaultAddress?->latitude;
+                $originLng = $defaultAddress?->longitude;
+            }
+
+            if ($originLat === null || $originLng === null) {
+                throw new Exception('Koordinat penjemputan customer belum ditentukan.');
+            }
+        }
 
         $storeId = $order->store_id;
         $searchRadius = config('courier.courier_search_radius_km', 5);
@@ -131,7 +165,8 @@ class CourierAssignmentService
             })
             ->get();
 
-        $eligible = collect();
+        $eligibleWithDistance = collect();
+        $eligibleWithoutDistance = collect();
 
         foreach ($couriers as $courier) {
             // Check for conflicting active task
@@ -139,6 +174,13 @@ class CourierAssignmentService
                 ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
                 ->exists();
             if ($conflicting) {
+                continue;
+            }
+
+            // Couriers without current GPS location remain eligible, sorted at the end
+            if ($courier->current_latitude === null || $courier->current_longitude === null) {
+                $courier->calculated_distance = null;
+                $eligibleWithoutDistance->push($courier);
                 continue;
             }
 
@@ -150,12 +192,12 @@ class CourierAssignmentService
 
             if ($distance !== null && $distance <= $searchRadius) {
                 $courier->calculated_distance = $distance;
-                $eligible->push($courier);
+                $eligibleWithDistance->push($courier);
             }
         }
 
-        // Sort by distance ascending
-        return $eligible->sortBy('calculated_distance');
+        // Sort by distance ascending, then append couriers without GPS
+        return $eligibleWithDistance->sortBy('calculated_distance')->concat($eligibleWithoutDistance);
     }
 
     /**

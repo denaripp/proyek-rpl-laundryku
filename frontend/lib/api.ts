@@ -67,11 +67,13 @@ export function formatFriendlyErrorMessage(
   if (!err) return fallbackMessage;
 
   const anyErr = err as any;
+  const rawErrField = anyErr?.responseData?.error ?? anyErr?.response?.data?.error ?? anyErr?.error;
+  const errStringFromField = typeof rawErrField === 'string' ? rawErrField : rawErrField?.message;
+
   const msg =
     anyErr?.responseData?.message ||
-    anyErr?.responseData?.error?.message ||
+    errStringFromField ||
     anyErr?.response?.data?.message ||
-    anyErr?.response?.data?.error?.message ||
     (err instanceof Error ? err.message : typeof err === 'string' ? err : '');
 
   if (
@@ -126,13 +128,15 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
 
   if (!response.ok || (data as ApiErrorResponse).success === false) {
     const errObj = (data as ApiErrorResponse).error;
-    const rawData = data as unknown as { message?: string; error?: { message?: string } };
-    const rawErrorMsg = errObj?.message || rawData?.message || 'Terjadi kesalahan pada sistem.';
+    const rawData = data as unknown as { message?: string; error?: string | { message?: string } };
+    const errObjString = typeof errObj === 'string' ? errObj : (errObj as any)?.message;
+    const rawDataErrString = typeof rawData?.error === 'string' ? rawData.error : rawData?.error?.message;
+    const rawErrorMsg = errObjString || rawDataErrString || rawData?.message || 'Terjadi kesalahan pada sistem.';
     const errorMsg = formatFriendlyErrorMessage(rawErrorMsg, 'Terjadi kesalahan pada sistem.');
     const error = new Error(errorMsg);
     (error as unknown as { responseData: unknown; status: number; code?: string }).responseData = data;
     (error as unknown as { status: number }).status = response.status;
-    (error as unknown as { code?: string }).code = errObj?.code;
+    (error as unknown as { code?: string }).code = typeof errObj === 'object' ? (errObj as any)?.code : undefined;
     throw error;
   }
 
