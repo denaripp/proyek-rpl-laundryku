@@ -12,7 +12,9 @@
 | T006 | Infrastructure | PHP 8.3.33 vs Laravel 12 dependency (symfony/css-selector requires PHP ≥ 8.4) | Deferred | Deferred — akan direview di Tahap 17 atau saat dibutuhkan API eksternal, keputusan sadar untuk tidak upgrade PHP sekarang demi menghindari resiko infrastruktur yang tidak perlu di tengah development. |
 | T007 | Infrastructure | Queue driver dependency: `QUEUE_CONNECTION=redis` butuh PHP Redis extension (`ext-redis`) | Resolved | Di local/staging default menggunakan `QUEUE_CONNECTION=database` (via MySQL `jobs` table). Jika di production ingin menggunakan `QUEUE_CONNECTION=redis`, pastikan PHP Redis extension (`ext-redis`) sudah terpasang dan aktif di server production SEBELUM mengubah .env, atau tetap pertahankan `QUEUE_CONNECTION=database`. NotificationTrigger sudah dibentengi dengan try-catch defensif sehingga queue failure tidak membatalkan transaksi bisnis. |
 | T008 | Security | Akun testing Platform Owner (`admin@laundryku.test` / `admin12345`) | Security Caution | Akun ini dibuat HANYA untuk kebutuhan pengujian lokal/staging. DILARANG KERAS menggunakan kredensial ini di production. Saat deployment go-live, akun ini WAJIB dihapus atau diubah password-nya menjadi string acak yang kuat (32+ karakter) dan diwajibkan mengaktifkan 2FA via Google Authenticator. |
-| T009 | Courier / Order | Logika penutupan task duplikat di `CourierPortalController` dan `OrderService` | Pending Refactoring | Dual task closure logic (saat serah terima/antar selesai) perlu disatukan ke service method atau event listener terpusat di Tahap 3 (Refactoring). |
+| T009 | Courier / Order | Logika penutupan task duplikat di `CourierPortalController` dan `OrderService` | Resolved | Disatukan ke `CourierTask::closeActiveFor` di Tahap 3b (commit `2f5b327`). |
+| T010 | Enum / Model | Penundaan Eloquent `$casts` Enum untuk `OrderStatus` dan `CourierTaskStatus` | Deferred | Magic string diganti enum value di file kurir/order; `$casts` model ditunda agar tidak memecah kueri mentah. |
+| T011 | Auth / RBAC | Dua sistem role tidak sinkron: `users.role` vs tabel `roles` | Pending Refactoring | Kolom flat (`super_admin`, `store_admin`, `courier`, `customer`) vs tabel RBAC (`platform_owner`, `platform_admin`, `store_owner`, `store_staff`, `courier`, `customer`). |
 
 ## Decision Log
 
@@ -390,3 +392,35 @@
 - **Konteks**: Pada refactoring Tahap 3c, enum `App\Enums\CourierTaskStatus` dibuat dan magic strings pada alur kurir/order yang disentuh tahap refactoring digantikan dengan nilai enum `OrderStatus::X->value` dan `CourierTaskStatus::X->value`.
 - **Keputusan**: Penambahan Eloquent `$casts` pada model `Order` (`'status' => OrderStatus::class`) dan `CourierTask` (`'status' => CourierTaskStatus::class`) sengaja ditunda dan tidak diaktifkan pada putaran ini untuk menjaga backward compatibility penuh dengan query builder mentah, serialisasi JSON internal, serta fixture test yang masih mengasumsikan tipe string primitif.
 - **Rencana Tindak Lanjut**: Menjadwalkan refactor khusus untuk mengaktifkan `$casts` enum pada model setelah melakukan audit menyeluruh terhadap semua pemanggil `$order->status` dan `$task->status`.
+
+## [2026-10-29] Utang Teknis: Sinkronisasi Dua Sistem Role (T011)
+- **Konteks Masalah**: Terdapat dua otoritas sistem role yang terpisah dan tidak sinkron di database:
+  1. **Sistem Kolom Flat (`users.role`)**: Menyimpan string coarse-grained berupa `super_admin`, `store_admin`, `courier`, dan `customer`.
+  2. **Sistem Tabel Relasional RBAC (`roles`, `permissions`, `role_user`)**: Menyimpan role fine-grained berupa `platform_owner`, `platform_admin`, `store_owner`, `store_staff`, `courier`, dan `customer`.
+- **Resolusi Saat Ini di `User::hasRole(string $roleName): bool`**:
+  - Kode implementasi:
+    ```php
+    public function hasRole(string $roleName): bool
+    {
+        if ($this->role === $roleName) {
+            return true;
+        }
+
+        return $this->roles()->where('name', $roleName)->exists();
+    }
+    ```
+  - **Mekanisme**: Membaca kolom flat `$this->role` terlebih dahulu via perbandingan string langsung (`$this->role === $roleName`). Jika tidak cocok, baru menjalankan kueri relasi many-to-many ke tabel `roles` (`$this->roles()->where('name', $roleName)->exists()`).
+  - **Antipattern (Dual Authority / Split-Brain)**:
+    - Tidak ada tabel pemetaan (mapping layer) antar kedua sistem nama role.
+    - User dengan `$this->role = 'super_admin'` dianggap memiliki role `'super_admin'` via kolom, namun akan mengembalikan `false` jika dicek `$user->hasRole('platform_admin')` kecuali relasi pivot `role_user` juga diisi secara manual.
+    - Sebaliknya, jika pengecekan kode mengecek `$user->role === 'store_admin'`, user yang hanya terdaftar dengan role relasional `'store_owner'` di pivot `role_user` akan ditolak.
+    - Sistem saat ini hanya dapat bekerja karena seeder mengisi kedua sistem tersebut secara manual (redundansi/denormalisasi parsial).
+- **Usulan Rencana Penyatuan untuk Tahap Terpisah**:
+  1. **Audit Penggunaan**: Audit seluruh controller, policy, middleware, dan frontend serializer yang masih mengakses properti `$user->role` secara mentah.
+  2. **Jadikan Tabel RBAC sebagai Single Source of Truth (SSOT)**:
+     - Seluruh otorisasi hak akses wajib mengacu pada tabel `roles` + `permissions` via Gate & Policy (selaras dengan prinsip arsitektur di `AGENTS.md`).
+  3. **Deprekasi Kolom `users.role` Secara Bertahap**:
+     - *Langkah A (Backward-Compatible Accessor)*: Ubah `$user->role` menjadi virtual accessor Eloquent yang mengembalikan primary role name dari relasi (`$this->roles->first()?->name`), sehingga kode lama tetap bekerja tanpa membaca kolom fisik terpisah.
+     - *Langkah B (Pembersihan Skema)*: Buat migration baru untuk mendrop kolom `users.role` setelah semua lapisan kode 100% menggunakan Policy dan `$user->hasPermissionTo(...)` / `$user->hasRole(...)`.
+  4. **Penyelarasan Seeder & Factory**:
+     - Hilangkan field `'role'` dari `UserFactory`, `RolesAndPermissionsSeeder`, dan `SuperAdminSeeder`; cukup kaitkan id dari tabel `roles`.
