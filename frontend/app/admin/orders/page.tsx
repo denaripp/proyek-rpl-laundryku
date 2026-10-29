@@ -17,6 +17,28 @@ export default function AdminOrdersPage() {
   const [total, setTotal] = useState(0);
   const [lastPage, setLastPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+  const [assigningCourier, setAssigningCourier] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignSuccess, setAssignSuccess] = useState<string | null>(null);
+
+  const handleAssignCourier = async (orderId: string, taskType: 'pickup' | 'delivery') => {
+    setAssigningCourier(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+    try {
+      await adminApi.assignCourier(orderId, taskType);
+      setAssignSuccess(`Kurir ${taskType === 'delivery' ? 'pengantaran' : 'penjemputan'} berhasil ditugaskan.`);
+      const updatedOrder = await adminApi.getOrder(orderId);
+      if (updatedOrder) setSelectedOrder(updatedOrder);
+      await fetchOrders(true);
+    } catch (err: unknown) {
+      const anyErr = err as any;
+      const msg = anyErr?.responseData?.message || anyErr?.response?.data?.message || anyErr?.message || 'Gagal menugaskan kurir.';
+      setAssignError(msg);
+    } finally {
+      setAssigningCourier(false);
+    }
+  };
 
   const fetchOrders = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -262,9 +284,47 @@ export default function AdminOrdersPage() {
               </div>
             )}
 
-            <div className="pt-3 border-t border-slate-100 flex justify-end">
+            {assignError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                {assignError}
+              </div>
+            )}
+
+            {assignSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+                {assignSuccess}
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div>
+                {(selectedOrder.status === 'READY_FOR_DELIVERY' || selectedOrder.status === 'ready_for_delivery') && (
+                  <button
+                    disabled={assigningCourier}
+                    onClick={() => handleAssignCourier(selectedOrder.id, 'delivery')}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Bike className="w-3.5 h-3.5" />
+                    <span>{assigningCourier ? 'Menugaskan...' : 'Tugaskan kurir antar'}</span>
+                  </button>
+                )}
+                {(selectedOrder.status === 'PENDING_PICKUP' || selectedOrder.status === 'pending_pickup') && !selectedOrder.courier && (
+                  <button
+                    disabled={assigningCourier}
+                    onClick={() => handleAssignCourier(selectedOrder.id, 'pickup')}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Bike className="w-3.5 h-3.5" />
+                    <span>{assigningCourier ? 'Menugaskan...' : 'Tugaskan kurir jemput'}</span>
+                  </button>
+                )}
+              </div>
               <button
-                onClick={() => setSelectedOrder(null)}
+                onClick={() => {
+                  setSelectedOrder(null);
+                  setAssignError(null);
+                  setAssignSuccess(null);
+                }}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
               >
                 Tutup

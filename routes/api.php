@@ -259,6 +259,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders/{order}', [OrderController::class, 'show']);
         Route::get('/orders/{order}/tracking', [OrderController::class, 'tracking']);
         Route::post('/orders/{order}/transition', [OrderController::class, 'transition']);
+        Route::post('/orders/{order}/assign-courier', [OrderController::class, 'assignCourier']);
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
         Route::get('/orders/{order}/rating', [ReviewController::class, 'orderRating']);
         Route::post('/orders/{order}/rating', [ReviewController::class, 'storeRating']);
@@ -374,6 +375,7 @@ Route::prefix('v1')->group(function () {
         // 1. Orders
         Route::get('/orders', [AdminPortalController::class, 'orders']);
         Route::get('/orders/{id}', [AdminPortalController::class, 'orderDetail']);
+        Route::post('/orders/{id}/assign-courier', [AdminPortalController::class, 'assignCourier']);
 
         // 2. Payments
         Route::get('/payments', [AdminPortalController::class, 'payments']);

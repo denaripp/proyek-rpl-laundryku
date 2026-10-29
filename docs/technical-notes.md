@@ -12,6 +12,7 @@
 | T006 | Infrastructure | PHP 8.3.33 vs Laravel 12 dependency (symfony/css-selector requires PHP ≥ 8.4) | Deferred | Deferred — akan direview di Tahap 17 atau saat dibutuhkan API eksternal, keputusan sadar untuk tidak upgrade PHP sekarang demi menghindari resiko infrastruktur yang tidak perlu di tengah development. |
 | T007 | Infrastructure | Queue driver dependency: `QUEUE_CONNECTION=redis` butuh PHP Redis extension (`ext-redis`) | Resolved | Di local/staging default menggunakan `QUEUE_CONNECTION=database` (via MySQL `jobs` table). Jika di production ingin menggunakan `QUEUE_CONNECTION=redis`, pastikan PHP Redis extension (`ext-redis`) sudah terpasang dan aktif di server production SEBELUM mengubah .env, atau tetap pertahankan `QUEUE_CONNECTION=database`. NotificationTrigger sudah dibentengi dengan try-catch defensif sehingga queue failure tidak membatalkan transaksi bisnis. |
 | T008 | Security | Akun testing Platform Owner (`admin@laundryku.test` / `admin12345`) | Security Caution | Akun ini dibuat HANYA untuk kebutuhan pengujian lokal/staging. DILARANG KERAS menggunakan kredensial ini di production. Saat deployment go-live, akun ini WAJIB dihapus atau diubah password-nya menjadi string acak yang kuat (32+ karakter) dan diwajibkan mengaktifkan 2FA via Google Authenticator. |
+| T009 | Courier / Order | Logika penutupan task duplikat di `CourierPortalController` dan `OrderService` | Pending Refactoring | Dual task closure logic (saat serah terima/antar selesai) perlu disatukan ke service method atau event listener terpusat di Tahap 3 (Refactoring). |
 
 ## Decision Log
 
@@ -355,3 +356,7 @@
 
 
 
+
+## [2026-10-29] Utang Teknis: Duplikasi Logika Penutupan Task Kurir (T009)
+- **Konteks**: Pada perbaikan bug penutupan task kurir (commit `a06b183`), logika transisi task kurir menjadi `delivered` (`completed_at = now()`) ditaruh di dua tempat: `CourierPortalController::transitionTask` (alur aksi kurir di portal kurir) dan `OrderService::transition` (alur perubahan status order oleh mitra toko/sistem).
+- **Rencana Refactoring (Tahap 3)**: Logika penutupan task kurir ini akan diekstrak dan disatukan ke dalam service tersendiri (`CourierAssignmentService` / `CourierTaskService`) atau lewat domain event (`OrderStatusChanged`) agar mematuhi prinsip Single Source of Truth (DRY) tanpa duplikasi query update task.

@@ -50,6 +50,11 @@ class OrderPolicy
      */
     public function update(User $user, Order $order): bool
     {
+        // Platform admin / Super admin has global permission to update any order
+        if ($user->hasRole('super_admin') || $user->hasRole('platform_admin') || $user->hasRole('platform_owner') || $user->hasRole('admin')) {
+            return true;
+        }
+
         // Platform admin with permission
         if ($user->hasPermissionTo('update_order')) {
             // Mitra store owner/staff/admin can only update orders belonging to their store

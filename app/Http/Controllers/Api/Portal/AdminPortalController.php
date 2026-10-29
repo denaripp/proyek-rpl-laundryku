@@ -209,6 +209,44 @@ class AdminPortalController extends Controller
         ]);
     }
 
+    public function assignCourier(Request $request, $id): JsonResponse
+    {
+        $request->validate([
+            'task_type' => 'nullable|string|in:pickup,delivery',
+        ]);
+
+        $order = Order::findOrFail($id);
+        $taskType = $request->input('task_type', 'delivery');
+
+        try {
+            $task = app(\App\Services\Courier\CourierAssignmentService::class)->assignCourier($order, $taskType);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        AuditLog::create([
+            'actor_id' => $request->user()?->id,
+            'actor_type' => 'user',
+            'action' => 'ADMIN_ASSIGN_COURIER',
+            'resource_type' => 'order',
+            'resource_id' => (string) $order->id,
+            'after_value' => json_encode([
+                'task_id' => $task->id,
+                'task_type' => $taskType,
+                'courier_id' => $task->courier_id,
+            ]),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kurir ' . ($taskType === 'delivery' ? 'pengantaran' : 'penjemputan') . ' berhasil ditugaskan.',
+            'data' => $task,
+        ], 201);
+    }
+
     protected function formatOrder(Order $order, bool $includeDetails = false): array
     {
         $finalAmount = (float) ($order->final_price ?? $order->total_amount ?? 0);

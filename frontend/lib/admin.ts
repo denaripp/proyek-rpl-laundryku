@@ -254,6 +254,13 @@ export const adminApi = {
     return res.data;
   },
 
+  async assignCourier(orderId: string, taskType: 'pickup' | 'delivery' = 'delivery') {
+    return apiClient<ApiSuccessResponse<any>>(`/admin/orders/${orderId}/assign-courier`, {
+      method: 'POST',
+      body: JSON.stringify({ task_type: taskType }),
+    });
+  },
+
   // 3. Payments & Financial Transactions
   async getPayments(params?: { status?: string; method?: string; q?: string; page?: number; start_date?: string; end_date?: string }) {
     const query = new URLSearchParams();
