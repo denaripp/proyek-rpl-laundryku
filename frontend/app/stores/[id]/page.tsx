@@ -17,7 +17,7 @@ import { StoreReviewsSection } from '@/components/rating/StoreReviewsSection';
 import { getStore, StoreItem, StoreServiceItem } from '@/lib/store';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { startOrGetConversation } from '@/lib/chat';
-import { formatRupiah, cn } from '@/lib/format';
+import { formatRupiah, cn, formatOpeningHours } from '@/lib/format';
 import {
   ArrowLeft,
   MapPin,
@@ -54,8 +54,10 @@ export default function StoreDetailPage({
     try {
       const conv = await startOrGetConversation({ store_id: store.id });
       router.push(`/chat/${conv.id}`);
-    } catch {
-      alert('Gagal memulai percakapan. Pastikan Anda sudah login sebagai pelanggan.');
+    } catch (err: unknown) {
+      console.error('Failed to start conversation:', err);
+      const msg = formatFriendlyErrorMessage(err, 'Gagal memulai percakapan. Pastikan Anda sudah login sebagai pelanggan.');
+      alert(msg);
     } finally {
       setChatLoading(false);
     }
@@ -320,7 +322,7 @@ export default function StoreDetailPage({
                         {Object.entries(store.opening_hours).map(([day, hours]) => (
                           <div key={day} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
                             <span className="capitalize font-medium text-slate-600">{day}</span>
-                            <span className="font-bold text-navy-900 tabular-nums">{hours as string}</span>
+                            <span className="font-bold text-navy-900 tabular-nums">{formatOpeningHours(hours)}</span>
                           </div>
                         ))}
                       </div>

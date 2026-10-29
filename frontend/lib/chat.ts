@@ -59,6 +59,9 @@ export async function startOrGetConversation(
 
   const response = await apiClient<ApiSuccessResponse<ConversationItem>>('/conversations', {
     method: 'POST',
+    headers: {
+      'x-portal': 'customer',
+    },
     body: JSON.stringify({
       store_id: storeId,
       order_id: orderId || undefined,
@@ -76,29 +79,18 @@ export async function sendChatMessage(
   conversationId: string,
   payload: { body?: string; image?: File | null }
 ): Promise<ChatMessageItem> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
   const formData = new FormData();
   if (payload.body) formData.append('body', payload.body);
   if (payload.image) formData.append('image', payload.image);
 
-  const res = await fetch(`${baseUrl}/conversations/${conversationId}/messages`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || errorData.message || 'Gagal mengirim pesan.');
-  }
-
-  const json = await res.json();
-  return json.data;
+  const response = await apiClient<ApiSuccessResponse<ChatMessageItem>>(
+    `/conversations/${conversationId}/messages`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
+  return response.data;
 }
 
 export async function pollChatMessages(

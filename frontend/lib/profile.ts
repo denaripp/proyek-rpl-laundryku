@@ -24,6 +24,8 @@ export interface AddressItem {
   user_id: string;
   label: string;
   address_text: string;
+  city?: string | null;
+  province?: string | null;
   latitude: number | null;
   longitude: number | null;
   is_default: boolean;
@@ -114,6 +116,20 @@ export async function reverseGeocode(coords: { latitude: number; longitude: numb
     method: 'POST',
     body: JSON.stringify(coords),
   });
+  return res.data;
+}
+
+export interface GeocodeForwardResult {
+  latitude: number;
+  longitude: number;
+  lat: number;
+  lng: number;
+  formatted_address?: string;
+}
+
+export async function forwardGeocode(address: string): Promise<GeocodeForwardResult> {
+  const query = new URLSearchParams({ address });
+  const res = await apiClient<{ success: true; data: GeocodeForwardResult }>(`/geocode/forward?${query.toString()}`);
   return res.data;
 }
 

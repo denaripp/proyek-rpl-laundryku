@@ -52,10 +52,20 @@ class OrderPolicy
     {
         // Platform admin with permission
         if ($user->hasPermissionTo('update_order')) {
+            // Mitra store owner/staff/admin can only update orders belonging to their store
+            if (($user->hasRole('store_owner') || $user->hasRole('store_staff') || $user->hasRole('store_admin')) && !$user->hasRole('platform_admin') && !$user->hasRole('platform_owner') && !$user->hasRole('admin')) {
+                return $this->userHasStoreAccess($user, $order->store);
+            }
+
             return true;
         }
 
-        // Store staff/owner: if they have access to the order's store
+        // Customer: only for price approval flow on their own order
+        if ($user->id === $order->customer_id && in_array($order->status, ['awaiting_price_approval', 'price_approved'])) {
+            return true;
+        }
+
+        // Store staff/owner: MUST have access to the order's store
         return $this->userHasStoreAccess($user, $order->store);
     }
 

@@ -240,6 +240,35 @@ class User extends Authenticatable
 
     public function hasRole(string $roleName): bool
     {
+        if ($this->role === $roleName) {
+            return true;
+        }
+
         return $this->roles()->where('name', $roleName)->exists();
+    }
+
+    /**
+     * Determine if the token has a given ability, with real-time role fallback for role abilities.
+     */
+    public function tokenCan(string $ability): bool
+    {
+        $token = $this->currentAccessToken();
+
+        if ($token) {
+            if ($token->can('2fa-pending') || $token->can('auth:2fa-pending')) {
+                return $token->can($ability);
+            }
+
+            if ($token->can($ability)) {
+                return true;
+            }
+        }
+
+        if (str_starts_with($ability, 'role:')) {
+            $roleName = substr($ability, 5);
+            return $this->hasRole($roleName);
+        }
+
+        return false;
     }
 }

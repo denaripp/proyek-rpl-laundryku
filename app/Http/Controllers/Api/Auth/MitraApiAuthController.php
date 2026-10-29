@@ -174,6 +174,8 @@ class MitraApiAuthController extends Controller
                     'slug' => $store->slug,
                     'status' => $store->status,
                     'is_active' => $store->is_active,
+                    'latitude' => (float) $store->latitude,
+                    'longitude' => (float) $store->longitude,
                 ],
             ], 201);
         });

@@ -65,6 +65,40 @@ export function formatDate(
 }
 
 /**
+ * Format daily opening hours for store display.
+ * Handles both string ("07:30 - 21:00") and object format ({ open, close, is_closed }).
+ * Returns "open - close", or "Tutup" if is_closed is true.
+ * Safely handles null or undefined values.
+ */
+export type OpeningHoursSchedule =
+  | string
+  | {
+      open?: string | null;
+      close?: string | null;
+      is_closed?: boolean | null;
+    }
+  | null
+  | undefined;
+
+export function formatOpeningHours(hours: OpeningHoursSchedule): string {
+  if (!hours) return 'Tutup';
+  if (typeof hours === 'string') return hours;
+  if (typeof hours === 'object') {
+    if (hours.is_closed) return 'Tutup';
+    const open = hours.open?.trim();
+    const close = hours.close?.trim();
+    if (open && close) {
+      return `${open} - ${close}`;
+    }
+    if (open) {
+      return open;
+    }
+    return 'Tutup';
+  }
+  return 'Tutup';
+}
+
+/**
  * Class name combiner helper
  */
 export function cn(...classes: (string | undefined | null | false)[]): string {

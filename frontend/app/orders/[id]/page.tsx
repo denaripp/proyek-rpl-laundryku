@@ -76,6 +76,8 @@ export default function OrderDetailPage({
   const [qrTimer, setQrTimer] = useState<number>(120);
   const [isPaidSuccess, setIsPaidSuccess] = useState<boolean>(false);
 
+  const isPaid = isPaidSuccess || (order?.payment_status || '').toLowerCase() === 'paid';
+
   // QRIS Timer Countdown (2:00 -> 0:00)
   useEffect(() => {
     if (!activePaymentInfo || activePaymentInfo.method !== 'qris' || isPaidSuccess) return;
@@ -333,7 +335,7 @@ export default function OrderDetailPage({
                       <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
                       <span>{chatLoading ? 'Membuka...' : 'Chat Toko'}</span>
                     </button>
-                    <OrderStatusBadge status={order.status} className="text-sm" />
+                    <OrderStatusBadge status={isPaid && (order.status === 'AWAITING_PAYMENT' || (order as any).raw_status?.toLowerCase() === 'awaiting_payment') ? 'PAID' : order.status} className="text-sm" />
                   </div>
                 </div>
 
@@ -414,7 +416,7 @@ export default function OrderDetailPage({
                 )}
 
                 {/* Action 2: Awaiting Payment Banner */}
-                {order.status === 'AWAITING_PAYMENT' && (
+                {order.status === 'AWAITING_PAYMENT' && !isPaid && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <h3 className="font-semibold text-sm text-amber-950">
@@ -593,8 +595,8 @@ export default function OrderDetailPage({
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                       <span>Status Pembayaran</span>
-                      <span className={order.payment_status === 'PAID' ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
-                        {order.payment_status === 'PAID' ? 'Lunas' : 'Belum Dibayar'}
+                      <span className={isPaid ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
+                        {isPaid ? 'Lunas' : 'Belum Dibayar'}
                       </span>
                     </div>
                   </div>

@@ -207,11 +207,16 @@ class AiAssistantTest extends TestCase
     {
         $assistant = $this->makeAssistant([], true);
 
-        $result = $assistant->chat($this->customer, null, 'Halo');
+        // Pertanyaan yang tidak ter-cover intent lokal saat provider gagal total -> fallback ke kontak CS
+        $result = $assistant->chat($this->customer, null, 'Pertanyaan acak di luar cakupan sistem');
 
         // Provider down -> fallback ke kontak CS (dari config, bukan hardcode UI).
         $this->assertTrue($result['fallback']);
         $this->assertStringContainsString('cs@landuryku.id', $result['reply']);
+
+        // Jawaban sukses (misal sapaan) tidak boleh ditempeli paragraf CS
+        $greetingResult = $assistant->chat($this->customer, null, 'Halo');
+        $this->assertStringNotContainsString('cs@landuryku.id', $greetingResult['reply']);
 
         $this->assertDatabaseHas('ai_usage_logs', [
             'user_id' => $this->customer->id,
@@ -428,5 +433,124 @@ class AiAssistantTest extends TestCase
         // 3. Zero state change: no price row created/updated/deleted.
         $this->assertEquals($pricesBefore, \App\Models\ServicePrice::count());
         $this->assertEquals($storesBefore, \App\Models\Store::count());
+    }
+
+    // ========== REGRESSION TEST: USER ISOLATION ACROSS CONVERSATION IDS ==========
+
+    public function test_user_b_using_user_a_conversation_id_ignores_history_and_answers_with_user_b_name()
+    {
+        $userA = User::factory()->create(['name' => 'Bhevin']);
+        $userB = User::factory()->create(['name' => 'Muhammad Najwa Syarif']);
+
+        $convA = AiConversation::create([
+            'user_id' => $userA->id,
+            'title' => 'Percakapan User A',
+        ]);
+
+        \App\Models\AiMessage::create([
+            'conversation_id' => $convA->id,
+            'role' => 'user',
+            'content' => 'siapa saya',
+        ]);
+        \App\Models\AiMessage::create([
+            'conversation_id' => $convA->id,
+            'role' => 'assistant',
+            'content' => 'Halo bhevin! Anda terdaftar sebagai pelanggan.',
+        ]);
+
+        $assistant = $this->makeAssistant([
+            [
+                'content' => 'Halo Muhammad Najwa Syarif! Anda terdaftar sebagai pelanggan.',
+                'tool_calls' => [],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 10],
+            ],
+        ]);
+
+        // User B memanggil chat dengan conversation_id milik User A
+        $result = $assistant->chat($userB, $convA->id, 'siapa saya');
+
+        // Pastikan jawaban menyebut nama User B dan bukan nama User A
+        $this->assertStringContainsString('Muhammad Najwa Syarif', $result['reply']);
+        $this->assertStringNotContainsString('bhevin', strtolower($result['reply']));
+
+        // Pastikan konteks dan riwayat yang dikirim ke LLM sama sekali tidak memuat nama atau riwayat User A
+        $this->assertNotEmpty($this->fakeClient->calls);
+        $sentMessages = $this->fakeClient->calls[0]['messages'];
+        $systemMsg = $sentMessages[0]['content'];
+        $this->assertStringContainsString('Muhammad Najwa Syarif', $systemMsg);
+        $this->assertStringNotContainsString('Bhevin', $systemMsg);
+        foreach ($sentMessages as $sentMsg) {
+            $this->assertStringNotContainsString('Bhevin', $sentMsg['content']);
+            $this->assertStringNotContainsString('bhevin', strtolower($sentMsg['content']));
+        }
+
+        // Pastikan conversation_id yang dihasilkan BUKAN milik User A, melainkan percakapan baru untuk User B
+        $this->assertNotEquals($convA->id, $result['conversation_id']);
+        $this->assertDatabaseHas('ai_conversations', [
+            'id' => $result['conversation_id'],
+            'user_id' => $userB->id,
+        ]);
+
+        // Percakapan milik User A tetap tidak terganggu
+        $this->assertEquals(2, \App\Models\AiMessage::where('conversation_id', $convA->id)->count());
+    }
+
+    public function test_http_user_b_using_user_a_conversation_id_isolates_session_and_answers_user_b()
+    {
+        $userA = User::factory()->create(['name' => 'Bhevin']);
+        $userB = User::factory()->create(['name' => 'Muhammad Najwa Syarif']);
+
+        $convA = AiConversation::create([
+            'user_id' => $userA->id,
+            'title' => 'Percakapan Lama Bhevin',
+        ]);
+        \App\Models\AiMessage::create([
+            'conversation_id' => $convA->id,
+            'role' => 'assistant',
+            'content' => 'Halo bhevin!',
+        ]);
+
+        $this->app->instance(AiClientInterface::class, new FakeAiClient([
+            [
+                'content' => 'Halo Muhammad Najwa Syarif! Anda terdaftar sebagai pelanggan.',
+                'tool_calls' => [],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 10],
+            ],
+        ]));
+
+        // Login sebagai User B dan kirim conversation_id milik User A
+        $this->actingAs($userB);
+        $response = $this->postJson('/api/ai/chat', [
+            'conversation_id' => $convA->id,
+            'message' => 'siapa saya',
+        ]);
+
+        $response->assertStatus(200);
+        $reply = $response->json('reply');
+        $this->assertStringContainsString('Muhammad Najwa Syarif', $reply);
+        $this->assertStringNotContainsString('bhevin', strtolower($reply));
+        $this->assertNotEquals($convA->id, $response->json('conversation_id'));
+    }
+
+    public function test_chatbot_api_rejects_foreign_session_access()
+    {
+        $userA = User::factory()->create(['name' => 'Bhevin']);
+        $userB = User::factory()->create(['name' => 'Muhammad Najwa Syarif']);
+
+        $convA = AiConversation::create([
+            'user_id' => $userA->id,
+            'title' => 'Sesi A',
+        ]);
+
+        \Laravel\Sanctum\Sanctum::actingAs($userB, ['role:customer']);
+
+        // User B mencoba membuka sesi User A -> ditolak 404
+        $this->getJson("/api/v1/chatbot/sessions/{$convA->id}")
+            ->assertStatus(404);
+
+        // User B mencoba mengirim pesan ke sesi User A -> ditolak 404
+        $this->postJson("/api/v1/chatbot/sessions/{$convA->id}/messages", [
+            'message' => 'siapa saya',
+        ])->assertStatus(404);
     }
 }

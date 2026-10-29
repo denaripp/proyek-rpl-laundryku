@@ -156,8 +156,11 @@ class AiTopicGuardrail
         'pesanan selesai', 'yang selesai', 'sudah selesai', 'kelar cuci', 'sudah beres', 'kemarin', 'terakhir',
         // Courier keywords
         'ketersediaan', 'online', 'offline', 'siap tugas', 'antar jemput', 'jemputan', 'tugas aktif', 'setoran cod',
-        // Store manager keywords
+        // Store manager & Dashboard keywords
         'omzet', 'omset', 'pelamar', 'kandidat', 'rekrut', 'pelamar kurir', 'kandidat kurir', 'staff toko', 'karyawan',
+        'rekap', 'dashboard', 'kondisi toko', 'performa toko', 'pemasukan', 'pendapatan', 'menu', 'navigasi',
+        'antrean', 'antri', 'nunggu', 'menunggu', 'terlama', 'diproses', 'proses', 'siap antar', 'siap diantar',
+        'selesai', 'kelar', 'hari ini', 'selesai hari ini', 'selesai hr ini',
         // Super admin keywords
         'pengguna', 'user', 'pelanggan', 'cari user', 'cari pengguna', 'cari toko', 'ringkasan platform', 'overview platform', 'monitoring platform', 'persetujuan mitra', 'approval mitra', 'approval toko', 'approval kurir', 'verifikasi mitra', 'ekosistem', 'sistem',
     ];
@@ -174,7 +177,7 @@ class AiTopicGuardrail
      *
      * @return array{allowed: bool, reason: string, type: string}
      */
-    public function classify(string $message): array
+    public function classify(string $message, ?\App\Models\User $user = null): array
     {
         $normalizer = $this->normalizer ?? new AiTextNormalizer();
         $normalized = mb_strtolower(trim($normalizer->normalize($message)));
@@ -354,9 +357,10 @@ class AiTopicGuardrail
         $normalized = mb_strtolower(trim($message));
         $patterns = [
             'siapa saya', 'saya siapa', 'siapakah saya', 'siapa aku',
+            'siapa diriku', 'siapakah diriku', 'siapa diri saya',
             'role saya', 'peran saya', 'nama saya', 'saya login sebagai apa',
             'akun saya', 'identitas saya', 'status akun saya', 'apa role saya',
-            'role akun', 'siapa nama saya', 'status login saya',
+            'role akun', 'siapa nama saya', 'status login saya', 'login sebagai apa',
         ];
 
         foreach ($patterns as $p) {
@@ -406,17 +410,26 @@ class AiTopicGuardrail
 
         $patterns = [
             'siapa anda', 'kamu siapa', 'siapa kamu', 'anda siapa',
+            'siapakah anda', 'siapakah kamu', 'siapa anda/kamu', 'siapa kamu/anda',
+            'siapa dirimu', 'kamu siapa sih', 'anda siapa sih',
             'kamu itu apa', 'nama kamu siapa', 'kamu bot apa',
             'siapa namamu', 'nama anda siapa', 'kamu asisten apa',
             'kamu robot apa', 'kamu ai apa', 'apakah kamu bot',
             'apakah anda bot', 'kamu ini siapa', 'anda ini siapa',
-            'siapa namamu', 'nama bot kamu',
+            'kamu itu siapa', 'anda itu siapa', 'siapa kamu itu', 'siapa anda itu',
+            'nama bot kamu',
+            'lu siapa', 'siapa lu', 'lo siapa', 'siapa lo', 'elu siapa', 'siapa elu',
+            'lu siapa sih', 'lo siapa sih', 'siapa lu sih', 'siapa lo sih',
         ];
 
         foreach ($patterns as $p) {
             if (str_contains($normalized, $p)) {
                 return true;
             }
+        }
+
+        if (preg_match('/\b(siapa\s*(anda|kamu|lu|lo|elu)|(kamu|anda|lu|lo|elu)\s*(itu|ini)?\s*siapa|siapakah\s*(anda|kamu))\b/iu', $normalized)) {
+            return true;
         }
 
         return false;

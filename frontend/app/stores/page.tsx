@@ -15,15 +15,13 @@ import {
 import { getAddresses, AddressItem } from '@/lib/profile';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getOrders, OrderDetail, ORDER_STATUS_META } from '@/lib/order';
-import { isAuthenticated, getStoredUser } from '@/lib/auth';
+import { isAuthenticated } from '@/lib/auth';
 import { useAuth } from '@/lib/AuthContext';
 import {
   Search,
   MapPin,
   SlidersHorizontal,
   Navigation,
-  List,
-  Map as MapIcon,
   Package,
   ArrowRight,
   RefreshCw,
@@ -33,6 +31,13 @@ import {
 
 const DEFAULT_LAT = -6.8900;
 const DEFAULT_LNG = 107.6150;
+
+function formatAddressLocationLabel(addr: AddressItem): string {
+  if (addr.label && addr.city && !addr.label.toLowerCase().includes(addr.city.toLowerCase())) {
+    return `${addr.label} (${addr.city})`;
+  }
+  return addr.label || addr.city || addr.address_text;
+}
 
 export default function StoreSearchPage() {
   const { user } = useAuth();
@@ -59,7 +64,50 @@ export default function StoreSearchPage() {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeMobileView, setActiveMobileView] = useState<'list' | 'map'>('list');
+
+  // Apply active/default address location
+  const applyAddressLocation = useCallback((addrList: AddressItem[]) => {
+    setSavedAddresses(addrList);
+    const activeAddr = addrList.find((a) => a.is_default) || addrList[0];
+
+    if (activeAddr && activeAddr.latitude != null && activeAddr.longitude != null) {
+      const lat = Number(activeAddr.latitude);
+      const lng = Number(activeAddr.longitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setCustomerLocation({ lat, lng });
+        setLocationLabel(formatAddressLocationLabel(activeAddr));
+        return;
+      }
+    }
+
+    // Titik default hanya dipakai jika belum ada alamat utama atau koordinatnya kosong
+    setCustomerLocation({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
+    setLocationLabel('Bandung (Titik Default)');
+  }, []);
+
+  const refreshSavedAddresses = useCallback(async () => {
+    if (isAuthenticated()) {
+      try {
+        const addrRes = await getAddresses();
+        applyAddressLocation(addrRes);
+      } catch {
+        // ignore
+      }
+    }
+  }, [applyAddressLocation]);
+
+  // Listen for address changes from profile or other tabs
+  useEffect(() => {
+    const onAddressChanged = () => {
+      refreshSavedAddresses();
+    };
+    window.addEventListener('address-changed', onAddressChanged);
+    window.addEventListener('focus', onAddressChanged);
+    return () => {
+      window.removeEventListener('address-changed', onAddressChanged);
+      window.removeEventListener('focus', onAddressChanged);
+    };
+  }, [refreshSavedAddresses]);
 
   // Load Initial Metadata & Active Order
   useEffect(() => {
@@ -71,12 +119,7 @@ export default function StoreSearchPage() {
         if (isAuthenticated()) {
           try {
             const addrRes = await getAddresses();
-            setSavedAddresses(addrRes);
-            const defaultAddr = addrRes.find((a) => a.is_default && a.latitude && a.longitude);
-            if (defaultAddr && defaultAddr.latitude && defaultAddr.longitude) {
-              setCustomerLocation({ lat: defaultAddr.latitude, lng: defaultAddr.longitude });
-              setLocationLabel(defaultAddr.label || defaultAddr.address_text);
-            }
+            applyAddressLocation(addrRes);
           } catch {
             // ignore
           }
@@ -103,7 +146,7 @@ export default function StoreSearchPage() {
       }
     }
     loadInitialData();
-  }, []);
+  }, [applyAddressLocation]);
 
   // Fetch Nearby Stores
   const fetchStores = useCallback(async () => {
@@ -159,10 +202,21 @@ export default function StoreSearchPage() {
     const addrId = e.target.value;
     if (!addrId) return;
     const addr = savedAddresses.find((a) => a.id === addrId);
-    if (addr && addr.latitude && addr.longitude) {
-      setCustomerLocation({ lat: addr.latitude, lng: addr.longitude });
-      setLocationLabel(addr.label ? `${addr.label}: ${addr.address_text}` : addr.address_text);
+    if (!addr) return;
+
+    if (addr.latitude != null && addr.longitude != null) {
+      const lat = Number(addr.latitude);
+      const lng = Number(addr.longitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setCustomerLocation({ lat, lng });
+        setLocationLabel(formatAddressLocationLabel(addr));
+        return;
+      }
     }
+
+    // Jika koordinatnya kosong, gunakan titik default
+    setCustomerLocation({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
+    setLocationLabel('Bandung (Titik Default)');
   };
 
   const handleLocationChange = (lat: number, lng: number) => {
@@ -179,240 +233,342 @@ export default function StoreSearchPage() {
     <PublicLayout>
       {/* 1. Active Order Banner Strip (if any) */}
       {activeOrder && (
-        <div className="bg-slate-900 text-white px-4 py-2.5 text-xs border-b border-slate-800">
+        <div className="bg-navy-950 text-white px-4 py-2.5 text-xs border-b border-navy-800">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 truncate">
-              <Package className="w-4 h-4 text-slate-300 shrink-0" strokeWidth={1.5} />
-              <span className="font-semibold text-slate-200">Pesanan Berjalan:</span>
-              <span className="font-mono text-slate-300">{activeOrder.order_number}</span>
-              <span className="text-slate-400 hidden sm:inline">•</span>
-              <span className="text-slate-300 hidden sm:inline truncate">
+              <Package className="w-4 h-4 text-sky-400 shrink-0" strokeWidth={1.75} />
+              <span className="font-semibold text-white">Pesanan aktif:</span>
+              <span className="font-mono text-sky-200">{activeOrder.order_number}</span>
+              <span className="text-navy-400 hidden sm:inline">·</span>
+              <span className="text-navy-200 hidden sm:inline truncate font-medium">
                 {ORDER_STATUS_META[activeOrder.status]?.label || activeOrder.status}
               </span>
             </div>
             <Link
               href={`/orders/${activeOrder.id}`}
-              className="inline-flex items-center gap-1 font-medium text-slate-200 hover:text-white underline shrink-0"
+              className="inline-flex items-center gap-1 font-semibold text-sky-300 hover:text-white underline shrink-0 transition-colors"
             >
-              <span>Lacak Pesanan</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span>Lacak pesanan</span>
+              <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.75} />
             </Link>
           </div>
         </div>
       )}
 
-      {/* 2. Top Location & Greeting Bar */}
-      <div className="bg-white border-b border-slate-200 py-3.5 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          {/* Sapaan & Location info */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-md bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-              <MapPin className="w-4 h-4" strokeWidth={1.5} />
-            </div>
-            <div>
-              <h1 className="text-sm font-semibold text-slate-900 leading-tight">
-                {user ? `Halo, ${user.name}` : 'Cari Outlet Laundry'}
+      {/* 2. Hero Header Section (Navy-900 with Wave & Bubbles) */}
+      <div className="bg-navy-900 text-white relative overflow-hidden pt-8 pb-14 px-4 sm:px-6 lg:px-8 select-none">
+        {/* Soap Bubbles Decorative Shapes (aria-hidden="true") */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+          {/* Bubble 1 (Top Left) */}
+          <div className="absolute top-4 left-10 w-24 h-24 rounded-full border border-sky-300/30 bg-sky-400/10 backdrop-blur-[1px] shadow-inner animate-gentle-float">
+            <div className="w-2.5 h-2.5 rounded-full bg-white/60 ml-3.5 mt-3.5" />
+          </div>
+
+          {/* Bubble 2 (Top Right) */}
+          <div className="absolute top-6 right-16 w-32 h-32 rounded-full border border-sky-300/20 bg-sky-300/10 animate-gentle-float-slow">
+            <div className="w-3.5 h-3.5 rounded-full bg-white/50 ml-4 mt-4" />
+          </div>
+        </div>
+
+        {/* Main Hero Content */}
+        <div className="max-w-7xl mx-auto relative z-10 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="space-y-1.5 max-w-xl">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">
+                {user ? `Halo, ${user.name}! Mau cuci apa hari ini?` : 'Temukan laundry di sekitar Anda'}
               </h1>
-              <p className="text-xs text-slate-500 truncate max-w-md">
-                Titik: <span className="font-medium text-slate-700">{locationLabel}</span>
-              </p>
+              <div className="flex items-center gap-2 text-xs text-navy-200">
+                <MapPin className="w-3.5 h-3.5 text-sky-400 shrink-0" strokeWidth={1.75} />
+                <span className="truncate">
+                  Lokasi Anda: <strong className="text-white font-semibold">{locationLabel}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Address Selector & GPS Action */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {savedAddresses.length > 0 && (
+                <select
+                  onChange={handleSelectSavedAddress}
+                  className="py-2 px-3 text-xs bg-navy-800/90 border border-navy-700 rounded-xl text-white focus:outline-hidden focus:ring-1 focus:ring-navy-400 cursor-pointer max-w-xs truncate"
+                  defaultValue=""
+                >
+                  <option value="" disabled className="text-slate-400">
+                    Pilih alamat tersimpan...
+                  </option>
+                  {savedAddresses.map((addr) => (
+                    <option key={addr.id} value={addr.id} className="bg-navy-900 text-white">
+                      {addr.is_default ? '★ ' : ''}{formatAddressLocationLabel(addr)}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                onClick={handleUseGPS}
+                disabled={isLocating}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-navy-700 bg-navy-800/90 hover:bg-navy-700 text-xs font-semibold text-white transition-colors cursor-pointer shrink-0 shadow-2xs"
+                title="Gunakan lokasi GPS perangkat Anda"
+              >
+                <Navigation className={`w-3.5 h-3.5 text-sky-300 ${isLocating ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+                <span>{isLocating ? 'Mendeteksi lokasi...' : 'Pakai lokasi saya'}</span>
+              </button>
             </div>
           </div>
+        </div>
 
-          {/* Quick Location Action: Saved Addresses Dropdown & GPS Button */}
-          <div className="flex items-center gap-2">
-            {savedAddresses.length > 0 && (
-              <select
-                onChange={handleSelectSavedAddress}
-                className="py-1.5 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-slate-400 cursor-pointer max-w-xs truncate"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Pilih Alamat Tersimpan...
-                </option>
-                {savedAddresses.map((addr) => (
-                  <option key={addr.id} value={addr.id}>
-                    {addr.label ? `${addr.label} (${addr.address_text.slice(0, 30)}...)` : addr.address_text.slice(0, 35)}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <button
-              onClick={handleUseGPS}
-              disabled={isLocating}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 transition-colors cursor-pointer shrink-0"
-              title="Gunakan lokasi GPS perangkat Anda"
-            >
-              <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} strokeWidth={1.5} />
-              <span>{isLocating ? 'Mendeteksi...' : 'Lokasi Saya'}</span>
-            </button>
-          </div>
+        {/* Wave SVG Divider at Bottom of Hero */}
+        <div className="absolute -bottom-1 left-0 right-0 pointer-events-none overflow-hidden leading-none z-10" aria-hidden="true">
+          <svg
+            viewBox="0 0 1440 48"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-8 sm:h-12 text-slate-50 preserve-3d"
+          >
+            <path
+              d="M0 20C240 45 480 5 720 25C960 45 1200 10 1440 20V48H0V20Z"
+              fill="currentColor"
+            />
+          </svg>
         </div>
       </div>
 
-      {/* 3. Search & Filter Toolbar */}
-      <div className="bg-slate-50 border-b border-slate-200 py-3 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative w-full lg:w-96">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" strokeWidth={1.5} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari nama gerai, jalan, layanan..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-slate-400 text-slate-900 placeholder-slate-400"
-            />
+      {/* 3. Floating Elevated Search Hub & Filter Bar */}
+      <div className="bg-slate-50 pb-6 pt-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-7 sm:-mt-8 relative z-20 space-y-3">
+          {/* Search Bar Container */}
+          <div className="bg-white rounded-2xl shadow-md border border-navy-100 p-2 sm:p-2.5 flex items-center gap-2">
+            <div className="relative flex-1 flex items-center">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" strokeWidth={1.75} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cari nama laundry, layanan, atau alamat..."
+                className="w-full pl-10 pr-3.5 py-2 text-xs sm:text-sm bg-transparent focus:outline-hidden text-navy-900 placeholder:text-slate-400 font-medium"
+              />
+            </div>
           </div>
 
-          {/* Filter Pills & Radius Controls */}
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-            {/* Category Filter */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="py-1.5 px-2.5 text-xs bg-white border border-slate-200 rounded-md text-slate-700 focus:outline-hidden cursor-pointer"
-            >
-              <option value="all">Semua Kategori</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.slug}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+          {/* Desktop Filter Row */}
+          <div className="hidden lg:flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-navy-100/80 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-bold text-navy-900 flex items-center gap-1.5 pl-1">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-navy-700" strokeWidth={1.75} />
+                <span>Filter:</span>
+              </span>
 
-            {/* Radius Selector */}
-            <select
-              value={radiusKm}
-              onChange={(e) => setRadiusKm(Number(e.target.value))}
-              className="py-1.5 px-2.5 text-xs bg-white border border-slate-200 rounded-md text-slate-700 focus:outline-hidden cursor-pointer"
-            >
-              <option value={3}>Radius 3 KM</option>
-              <option value={5}>Radius 5 KM</option>
-              <option value={10}>Radius 10 KM</option>
-              <option value={25}>Radius 25 KM</option>
-            </select>
+              {/* Category Select */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-navy-900 font-medium focus:outline-hidden focus:border-navy-700 cursor-pointer"
+              >
+                <option value="all">Semua layanan</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.slug}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
 
-            {/* Serviceable Only Checkbox */}
-            <label className="inline-flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none bg-white border border-slate-200 px-2.5 py-1.5 rounded-md">
+              {/* Radius Select */}
+              <select
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+                className="py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-navy-900 font-medium focus:outline-hidden focus:border-navy-700 cursor-pointer"
+              >
+                <option value={3}>Radius 3 km</option>
+                <option value={5}>Radius 5 km</option>
+                <option value={10}>Radius 10 km</option>
+                <option value={25}>Radius 25 km</option>
+              </select>
+            </div>
+
+            {/* Serviceable Only Checkbox (Antar jemput) */}
+            <label className="inline-flex items-center gap-2 text-xs font-semibold text-navy-900 cursor-pointer select-none bg-slate-50 hover:bg-navy-50/60 border border-slate-200 px-3 py-2 rounded-xl transition-colors">
               <input
                 type="checkbox"
                 checked={showOnlyServiceable}
                 onChange={(e) => setShowOnlyServiceable(e.target.checked)}
-                className="rounded text-[#1A3A5C] focus:ring-0"
+                className="rounded text-navy-700 focus:ring-navy-700 w-4 h-4"
               />
-              <span>Hanya Bisa Antar-Jemput</span>
+              <span>Antar jemput</span>
             </label>
+          </div>
 
-            {/* Mobile View Toggle (List vs Map) */}
-            <div className="lg:hidden flex items-center bg-white border border-slate-200 rounded-md p-0.5 ml-auto">
+          {/* Mobile Native <details> for Filter */}
+          <details className="lg:hidden group bg-white rounded-2xl border border-navy-100 shadow-2xs overflow-hidden">
+            <summary className="flex items-center justify-between p-3.5 text-xs font-bold text-navy-900 cursor-pointer select-none">
+              <span className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-navy-700" strokeWidth={1.75} />
+                <span>Filter</span>
+              </span>
+              <span className="text-[11px] text-slate-500 font-normal group-open:rotate-180 transition-transform">
+                ▼
+              </span>
+            </summary>
+            <div className="p-3.5 pt-0 border-t border-slate-100 space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-navy-900 mb-1">Kategori Layanan</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-navy-900 font-medium focus:outline-hidden"
+                >
+                  <option value="all">Semua layanan</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.slug}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-navy-900 mb-1">Radius Jangkauan</label>
+                <select
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(Number(e.target.value))}
+                  className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-navy-900 font-medium focus:outline-hidden"
+                >
+                  <option value={3}>Radius 3 km</option>
+                  <option value={5}>Radius 5 km</option>
+                  <option value={10}>Radius 10 km</option>
+                  <option value={25}>Radius 25 km</option>
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2.5 text-xs font-semibold text-navy-900 cursor-pointer select-none bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+                <input
+                  type="checkbox"
+                  checked={showOnlyServiceable}
+                  onChange={(e) => setShowOnlyServiceable(e.target.checked)}
+                  className="rounded text-navy-700 focus:ring-navy-700 w-4 h-4"
+                />
+                <span>Antar jemput</span>
+              </label>
+            </div>
+          </details>
+
+          {/* Mobile Native <details> for Map */}
+          <details className="lg:hidden group bg-white rounded-2xl border border-navy-200/90 shadow-2xs overflow-hidden">
+            <summary className="flex items-center justify-between p-3.5 text-xs font-bold text-navy-900 cursor-pointer select-none">
+              <span className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-navy-700" strokeWidth={1.75} />
+                <span>Lihat peta</span>
+              </span>
+              <span className="text-[11px] text-navy-700 font-semibold group-open:hidden">
+                Buka peta ▼
+              </span>
+              <span className="text-[11px] text-navy-700 font-semibold hidden group-open:inline">
+                Tutup peta ▲
+              </span>
+            </summary>
+            <div className="p-2 pt-0 border-t border-slate-100">
+              <div className="h-[360px] rounded-xl overflow-hidden border border-slate-200 mt-2">
+                <DynamicStoreMap
+                  customerLocation={customerLocation}
+                  stores={filteredStores}
+                  selectedStoreId={selectedStoreId}
+                  onStoreSelect={(store) => setSelectedStoreId(store.id)}
+                  onLocationChange={handleLocationChange}
+                  searchRadiusKm={radiusKm}
+                />
+              </div>
+            </div>
+          </details>
+        </div>
+
+        {/* 4. Main Content: Split List & Sticky Map Grid */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          {error ? (
+            <div className="bg-white border border-rose-200 rounded-3xl p-8 sm:p-10 text-center space-y-3 shadow-2xs">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shadow-2xs">
+                <AlertCircle className="w-6 h-6" strokeWidth={1.75} />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-sm sm:text-base font-bold text-navy-900">Tidak dapat memuat daftar laundry</h2>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">{error}</p>
+              </div>
               <button
-                onClick={() => setActiveMobileView('list')}
-                className={`p-1 rounded text-xs ${activeMobileView === 'list' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
-                aria-label="Tampilan Daftar"
+                onClick={() => fetchStores()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-navy-700 text-white rounded-xl text-xs font-bold hover:bg-navy-800 transition-colors cursor-pointer shadow-2xs"
               >
-                <List className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setActiveMobileView('map')}
-                className={`p-1 rounded text-xs ${activeMobileView === 'map' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
-                aria-label="Tampilan Peta"
-              >
-                <MapIcon className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <span>Muat ulang</span>
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Main Content: Split List & Map Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {error ? (
-          <div className="bg-white border border-rose-200 rounded-lg p-6 text-center">
-            <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" strokeWidth={1.5} />
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Gagal Memuat Toko</h2>
-            <p className="text-xs text-slate-500 mb-4">{error}</p>
-            <button
-              onClick={() => fetchStores()}
-              className="px-3 py-1.5 bg-slate-900 text-white rounded-md text-xs font-medium hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              Coba Lagi
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left Column: Stores List */}
-            <div
-              className={`lg:col-span-6 space-y-3 ${
-                activeMobileView === 'map' ? 'hidden lg:block' : 'block'
-              }`}
-            >
-              <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
-                <span>
-                  Menampilkan <strong className="text-slate-900">{filteredStores.length}</strong> outlet laundry
-                </span>
-                {meta?.serviceable_total !== undefined && (
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Stores List */}
+              <div className="lg:col-span-6 space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
                   <span>
-                    <strong className="text-emerald-700">{meta.serviceable_total}</strong> dalam jangkauan
+                    Menampilkan <strong className="text-navy-900">{filteredStores.length}</strong> laundry
                   </span>
+                  {meta?.serviceable_total !== undefined && (
+                    <span className="text-xs font-medium">
+                      <strong className="text-emerald-700 font-bold">{meta.serviceable_total}</strong> dalam jangkauan Anda
+                    </span>
+                  )}
+                </div>
+
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-40 bg-white border border-slate-200/90 rounded-2xl animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredStores.length === 0 ? (
+                  <div className="bg-white border border-navy-100 rounded-3xl p-8 sm:p-12 text-center space-y-3 shadow-2xs">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-navy-50 text-navy-700 border border-navy-100 flex items-center justify-center shadow-2xs">
+                      <StoreIcon className="w-7 h-7" strokeWidth={1.75} />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm sm:text-base font-bold text-navy-900">Laundry tidak ditemukan</h3>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                        Coba perbesar radius atau gunakan kata kunci lain.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredStores.map((store) => (
+                      <StoreCard
+                        key={store.id}
+                        store={store}
+                        isSelected={selectedStoreId === store.id}
+                        onSelect={(s) => setSelectedStoreId(s.id)}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {loading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-36 bg-white border border-slate-200 rounded-lg animate-pulse" />
-                  ))}
-                </div>
-              ) : filteredStores.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-lg p-8 text-center">
-                  <StoreIcon className="w-8 h-8 text-slate-400 mx-auto mb-2" strokeWidth={1.5} />
-                  <h3 className="text-xs font-semibold text-slate-800">Tidak ada toko yang cocok</h3>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Coba perluas radius pencarian atau gunakan kata kunci lain.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredStores.map((store) => (
-                    <StoreCard
-                      key={store.id}
-                      store={store}
-                      isSelected={selectedStoreId === store.id}
-                      onSelect={(s) => setSelectedStoreId(s.id)}
+              {/* Right Column: Sticky Interactive Leaflet Map (Desktop) */}
+              <div className="hidden lg:block lg:col-span-6 lg:sticky lg:top-24">
+                <div className="bg-white border border-navy-200/90 rounded-3xl p-3.5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-slate-600 mb-2 px-1">
+                    <span className="font-bold text-navy-900">Peta Jangkauan Layanan</span>
+                    <span className="text-[11px] text-slate-400">Klik/geser pin untuk ubah lokasi</span>
+                  </div>
+
+                  <div className="h-[520px] rounded-2xl overflow-hidden border border-slate-200">
+                    <DynamicStoreMap
+                      customerLocation={customerLocation}
+                      stores={filteredStores}
+                      selectedStoreId={selectedStoreId}
+                      onStoreSelect={(store) => setSelectedStoreId(store.id)}
+                      onLocationChange={handleLocationChange}
+                      searchRadiusKm={radiusKm}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Sticky Interactive Leaflet Map */}
-            <div
-              className={`lg:col-span-6 lg:sticky lg:top-24 ${
-                activeMobileView === 'list' ? 'hidden lg:block' : 'block'
-              }`}
-            >
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-slate-600 mb-2">
-                  <span className="font-semibold text-slate-800">Peta Jangkauan Layanan</span>
-                  <span className="text-[11px] text-slate-400">Klik/geser pin untuk ubah lokasi</span>
-                </div>
-
-                <div className="h-[420px] lg:h-[540px] rounded overflow-hidden border border-slate-200">
-                  <DynamicStoreMap
-                    customerLocation={customerLocation}
-                    stores={filteredStores}
-                    selectedStoreId={selectedStoreId}
-                    onStoreSelect={(store) => setSelectedStoreId(store.id)}
-                    onLocationChange={handleLocationChange}
-                    searchRadiusKm={radiusKm}
-                  />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </PublicLayout>
   );

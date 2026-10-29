@@ -246,6 +246,11 @@ class AiTextNormalizer
         'dmna' => 'dimana',
         'bnyk' => 'banyak',
         'jmput' => 'jemput',
+        'anter' => 'antar',
+        'dianter' => 'diantar',
+        'diantar' => 'diantar',
+        'nganter' => 'antar',
+        'dproses' => 'proses',
 
         // Core Domain: Washing & Stages
         'dicuci' => 'cuci',
@@ -316,7 +321,7 @@ class AiTextNormalizer
         'lapak' => 'toko',
         'servis' => 'layanan',
         'jasa' => 'layanan',
-        'menu' => 'layanan',
+        'menu' => 'menu',
         'paket' => 'layanan',
         'list' => 'daftar',
         'daptar' => 'daftar',

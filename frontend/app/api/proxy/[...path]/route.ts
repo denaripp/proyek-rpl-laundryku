@@ -30,7 +30,13 @@ async function handleProxy(request: NextRequest, { params }: { params: Promise<{
 
   const portal = detectPortalFromRequest(request, targetPath);
   const cookieName = PORTAL_COOKIE_NAMES[portal];
-  const token = request.cookies.get(cookieName)?.value;
+  let token = request.cookies.get(cookieName)?.value;
+  if (!token && portal === 'courier') {
+    token = request.cookies.get(PORTAL_COOKIE_NAMES.customer)?.value || request.cookies.get('auth_token')?.value;
+  }
+  if (!token && portal === 'customer') {
+    token = request.cookies.get('auth_token')?.value;
+  }
 
   const backendUrl = `${LARAVEL_API_BASE_URL}${targetPath}${search}`;
 
@@ -42,8 +48,11 @@ async function handleProxy(request: NextRequest, { params }: { params: Promise<{
     headers.set('Content-Type', incomingContentType);
   }
 
+  const incomingAuth = request.headers.get('authorization');
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
+  } else if (incomingAuth) {
+    headers.set('Authorization', incomingAuth);
   }
 
   let body: BodyInit | null = null;

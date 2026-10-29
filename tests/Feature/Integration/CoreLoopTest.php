@@ -82,9 +82,11 @@ class CoreLoopTest extends TestCase
         // then set weight (which recalculates total).
         $order = $svc->transition($order, OrderStatus::WEIGHED->value, $owner);
         $order = $svc->setActualWeight($order, 5.0, $owner);
-        $order = $svc->transition($order, OrderStatus::PAYMENT_REQUIRED->value, $owner);
+        $order = $svc->transition($order, 'awaiting_price_approval', $owner);
+        $order = $svc->transition($order, 'price_approved', $customer);
+        $order = $svc->transition($order, 'awaiting_payment', $customer);
 
-        $this->assertEquals(OrderStatus::PAYMENT_REQUIRED->value, $order->status);
+        $this->assertEquals('awaiting_payment', $order->status);
 
         // ====== 6. PAYMENT (store owner marks paid after customer pays) ======
         $payment = TestFactoryHelper::makePaidPayment($order, $order->total_amount);

@@ -7,9 +7,7 @@ import { NotificationCenter } from '@/components/notifications/NotificationCente
 export default function NotificationsPage() {
   return (
     <PublicLayout>
-      <div className="py-8 px-4 sm:px-6 lg:px-8">
-        <NotificationCenter />
-      </div>
+      <NotificationCenter />
     </PublicLayout>
   );
 }

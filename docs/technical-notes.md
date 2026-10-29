@@ -297,3 +297,61 @@
 - **Verifikasi**:
   - Feature test `AdminDashboardMetricsTest` lulus (3 passed, 27 assertions).
   - Suite pengujian lengkap `php artisan test` lulus 100% (378 passed, 1.797 assertions).
+
+## [2026-10-27] Registrasi Rute Human Chat Percakapan Toko (/api/v1/conversations)
+- **Konteks**: Tombol "Chat Toko" di `/stores/{id}` memunculkan pesan "The route api/v1/conversations could not be found." karena grup rute `conversations` sebelumnya hanya terdapat di `backend/routes/api.php` dan belum didaftarkan di root `routes/api.php`.
+- **Implementasi**:
+  1. Mendaftarkan grup rute `conversations` di root `routes/api.php` di bawah prefix `v1` dan middleware `auth:sanctum`.
+  2. Menyediakan `App\Http\Controllers\Api\ChatController` di root berbasis `backend/app/Http/Controllers/Api/ChatController.php` dengan penyesuaian validasi ID toko/pesanan (integer ID di root database) dan pengecekan role pelanggan (`isCustomer()` / `hasRole('customer')`).
+  3. Memastikan model `Conversation`, `ChatMessage`, dan trait `ApiResponse` tersedia di root `app/Models` dan `app/Traits`.
+  4. Menambahkan migrasi baru `database/migrations/2026_10_27_000001_create_conversations_and_chat_messages_tables.php` yang kompatibel dengan relasi `users`, `stores`, dan `orders`.
+- **Verifikasi**:
+  - Feature test `Tests\Feature\CustomerStoreConversationTest` lulus (1 passed, 6 assertions).
+  - Test suite AI (`php artisan test --filter=Ai`) lulus 100% (146 passed, 1.142 assertions).
+  - Frontend TypeScript type check (`npx tsc --noEmit`) lulus 0 errors.
+
+## [2026-10-27] Sinkronisasi Lokasi Header & Geocoding Alamat Utama Pelanggan
+- **Konteks**: Pelanggan telah menyimpan alamat di Cirebon sebagai alamat utama, namun header lokasi di `/stores` tetap menampilkan "Titik: Bandung (Titik Default)".
+- **Akar Masalah**:
+  1. Frontend (`frontend/app/stores/page.tsx`): Status inisial lokasi diatur ke `Bandung (Titik Default)`. Saat alamat diambil via API, seleksi alamat default menggunakan `addrRes.find((a) => a.is_default && a.latitude && a.longitude)`. Jika alamat dibuat manual tanpa tombol GPS, nilai `latitude` dan `longitude` bernilai `null`, menyebabkan `defaultAddr` menjadi `undefined` dan label tidak pernah terbarui dari default.
+  2. Backend (`app/Http/Controllers/Api/CustomerController.php`): Pembuatan/pembaruan alamat yang tidak menyertakan koordinat GPS menyimpan `latitude: null, longitude: null` tanpa fallback forward geocoding.
+- **Implementasi**:
+  1. **Forward Geocoding Otomatis di Backend**:
+     - Menambahkan method `geocode(string $address)` pada `App\Services\Maps\NominatimGeocodingService` yang mengimplementasikan `GeocodingServiceInterface`.
+     - Memperbarui `CustomerController::storeAddress`, `updateAddress`, dan `setDefaultAddress` agar otomatis melakukan geocoding jika koordinat `latitude` atau `longitude` kosong/null saat disimpan atau dijadikan alamat utama.
+  2. **Sinkronisasi Dinamis di Frontend**:
+     - Memperbarui `applyAddressLocation` di `frontend/app/stores/page.tsx` untuk memprioritaskan alamat default (`is_default`) atau alamat pertama. Jika memiliki koordinat valid, titik aktif dan label header langsung diperbarui menjadi nama label alamat dan kota (mis. `Rumah (Cirebon)`). Fallback `Bandung (Titik Default)` hanya digunakan jika belum ada alamat atau koordinat kosong/gagal geocode.
+     - Menambahkan listener event `address-changed` dan window `focus` di `stores/page.tsx`, serta mendispatch event `address-changed` dari `frontend/app/profile/page.tsx` saat alamat default diubah, ditambah, atau dihapus sehingga lokasi header langsung tersinkronisasi tanpa perlu refresh penuh.
+- **Verifikasi**:
+  - Feature test `Tests\Feature\AddressLocationTest` (3 passed, 22 assertions).
+  - Feature test `Tests\Feature\CustomerStoreConversationTest` (1 passed, 6 assertions).
+  - TypeScript check `frontend`: `npx tsc --noEmit` lolos 0 error.
+
+## [2026-10-27] Otorisasi Portal Kurir & Resolusi Profil Nama Header (/courier)
+- **Konteks**: Akun pelanggan (Arieef) yang baru disetujui menjadi kurir toko membuka `/courier`. Menghadapi dua kendala:
+  1. Tab "Tugas Tersedia" menampilkan "Unauthenticated."
+  2. Header dashboard menampilkan "Kurir LaundryKu", bukan nama pengguna yang login (Arieef).
+- **Akar Masalah**:
+  1. **Autentikasi & Proxy BFF**: Pengguna login melalui alur OTP pelanggan yang menyetel cookie `laundryku_customer_token` (atau `auth_token`). Saat membuka portal `/courier`, Next.js BFF proxy mendeteksi target `/courier/tasks` sebagai portal `courier` dan hanya membaca `PORTAL_COOKIE_NAMES.courier` (`laundryku_courier_token`). Karena cookie khusus kurir belum disetel, proxy meneruskan request ke Laravel tanpa token (`Unauthenticated.`).
+  2. **Sanctum Abilities vs Real-Time DB Role**: Sanctum `ability:role:courier` mengecek abilities pada token database yang dicetak saat registrasi pelanggan (`["role:customer"]`). Meskipun kolom `users.role` telah berubah menjadi `courier`, token snapshot Sanctum menolak request.
+  3. **Header Fallback**: Di frontend `frontend/app/courier/page.tsx`, `getStoredUser()` membaca kunci `laundryku_courier_user` di `localStorage`, yang masih kosong karena login dilakukan di portal pelanggan. Halaman kemudian meneruskan default `'Kurir LaundryKu'` ke `DashboardLayout`. Selain itu, `CourierPortalController::profile` sebelumnya tidak mengembalikan field `name`, `email`, dan `phone`.
+- **Implementasi**:
+  1. **Frontend BFF Proxy & Session**:
+     - `frontend/app/api/proxy/[...path]/route.ts`: Menambahkan fallback ke `PORTAL_COOKIE_NAMES.customer` / `auth_token` jika cookie dedicated kurir belum ada pada portal kurir.
+     - `frontend/app/api/auth/[portal]/[action]/route.ts`: Pada endpoint session, menambahkan fallback token yang sama serta melakukan sinkronisasi otomatis menyetel cookie `laundryku_courier_token` saat session berhasil.
+     - `frontend/lib/auth.ts`: Menambahkan fallback pada `getStoredUser()` dari `COURIER_USER_KEY` / `MITRA_USER_KEY` ke `USER_KEY`.
+     - `frontend/lib/courier.ts` & `frontend/app/courier/page.tsx`: Menambahkan tipe `name`, `email`, `phone` pada `CourierProfileSummary`, menyinkronkan profil ke `currentUser`, serta mengoper nama profil/user ke `DashboardLayout`.
+  2. **Backend**:
+     - `app/Models/User.php`: Meng-override `tokenCan(string $ability): bool` untuk memeriksa hak akses role secara real-time (`$this->role === $roleName || $this->hasRole($roleName)`) saat ability bertipe `role:*`.
+     - `app/Http/Middleware/EnsureUserRole.php`: Memastikan pengecekan role memeriksa kolom `users.role` dan relasi tabel `user_roles`.
+     - `app/Http/Controllers/Api/Portal/CourierPortalController.php`:
+       - `profile()`: Menyertakan `name`, `email`, dan `phone` dari user kurir, serta menolak akses (403) jika kurir belum terverifikasi (`! $courier->is_verified`).
+       - `taskList()`: Menolak akses (403) jika kurir belum terverifikasi (`! $courier->is_verified`).
+- **Verifikasi**:
+  - `php artisan test --filter=CourierPortalAuthorizationTest`: 4 passed (15 assertions).
+  - `php artisan test --filter=CourierApplicationFlowTest`: 3 passed (36 assertions).
+  - `npx tsc --noEmit`: 0 error.
+
+
+
+

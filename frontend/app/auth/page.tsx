@@ -401,8 +401,8 @@ function AuthContent() {
         subtitle="Anda sedang masuk di akun LaundryKu"
       >
         <div className="space-y-6">
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-sky-50 border border-sky-200">
-            <div className="w-14 h-14 rounded-2xl bg-teal-500 text-navy-900 font-heading font-extrabold text-xl flex items-center justify-center shadow-sm">
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-navy-50 border border-navy-200">
+            <div className="w-14 h-14 rounded-2xl bg-navy-700 text-white font-heading font-extrabold text-xl flex items-center justify-center shadow-xs">
               {currentUser.name.charAt(0).toUpperCase()}
             </div>
             <div className="space-y-1">
@@ -425,7 +425,7 @@ function AuthContent() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Role:</span>
-              <Badge variant="teal" size="sm">Customer</Badge>
+              <Badge variant="sky" size="sm">Customer</Badge>
             </div>
           </div>
 
@@ -457,13 +457,23 @@ function AuthContent() {
 
     return (
     <AuthLayout
-      title={activeTab === 'otp' ? 'Verifikasi OTP' : activeTab === 'register' ? 'Buat Akun Baru' : 'Masuk ke LaundryKu'}
+      title={
+        activeTab === 'otp'
+          ? 'Verifikasi Kode OTP'
+          : activeTab === 'register'
+          ? 'Daftar Akun Baru'
+          : activeTab === 'setup_password'
+          ? 'Buat Kata Sandi Baru'
+          : 'Masuk ke Akun Anda'
+      }
       subtitle={
         activeTab === 'otp'
-          ? `Masukkan 6 digit kode OTP yang dikirim ke ${otpDestination || destination}`
+          ? `Ketik 6 angka kode yang kami kirim ke ${otpDestination || destination}`
           : activeTab === 'register'
-          ? 'Daftar akun baru LaundryKu untuk kemudahan layanan laundry Anda.'
-          : 'Masuk dengan email/nomor WhatsApp dan kata sandi Anda.'
+          ? 'Mulai pesan laundry antar-jemput dengan mudah.'
+          : activeTab === 'setup_password'
+          ? 'Buat kata sandi minimal 8 karakter agar akun tetap aman.'
+          : 'Masukkan WhatsApp atau email dan kata sandi Anda.'
       }
     >
       <div className="space-y-6">
@@ -475,7 +485,7 @@ function AuthContent() {
         )}
 
         {/* Tab Toggle (Login / Register) */}
-        {activeTab !== 'otp' && (
+        {activeTab !== 'otp' && activeTab !== 'setup_password' && (
           <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold">
             <button
               type="button"
@@ -515,7 +525,7 @@ function AuthContent() {
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Channel Switcher */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-navy-900">Kanal Masuk</label>
+              <label className="block text-xs font-bold text-navy-900">Masuk lewat</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -525,11 +535,11 @@ function AuthContent() {
                   }}
                   className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                     channel === 'whatsapp'
-                      ? 'border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-400'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      ? 'border-navy-700 bg-navy-50 text-navy-900 ring-1 ring-navy-700/50'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-navy-900'
                   }`}
                 >
-                  <MessageSquare className="w-4 h-4 text-teal-600" />
+                  <MessageSquare className="w-4 h-4 text-navy-700" />
                   <span>WhatsApp</span>
                 </button>
                 <button
@@ -540,11 +550,11 @@ function AuthContent() {
                   }}
                   className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                     channel === 'email'
-                      ? 'border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-400'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      ? 'border-navy-700 bg-navy-50 text-navy-900 ring-1 ring-navy-700/50'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-navy-900'
                   }`}
                 >
-                  <Mail className="w-4 h-4 text-teal-600" />
+                  <Mail className="w-4 h-4 text-navy-700" />
                   <span>Email</span>
                 </button>
               </div>
@@ -574,7 +584,7 @@ function AuthContent() {
             />
 
             <PasswordInput
-              label="Kata Sandi / Password"
+              label="Kata sandi"
               required
               autoComplete="current-password"
               value={loginPassword}
@@ -598,7 +608,7 @@ function AuthContent() {
               className="w-full min-h-[46px]"
               isLoading={loading}
             >
-              Masuk ke Akun
+              Masuk
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
 
@@ -611,19 +621,19 @@ function AuthContent() {
                   setErrorMsg(null);
                   setFieldErrors({});
                 }}
-                className="text-xs text-slate-500 hover:text-teal-600 font-medium transition-colors"
+                className="text-xs text-slate-500 hover:text-navy-700 font-medium transition-colors"
               >
-                Akun lama belum memiliki kata sandi? <strong className="text-teal-600 underline">Atur di sini</strong>
+                Belum punya kata sandi? <strong className="text-navy-700 hover:text-navy-800 underline">Atur di sini</strong>
               </button>
             </div>
 
             <div className="pt-2 text-center border-t border-slate-100">
               <Link
                 href="/mitra/login"
-                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-blue-700 font-medium transition-colors"
+                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-navy-700 font-medium transition-colors"
               >
-                <span>Pemilik gerai laundry?</span>
-                <span className="text-blue-600 font-semibold underline">Masuk sebagai mitra &rarr;</span>
+                <span>Punya usaha laundry?</span>
+                <span className="text-navy-700 font-semibold underline">Masuk sebagai mitra &rarr;</span>
               </Link>
             </div>
           </form>
@@ -634,7 +644,7 @@ function AuthContent() {
           <form onSubmit={handleRegister} className="space-y-4">
             {/* Channel Switcher */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-navy-900">Kanal Pendaftaran</label>
+              <label className="block text-xs font-bold text-navy-900">Daftar lewat</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -644,11 +654,11 @@ function AuthContent() {
                   }}
                   className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                     channel === 'whatsapp'
-                      ? 'border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-400'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      ? 'border-navy-700 bg-navy-50 text-navy-900 ring-1 ring-navy-700/50'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-navy-900'
                   }`}
                 >
-                  <MessageSquare className="w-4 h-4 text-teal-600" />
+                  <MessageSquare className="w-4 h-4 text-navy-700" />
                   <span>WhatsApp</span>
                 </button>
                 <button
@@ -659,11 +669,11 @@ function AuthContent() {
                   }}
                   className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                     channel === 'email'
-                      ? 'border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-400'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      ? 'border-navy-700 bg-navy-50 text-navy-900 ring-1 ring-navy-700/50'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-navy-900'
                   }`}
                 >
-                  <Mail className="w-4 h-4 text-teal-600" />
+                  <Mail className="w-4 h-4 text-navy-700" />
                   <span>Email</span>
                 </button>
               </div>
@@ -716,7 +726,7 @@ function AuthContent() {
 
             <div>
               <PasswordInput
-                label="Kata Sandi / Password"
+                label="Kata sandi"
                 required
                 autoComplete="new-password"
                 value={password}
@@ -741,7 +751,7 @@ function AuthContent() {
             </div>
 
             <PasswordInput
-              label="Konfirmasi Kata Sandi"
+              label="Ulangi kata sandi"
               required
               autoComplete="new-password"
               value={passwordConfirmation}
@@ -765,7 +775,7 @@ function AuthContent() {
               className="w-full min-h-[46px]"
               isLoading={loading}
             >
-              Daftar &amp; Kirim OTP
+              Lanjut &amp; kirim kode
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </form>
@@ -783,9 +793,9 @@ function AuthContent() {
 
             {/* Dev Mode Dummy OTP Hint Alert */}
             {debugOtp && (
-              <div className="p-3.5 rounded-2xl border border-teal-200 bg-teal-50 text-teal-900 text-xs flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-navy-200 bg-navy-50 text-navy-900 text-xs flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-teal-600" />
+                  <KeyRound className="w-4 h-4 text-navy-700" />
                   <span>OTP Dev: <strong className="font-mono text-sm tracking-widest">{debugOtp}</strong></span>
                 </span>
                 <button
@@ -794,7 +804,7 @@ function AuthContent() {
                     setOtpCode(debugOtp);
                     handleVerifyOtp(debugOtp);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-teal-600 text-white font-semibold text-[11px] hover:bg-teal-700 transition-colors"
+                  className="px-2.5 py-1 rounded-lg bg-navy-700 text-white font-semibold text-[11px] hover:bg-navy-800 transition-colors"
                 >
                   Isi &amp; Verifikasi
                 </button>
@@ -803,7 +813,7 @@ function AuthContent() {
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-navy-900 text-center">
-                Masukkan 6 Digit Kode OTP
+                Ketik 6 angka kode OTP
               </label>
               <OTPInput
                 length={6}
@@ -821,7 +831,7 @@ function AuthContent() {
               disabled={otpCode.length !== 6}
               onClick={() => handleVerifyOtp()}
             >
-              Verifikasi &amp; Masuk
+              Verifikasi &amp; masuk
             </Button>
 
             <div className="flex items-center justify-between pt-2 text-xs">
@@ -833,16 +843,16 @@ function AuthContent() {
                 }}
                 className="text-slate-500 hover:text-navy-900 font-semibold p-1"
               >
-                ← Ganti Kontak / Masuk
+                ← Ganti kontak / masuk
               </button>
 
               <button
                 type="button"
                 disabled={resendCooldown > 0 || loading}
                 onClick={handleResendOtp}
-                className="text-teal-600 hover:text-teal-700 font-semibold disabled:text-slate-400 p-1"
+                className="text-navy-700 hover:text-navy-800 font-semibold disabled:text-slate-400 p-1"
               >
-                {resendCooldown > 0 ? `Kirim ulang (${resendCooldown}s)` : 'Kirim Ulang Kode'}
+                {resendCooldown > 0 ? `Kirim ulang (${resendCooldown}s)` : 'Kirim ulang kode'}
               </button>
             </div>
           </div>
@@ -851,10 +861,10 @@ function AuthContent() {
         {/* 4. SETUP PASSWORD FORM (FOR LEGACY ACTIVE ACCOUNTS WITHOUT PASSWORD) */}
         {activeTab === 'setup_password' && (
           <div className="space-y-5">
-            <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-900">
-              <h4 className="font-bold mb-1">Atur Kata Sandi Akun Lama</h4>
-              <p className="text-[11px] text-teal-700 leading-relaxed">
-                Fitur ini khusus untuk akun aktif yang terdaftar sebelum fitur kata sandi diperkenalkan.
+            <div className="p-3.5 bg-navy-50/70 border border-navy-100 rounded-xl text-xs text-navy-900">
+              <h4 className="font-bold mb-1">Atur kata sandi akun</h4>
+              <p className="text-[11px] text-navy-700 leading-relaxed">
+                Khusus akun yang belum memiliki kata sandi untuk masuk.
               </p>
             </div>
 
@@ -862,18 +872,18 @@ function AuthContent() {
               <form onSubmit={handleRequestPasswordSetup} className="space-y-4">
                 {/* Channel Switcher */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-navy-900">Kanal Kontak Akun</label>
+                  <label className="block text-xs font-bold text-navy-900">Kontak akun terdaftar</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setChannel('whatsapp')}
                       className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                         channel === 'whatsapp'
-                          ? 'border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-400'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-navy-700 bg-navy-50 text-navy-900 ring-1 ring-navy-700/50'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-navy-900'
                       }`}
                     >
-                      <MessageSquare className="w-4 h-4 text-teal-600" />
+                      <MessageSquare className="w-4 h-4 text-navy-700" />
                       <span>WhatsApp</span>
                     </button>
                     <button
@@ -881,18 +891,18 @@ function AuthContent() {
                       onClick={() => setChannel('email')}
                       className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                         channel === 'email'
-                          ? 'border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-400'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-navy-700 bg-navy-50 text-navy-900 ring-1 ring-navy-700/50'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-navy-900'
                       }`}
                     >
-                      <Mail className="w-4 h-4 text-teal-600" />
+                      <Mail className="w-4 h-4 text-navy-700" />
                       <span>Email</span>
                     </button>
                   </div>
                 </div>
 
                 <Input
-                  label={channel === 'whatsapp' ? 'Nomor WhatsApp Terdaftar' : 'Alamat Email Terdaftar'}
+                  label={channel === 'whatsapp' ? 'Nomor WhatsApp terdaftar' : 'Alamat email terdaftar'}
                   type={channel === 'whatsapp' ? 'tel' : 'email'}
                   required
                   value={destination}
@@ -907,7 +917,7 @@ function AuthContent() {
                   className="w-full min-h-[46px]"
                   isLoading={loading}
                 >
-                  Minta Kode OTP Verifikasi
+                  Minta Kode OTP
                   <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>
 
@@ -920,22 +930,22 @@ function AuthContent() {
                     }}
                     className="text-xs text-slate-500 hover:text-navy-900 font-semibold p-1"
                   >
-                    ← Kembali ke Halaman Masuk
+                    ← Kembali ke halaman masuk
                   </button>
                 </div>
               </form>
             ) : (
               <form onSubmit={handleCompletePasswordSetup} className="space-y-4">
                 {debugOtp && (
-                  <div className="p-3.5 rounded-2xl border border-teal-200 bg-teal-50 text-teal-900 text-xs flex items-center justify-between">
+                  <div className="p-3.5 rounded-2xl border border-navy-200 bg-navy-50 text-navy-900 text-xs flex items-center justify-between">
                     <span className="flex items-center gap-2">
-                      <KeyRound className="w-4 h-4 text-teal-600" />
+                      <KeyRound className="w-4 h-4 text-navy-700" />
                       <span>OTP Dev: <strong className="font-mono text-sm tracking-widest">{debugOtp}</strong></span>
                     </span>
                     <button
                       type="button"
                       onClick={() => setSetupOtp(debugOtp)}
-                      className="px-2.5 py-1 rounded-lg bg-teal-600 text-white font-semibold text-[11px] hover:bg-teal-700 transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-navy-700 text-white font-semibold text-[11px] hover:bg-navy-800 transition-colors"
                     >
                       Isi Kode
                     </button>
@@ -944,7 +954,7 @@ function AuthContent() {
 
                 <div className="space-y-2">
                   <label className="block text-xs font-bold text-navy-900 text-center">
-                    Masukkan 6 Digit Kode OTP
+                    Ketik 6 angka kode OTP
                   </label>
                   <OTPInput
                     length={6}
@@ -956,7 +966,7 @@ function AuthContent() {
 
                 <div>
                   <PasswordInput
-                    label="Kata Sandi Baru"
+                    label="Kata sandi baru"
                     required
                     autoComplete="new-password"
                     value={setupNewPassword}
@@ -971,7 +981,7 @@ function AuthContent() {
                 </div>
 
                 <PasswordInput
-                  label="Konfirmasi Kata Sandi Baru"
+                  label="Ulangi kata sandi baru"
                   required
                   autoComplete="new-password"
                   value={setupNewPasswordConfirmation}
@@ -986,7 +996,7 @@ function AuthContent() {
                   className="w-full min-h-[46px]"
                   isLoading={loading}
                 >
-                  Simpan Kata Sandi &amp; Masuk
+                  Simpan kata sandi &amp; masuk
                   <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>
 
@@ -999,16 +1009,16 @@ function AuthContent() {
                     }}
                     className="text-slate-500 hover:text-navy-900 font-semibold p-1"
                   >
-                    ← Ganti Kontak
+                    ← Ganti kontak
                   </button>
 
                   <button
                     type="button"
                     disabled={resendCooldown > 0 || loading}
                     onClick={handleRequestPasswordSetup}
-                    className="text-teal-600 hover:text-teal-700 font-semibold disabled:text-slate-400 p-1"
+                    className="text-navy-700 hover:text-navy-800 font-semibold disabled:text-slate-400 p-1"
                   >
-                    {resendCooldown > 0 ? `Kirim ulang (${resendCooldown}s)` : 'Kirim Ulang Kode'}
+                    {resendCooldown > 0 ? `Kirim ulang (${resendCooldown}s)` : 'Kirim ulang kode'}
                   </button>
                 </div>
               </form>
@@ -1026,7 +1036,7 @@ export default function AuthPage() {
       fallback={
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-10 h-10 border-4 border-navy-700 border-t-transparent rounded-full animate-spin" />
             <p className="text-slate-600 font-medium">Memuat halaman autentikasi...</p>
           </div>
         </div>

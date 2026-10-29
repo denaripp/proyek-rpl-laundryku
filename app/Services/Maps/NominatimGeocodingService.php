@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class NominatimGeocodingService
+class NominatimGeocodingService implements GeocodingServiceInterface
 {
     protected string $baseUrl;
     protected string $userAgent;
@@ -189,5 +189,102 @@ class NominatimGeocodingService
             'province' => $province,
             'postal_code' => $postalCode,
         ];
+    }
+
+    /**
+     * Geocode an address string to coordinates.
+     *
+     * @param string $address
+     * @return array{latitude: float, longitude: float, lat: float, lng: float}|null
+     */
+    public function geocode(string $address): ?array
+    {
+        $trimmed = trim($address);
+        if (empty($trimmed)) {
+            return null;
+        }
+
+        $cacheKey = 'nominatim:forward:' . sha1(strtolower($trimmed));
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && isset($cached['latitude'], $cached['longitude'])) {
+            return $cached;
+        }
+
+        $this->throttleGlobalRequest();
+
+        try {
+            $response = Http::timeout($this->timeout)
+                ->withHeaders([
+                    'User-Agent' => $this->userAgent,
+                    'Accept' => 'application/json',
+                ])
+                ->get("{$this->baseUrl}/search", [
+                    'format' => 'jsonv2',
+                    'q' => $trimmed,
+                    'limit' => 1,
+                    'addressdetails' => 1,
+                ]);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            $json = $response->json();
+            if (!is_array($json) || empty($json) || !isset($json[0]['lat'], $json[0]['lon'])) {
+                return null;
+            }
+
+            $lat = (float) $json[0]['lat'];
+            $lng = (float) $json[0]['lon'];
+
+            $coords = [
+                'latitude' => $lat,
+                'longitude' => $lng,
+                'lat' => $lat,
+                'lng' => $lng,
+                'formatted_address' => $json[0]['display_name'] ?? null,
+            ];
+
+            Cache::put($cacheKey, $coords, $this->cacheTtl);
+
+            return $coords;
+        } catch (Throwable $e) {
+            Log::error('Nominatim geocode exception', [
+                'query' => $trimmed,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Reverse geocode coordinates to simple address string.
+     */
+    public function reverseGeocode(float $lat, float $lng): ?string
+    {
+        $structured = $this->reverseGeocodeStructured($lat, $lng);
+        return $structured['formatted_address'] ?? null;
+    }
+
+    /**
+     * Calculate distance between two coordinates in kilometers using Haversine formula.
+     */
+    public function distance(array $origin, array $destination): ?float
+    {
+        if (!isset($origin['lat'], $origin['lng'], $destination['lat'], $destination['lng'])) {
+            return null;
+        }
+
+        $earthRadius = 6371; // km
+        $dLat = deg2rad($destination['lat'] - $origin['lat']);
+        $dLon = deg2rad($destination['lng'] - $origin['lng']);
+
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($origin['lat'])) * cos(deg2rad($destination['lat'])) *
+            sin($dLon / 2) * sin($dLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return round($earthRadius * $c, 2);
     }
 }

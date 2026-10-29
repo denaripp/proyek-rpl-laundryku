@@ -24,5 +24,9 @@ class SendOrderNotification implements ShouldQueue
             $event->newStatus,
             $event->reason
         );
+
+        if ($event->oldStatus === 'created' && strtolower($event->newStatus) === 'created') {
+            NotificationTrigger::newOrderForStore($event->order);
+        }
     }
 }

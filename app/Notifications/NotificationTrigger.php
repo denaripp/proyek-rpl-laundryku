@@ -162,4 +162,275 @@ class NotificationTrigger
     {
         self::toUser($customer, 'order_status', "Order #{$order->order_number} status updated", "Your order status changed from \"{$oldStatus}\" to \"{$newStatus}\"." . ($reason ? " Reason: {$reason}" : ''), ['order_id' => $order->id, 'old_status' => $oldStatus, 'new_status' => $newStatus, 'reason' => $reason]);
     }
+
+    // ===== Tahap 11D: Event Triggers & Gap Closures =====
+
+    public static function newOrderForStore($order): void
+    {
+        if (!$order) {
+            return;
+        }
+        $store = $order->store;
+        $owner = $store?->owner ?? ($store?->owner_user_id ? User::find($store->owner_user_id) : null);
+        if (!$owner) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+        $customerName = $order->customer?->name ?? 'Pelanggan';
+        $serviceName = $order->service_type ?? ($order->items?->first()?->service_name ?? 'Laundry');
+
+        self::toUser(
+            $owner,
+            'new_order_store',
+            "Pesanan Baru Masuk #{$order->order_number}",
+            "Pesanan baru #{$order->order_number} dari {$customerName} untuk layanan {$serviceName}. Cek pesanan di portal toko: {$baseUrl}/store/orders/{$order->id}",
+            ['order_id' => $order->id, 'store_id' => $order->store_id]
+        );
+    }
+
+    public static function courierTaskTransitioned($order, string $toStatus): void
+    {
+        if (!$order) {
+            return;
+        }
+        $customer = $order->customer ?? ($order->customer_id ? User::find($order->customer_id) : null);
+        if (!$customer) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+
+        if ($toStatus === 'picked_up') {
+            self::toUser(
+                $customer,
+                'picked_up',
+                "Cucian Telah Dijemput Kurir #{$order->order_number}",
+                "Kurir telah menjemput cucian untuk pesanan #{$order->order_number} dan menuju ke toko. Cek pesanan: {$baseUrl}/orders/{$order->id}",
+                ['order_id' => $order->id]
+            );
+        } elseif ($toStatus === 'out_for_delivery') {
+            self::toUser(
+                $customer,
+                'out_for_delivery',
+                "Kurir Mengantar Pesanan #{$order->order_number}",
+                "Kurir sedang dalam perjalanan mengantarkan cucian untuk pesanan #{$order->order_number} ke alamat Anda. Cek pesanan: {$baseUrl}/orders/{$order->id}",
+                ['order_id' => $order->id]
+            );
+        }
+    }
+
+    public static function codPaymentReceived($order): void
+    {
+        if (!$order) {
+            return;
+        }
+        $customer = $order->customer ?? ($order->customer_id ? User::find($order->customer_id) : null);
+        if (!$customer) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+        $amount = number_format((float) ($order->total_amount ?? $order->final_price ?? 0), 0, ',', '.');
+
+        self::toUser(
+            $customer,
+            'cod_payment_received',
+            "Pembayaran COD Diterima #{$order->order_number}",
+            "Pembayaran tunai (COD) untuk pesanan #{$order->order_number} sebesar Rp {$amount} telah diterima kurir. Cek pesanan: {$baseUrl}/orders/{$order->id}",
+            ['order_id' => $order->id, 'payment_status' => 'paid']
+        );
+    }
+
+    public static function orderPaidForStore($order): void
+    {
+        if (!$order) {
+            return;
+        }
+        $store = $order->store;
+        $owner = $store?->owner ?? ($store?->owner_user_id ? User::find($store->owner_user_id) : null);
+        if (!$owner) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+
+        self::toUser(
+            $owner,
+            'order_paid_store',
+            "Pembayaran Pesanan Lunas #{$order->order_number}",
+            "Pembayaran untuk pesanan #{$order->order_number} telah lunas. Silakan proses pesanan di portal toko: {$baseUrl}/store/orders/{$order->id}",
+            ['order_id' => $order->id, 'store_id' => $order->store_id, 'payment_status' => 'paid']
+        );
+    }
+
+    public static function orderCompletedForStore($order): void
+    {
+        if (!$order) {
+            return;
+        }
+        $store = $order->store;
+        $owner = $store?->owner ?? ($store?->owner_user_id ? User::find($store->owner_user_id) : null);
+        if (!$owner) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+
+        self::toUser(
+            $owner,
+            'order_completed_store',
+            "Pesanan Selesai #{$order->order_number}",
+            "Pesanan #{$order->order_number} telah selesai dan diterima oleh pelanggan. Cek detail di portal toko: {$baseUrl}/store/orders/{$order->id}",
+            ['order_id' => $order->id, 'store_id' => $order->store_id, 'status' => 'completed']
+        );
+    }
+
+    public static function orderCancelledForStore($order, ?string $reason = null): void
+    {
+        if (!$order) {
+            return;
+        }
+        $store = $order->store;
+        $owner = $store?->owner ?? ($store?->owner_user_id ? User::find($store->owner_user_id) : null);
+        if (!$owner) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+
+        self::toUser(
+            $owner,
+            'order_cancelled_store',
+            "Pesanan Dibatalkan #{$order->order_number}",
+            "Pesanan #{$order->order_number} telah dibatalkan." . ($reason ? " Alasan: {$reason}." : '') . " Cek detail di portal toko: {$baseUrl}/store/orders/{$order->id}",
+            ['order_id' => $order->id, 'store_id' => $order->store_id, 'status' => 'cancelled', 'reason' => $reason]
+        );
+    }
+
+    public static function disputeOpenedForStoreAndAdmins($order, $dispute): void
+    {
+        if (!$order) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+        $store = $order->store;
+        $owner = $store?->owner ?? ($store?->owner_user_id ? User::find($store->owner_user_id) : null);
+        if ($owner) {
+            self::toUser(
+                $owner,
+                'dispute_opened_store',
+                "Komplain Baru Diajukan #{$order->order_number}",
+                "Komplain baru telah diajukan pelanggan untuk pesanan #{$order->order_number}. Cek di portal toko: {$baseUrl}/store/complaints",
+                ['order_id' => $order->id, 'dispute_id' => $dispute->id, 'store_id' => $order->store_id]
+            );
+        }
+
+        try {
+            $adminRoles = \App\Models\Role::whereIn('name', ['super_admin', 'platform_owner', 'platform_admin'])->pluck('id');
+            $admins = User::whereIn('role', [User::ROLE_SUPER_ADMIN, 'platform_owner', 'platform_admin'])
+                ->orWhereHas('roles', fn ($q) => $q->whereIn('roles.id', $adminRoles))
+                ->get();
+
+            $caseNum = $dispute->complaint_number ?? $dispute->case_number ?? $dispute->id;
+            foreach ($admins as $admin) {
+                self::toUser(
+                    $admin,
+                    'dispute_opened_admin',
+                    "Komplain Baru Diajukan #{$order->order_number}",
+                    "Komplain baru untuk pesanan #{$order->order_number} (kasus #{$caseNum}) memerlukan pemantauan platform.",
+                    ['order_id' => $order->id, 'dispute_id' => $dispute->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            // Never break caller
+        }
+    }
+
+    public static function disputeResolvedForStore($order, $dispute, string $outcome): void
+    {
+        if (!$order) {
+            return;
+        }
+        $store = $order->store;
+        $owner = $store?->owner ?? ($store?->owner_user_id ? User::find($store->owner_user_id) : null);
+        if (!$owner) {
+            return;
+        }
+        $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
+
+        self::toUser(
+            $owner,
+            'dispute_' . $outcome . '_store',
+            "Komplain Diselesaikan #{$order->order_number}",
+            "Komplain untuk pesanan #{$order->order_number} telah diselesaikan dengan keputusan: {$outcome}. Cek di portal toko: {$baseUrl}/store/complaints",
+            ['order_id' => $order->id, 'dispute_id' => $dispute->id, 'store_id' => $order->store_id, 'outcome' => $outcome]
+        );
+    }
+
+    public static function readyForDeliveryCourier($order): void
+    {
+        if (!$order) {
+            return;
+        }
+        $courierUser = $order->courier;
+        if (!$courierUser && $order->courier_id) {
+            $courierUser = User::find($order->courier_id);
+        }
+        if (!$courierUser && $order->courier_id) {
+            $courierRecord = \App\Models\Courier::find($order->courier_id);
+            $courierUser = $courierRecord?->user;
+        }
+        if (!$courierUser && method_exists($order, 'courierTasks')) {
+            $task = $order->courierTasks()->whereIn('task_type', ['delivery', 'pickup'])->latest()->first();
+            $courierUser = $task?->courier?->user;
+        }
+
+        if (!$courierUser) {
+            return;
+        }
+
+        $storeName = $order->store?->name ?? 'toko';
+        self::toUser(
+            $courierUser,
+            'order_ready_courier',
+            "Pesanan Siap Diantar #{$order->order_number}",
+            "Cucian untuk pesanan #{$order->order_number} telah siap diantar. Silakan ambil di {$storeName} dan antar ke pelanggan.",
+            ['order_id' => $order->id, 'courier_id' => $courierUser->id]
+        );
+    }
+
+    public static function courierRecruited($courier, $store): void
+    {
+        if (!$courier) {
+            return;
+        }
+        $courierUser = $courier->user ?? ($courier->user_id ? User::find($courier->user_id) : null);
+        if (!$courierUser) {
+            return;
+        }
+        $storeName = $store?->name ?? 'Toko Mitra';
+
+        self::toUser(
+            $courierUser,
+            'courier_recruited',
+            'Lamaran Kurir Diterima',
+            "Selamat! Lamaran Anda telah diterima oleh toko {$storeName}. Anda kini resmi bertugas sebagai kurir toko tersebut.",
+            ['store_id' => $store?->id]
+        );
+    }
+
+    public static function courierRejected($courier, $store, ?string $reason = null): void
+    {
+        if (!$courier) {
+            return;
+        }
+        $courierUser = $courier->user ?? ($courier->user_id ? User::find($courier->user_id) : null);
+        if (!$courierUser) {
+            return;
+        }
+        $storeName = $store?->name ?? 'Toko Mitra';
+
+        self::toUser(
+            $courierUser,
+            'courier_rejected',
+            'Status Lamaran Kurir',
+            "Mohon maaf, lamaran Anda ke toko {$storeName} belum dapat diterima saat ini." . ($reason ? " Alasan: {$reason}." : ''),
+            ['store_id' => $store?->id, 'reason' => $reason]
+        );
+    }
 }

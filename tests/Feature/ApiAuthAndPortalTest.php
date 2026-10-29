@@ -122,6 +122,8 @@ class ApiAuthAndPortalTest extends TestCase
             'store_address' => 'Jl. Sudirman No. 12',
             'city' => 'Jakarta Selatan',
             'province' => 'DKI Jakarta',
+            'latitude' => -6.2100,
+            'longitude' => 106.8200,
         ]);
 
         $response->assertStatus(201)

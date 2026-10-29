@@ -86,6 +86,7 @@ class DisputeService
 
             // Tahap 15: queued side-effect notification to the customer
             NotificationTrigger::disputeOpened($order->customer, $order, $dispute);
+            NotificationTrigger::disputeOpenedForStoreAndAdmins($order, $dispute);
 
             return $dispute;
         });
@@ -204,6 +205,7 @@ class DisputeService
 
             // Tahap 15: queued side-effect notification
             NotificationTrigger::disputeResolved($dispute->order->customer, $dispute->order, $dispute, $outcome);
+            NotificationTrigger::disputeResolvedForStore($dispute->order, $dispute, $outcome);
 
             return $dispute;
         });

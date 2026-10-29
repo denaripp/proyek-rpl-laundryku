@@ -444,7 +444,15 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
   if (action === 'session') {
     const cookieName = PORTAL_COOKIE_NAMES[portal];
-    const token = request.cookies.get(cookieName)?.value;
+    let token = request.cookies.get(cookieName)?.value;
+    const hadDedicatedCookie = Boolean(token);
+
+    if (!token && portal === 'courier') {
+      token = request.cookies.get(PORTAL_COOKIE_NAMES.customer)?.value || request.cookies.get('auth_token')?.value;
+    }
+    if (!token && portal === 'customer') {
+      token = request.cookies.get('auth_token')?.value;
+    }
 
     if (!token) {
       return NextResponse.json({ success: false, user: null }, { status: 401 });
@@ -462,16 +470,26 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       if (!res.ok) {
         // Token invalid or revoked in database
         const response = NextResponse.json({ success: false, user: null }, { status: 401 });
-        response.cookies.set(cookieName, '', getCookieOptions(0));
+        if (hadDedicatedCookie) {
+          response.cookies.set(cookieName, '', getCookieOptions(0));
+        }
         return response;
       }
 
       const data = await res.json();
-      const resolvedUser = data.data?.user || (data.data?.id ? data.data : data.user) || null;
-      return NextResponse.json({
+      const rawUser = data.data?.user || (data.data?.id ? data.data : data.user) || null;
+      const resolvedUser = rawUser ? { ...rawUser, role: rawUser.role || rawUser.active_mode || (rawUser.roles && rawUser.roles[0]) || portal } : null;
+      const response = NextResponse.json({
         success: true,
         user: resolvedUser,
       });
+
+      // Synchronize courier cookie if authenticated via customer fallback
+      if (portal === 'courier' && !hadDedicatedCookie && token) {
+        response.cookies.set(cookieName, token, getCookieOptions());
+      }
+
+      return response;
     } catch {
       return NextResponse.json({ success: false, user: null }, { status: 502 });
     }

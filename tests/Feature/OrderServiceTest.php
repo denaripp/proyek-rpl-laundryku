@@ -139,7 +139,7 @@ class OrderServiceTest extends TestCase
         $this->assertEquals($expectedPrice, $order->total_amount);
     }
 
-    public function test_weighed_to_payment_required_transition()
+    public function test_weighed_to_awaiting_price_approval_transition()
     {
         $order = $this->orderService->createOrder([
             'store_id' => $this->store->id,
@@ -162,9 +162,9 @@ class OrderServiceTest extends TestCase
         $this->orderService->transition($order, OrderStatus::RECEIVED_BY_STORE->value, $this->admin);
         $this->orderService->transition($order, OrderStatus::WEIGHED->value, $this->admin);
 
-        // Transition to PAYMENT_REQUIRED
-        $order = $this->orderService->transition($order, OrderStatus::PAYMENT_REQUIRED->value, $this->admin);
-        $this->assertEquals(OrderStatus::PAYMENT_REQUIRED->value, $order->status);
+        // Transition to awaiting_price_approval
+        $order = $this->orderService->transition($order, 'awaiting_price_approval', $this->admin);
+        $this->assertEquals('awaiting_price_approval', $order->status);
     }
 
     public function test_cannot_cancel_completed_order()

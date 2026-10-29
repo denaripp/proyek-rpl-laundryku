@@ -8,6 +8,7 @@ use App\Models\Courier;
 use App\Models\CourierTask;
 use App\Models\Order;
 use App\Models\Store;
+use App\Notifications\NotificationTrigger;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -606,6 +607,8 @@ class CourierPortalController extends Controller
             'after_value' => json_encode(['to_status' => $toStatus, 'note' => $request->input('note')]),
         ]);
 
+        NotificationTrigger::courierTaskTransitioned($order, $toStatus);
+
         return response()->json([
             'success' => true,
             'message' => 'Status tugas berhasil diperbarui.',
@@ -649,6 +652,8 @@ class CourierPortalController extends Controller
             'user_agent' => $request->userAgent(),
             'after_value' => json_encode(['payment_status' => 'paid', 'amount' => $order->total_amount]),
         ]);
+
+        NotificationTrigger::codPaymentReceived($order);
 
         return response()->json([
             'success' => true,

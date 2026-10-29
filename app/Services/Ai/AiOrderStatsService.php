@@ -168,6 +168,7 @@ class AiOrderStatsService
         // 1. Specific query: "pesanan terakhir"
         if (str_contains($normalizedMessage, 'terakhir')) {
             $lastOrder = Order::where('customer_id', $user->id)
+                ->with('store')
                 ->latest('order_date')
                 ->latest('id')
                 ->first();
@@ -178,8 +179,9 @@ class AiOrderStatsService
 
             $dateWib = $this->formatWibDate($lastOrder->order_date ?? $lastOrder->created_at);
             $label = $this->statusLabels[$lastOrder->status] ?? $lastOrder->status;
+            $storeName = $lastOrder->store?->name ?? 'Toko Laundry';
 
-            return "Pesanan terakhir Anda nomor {$lastOrder->order_number} dengan status '{$label}' pada tanggal {$dateWib}.";
+            return "Pesanan terakhir Anda dilakukan di toko {$storeName} (nomor {$lastOrder->order_number}) dengan status '{$label}' pada tanggal {$dateWib}.";
         }
 
         // 2. Specific query: "total pengeluaran" / "belanja"

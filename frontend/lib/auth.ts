@@ -151,7 +151,12 @@ export function getStoredToken(): string | null {
 
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(localStorage.getItem(USER_KEY));
+  return Boolean(
+    localStorage.getItem(USER_KEY) ||
+    localStorage.getItem(MITRA_USER_KEY) ||
+    localStorage.getItem(COURIER_USER_KEY) ||
+    localStorage.getItem(ADMIN_USER_KEY)
+  );
 }
 
 export function getStoredUser(portal?: string): AuthUser | null {
@@ -167,14 +172,19 @@ export function getStoredUser(portal?: string): AuthUser | null {
     }
   } else if (typeof window !== 'undefined' && window.location) {
     const pathname = window.location.pathname;
-    if (pathname.startsWith('/store') || pathname.startsWith('/mitra')) {
+    if (pathname === '/store' || pathname.startsWith('/store/') || pathname === '/mitra' || pathname.startsWith('/mitra/')) {
       key = MITRA_USER_KEY;
-    } else if (pathname.startsWith('/courier')) {
+    } else if (pathname === '/courier' || pathname.startsWith('/courier/')) {
       key = COURIER_USER_KEY;
+    } else if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+      key = ADMIN_USER_KEY;
     }
   }
 
-  const user = localStorage.getItem(key);
+  let user = localStorage.getItem(key);
+  if (!user && (key === COURIER_USER_KEY || key === MITRA_USER_KEY)) {
+    user = localStorage.getItem(USER_KEY);
+  }
   if (!user) return null;
   try {
     return JSON.parse(user);
@@ -204,6 +214,9 @@ export function updateStoredUser(updates: Partial<AuthUser>): AuthUser | null {
 export function clearAuthSession(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(MITRA_USER_KEY);
+  localStorage.removeItem(COURIER_USER_KEY);
+  localStorage.removeItem(ADMIN_USER_KEY);
   window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: null }));
 }
 
@@ -449,10 +462,11 @@ export async function fetchPortalSession(
         : USER_KEY;
 
     if (!res.ok) {
-      if (portal === 'customer') {
-        clearAuthSession();
-      } else if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined') {
         localStorage.removeItem(key);
+        if (portal === 'customer') {
+          window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: null }));
+        }
       }
       return null;
     }

@@ -33,6 +33,9 @@ class Store extends Model
         'is_active',
         'status',
         'cod_enabled',
+        'qris_enabled',
+        'va_enabled',
+        'va_banks',
         'operational_hours',
         'service_radius_km',
         'minimum_order_amount',
@@ -49,6 +52,9 @@ class Store extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'cod_enabled' => 'boolean',
+        'qris_enabled' => 'boolean',
+        'va_enabled' => 'boolean',
+        'va_banks' => 'array',
         'operational_hours' => 'json',
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
@@ -101,6 +107,11 @@ class Store extends Model
     public function couriers(): HasMany
     {
         return $this->hasMany(Courier::class);
+    }
+
+    public function payoutAccount(): HasOne
+    {
+        return $this->hasOne(StorePayoutAccount::class);
     }
 
     public function reviews(): HasMany

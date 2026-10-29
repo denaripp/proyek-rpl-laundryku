@@ -15,6 +15,7 @@ use App\Models\ServicePrice;
 use App\Models\Setting;
 use App\Models\Store;
 use App\Models\User;
+use App\Services\Store\StoreDashboardService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -142,10 +143,14 @@ class AiDataQueryService
     ];
 
     protected AiOrderStatsService $statsService;
+    protected StoreDashboardService $storeDashboardService;
 
-    public function __construct(AiOrderStatsService $statsService)
-    {
+    public function __construct(
+        AiOrderStatsService $statsService,
+        ?StoreDashboardService $storeDashboardService = null
+    ) {
         $this->statsService = $statsService;
+        $this->storeDashboardService = $storeDashboardService ?? app(StoreDashboardService::class);
     }
 
     /**
@@ -710,20 +715,76 @@ class AiDataQueryService
         $roleStr = implode(', ', $translated);
 
         $storeInfo = '';
-        $storeIds = $this->getManagedStoreIds($user);
-        if (!empty($storeIds)) {
-            $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->all();
-            if (!empty($storeNames)) {
-                $storeInfo = ' Toko yang dikelola: ' . implode(', ', $storeNames) . '.';
+        $isStoreManager = in_array('store_owner', $roles, true) || in_array('store_admin', $roles, true);
+        $isCourier = in_array('courier', $roles, true);
+        $isSuperAdmin = in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true);
+        $isCustomer = in_array('customer', $roles, true);
+
+        if ($isCourier) {
+            $courier = Courier::with('store')->where('user_id', $user->id)->first();
+            if ($courier && $courier->store) {
+                $storeInfo = " Toko mitra tempat Anda bertugas: {$courier->store->name}.";
+            } else {
+                $storeInfo = " Status toko mitra: Belum terhubung ke toko tertentu.";
+            }
+        } elseif ($isStoreManager) {
+            $storeIds = $this->getManagedStoreIds($user);
+            if (!empty($storeIds)) {
+                $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->all();
+                if (!empty($storeNames)) {
+                    $storeInfo = ' Toko yang dikelola: ' . implode(', ', $storeNames) . '.';
+                }
+            }
+            if (empty($storeInfo)) {
+                $ownedStore = Store::where('user_id', $user->id)->first();
+                if ($ownedStore) {
+                    $storeInfo = " Toko yang dikelola: {$ownedStore->name}.";
+                } else {
+                    $storeInfo = " Status toko: Belum ada toko yang terdaftar/dikelola.";
+                }
+            }
+        } elseif ($isSuperAdmin) {
+            $storeInfo = " Akses toko: Seluruh toko mitra dalam sistem platform LaundryKu.";
+        } elseif ($isCustomer) {
+            $lastOrder = Order::where('customer_id', $user->id)->with('store')->latest()->first();
+            if ($lastOrder && $lastOrder->store) {
+                $storeInfo = " Toko mitra langganan/terakhir Anda: {$lastOrder->store->name}.";
+            } else {
+                $storeInfo = " Anda terdaftar sebagai pelanggan pada seluruh jaringan mitra toko LaundryKu.";
             }
         }
 
-        $addressCount = DB::table('customer_addresses')
-            ->where('user_id', $user->id)
-            ->whereNull('deleted_at')
-            ->count();
+        $addressInfo = '';
+        if ($isCustomer) {
+            $addressCount = DB::table('customer_addresses')
+                ->where('user_id', $user->id)
+                ->whereNull('deleted_at')
+                ->count();
+            $addressInfo = " Anda memiliki {$addressCount} alamat tersimpan di LaundryKu.";
+        }
 
-        return "Akun Anda terdaftar atas nama {$user->name} dengan peran {$roleStr}.{$storeInfo} Anda memiliki {$addressCount} alamat tersimpan di LaundryKu.";
+        return "Akun Anda terdaftar atas nama {$user->name} dengan peran {$roleStr}.{$storeInfo}{$addressInfo}";
+    }
+
+    /**
+     * Format store display name.
+     */
+    public function getStoreDisplayName(?Store $store): string
+    {
+        if (!$store) {
+            return 'Toko Anda';
+        }
+        $name = trim($store->name ?? 'Toko Anda');
+        return preg_match('/^toko\b/i', $name) ? $name : "Toko {$name}";
+    }
+
+    public function getStoreNamesList(array $storeIds): string
+    {
+        $stores = Store::whereIn('id', $storeIds)->get();
+        if ($stores->isEmpty()) {
+            return 'Toko Anda';
+        }
+        return $stores->map(fn ($s) => $this->getStoreDisplayName($s))->implode(', ');
     }
 
     /**
@@ -731,89 +792,134 @@ class AiDataQueryService
      */
     public function handleStoreManagerQuery(User $user, string $normalizedMessage): ?string
     {
-        $storeIds = $this->getManagedStoreIds($user);
+        $store = $this->storeDashboardService->resolveStore($user);
+        if (!$store) {
+            $storeIds = $this->getManagedStoreIds($user);
+            if (!empty($storeIds)) {
+                $store = Store::find($storeIds[0]);
+            }
+        }
 
-        if (empty($storeIds)) {
+        if (!$store) {
             return 'Anda belum memiliki toko mitra yang dikelola.';
         }
 
-        // Check if query is looking up specific order number
-        preg_match('/ord-[a-z0-9-]+/i', $normalizedMessage, $matches);
-        $orderNumber = !empty($matches[0]) ? strtoupper($matches[0]) : null;
+        $norm = mb_strtolower(trim($normalizedMessage));
 
-        if ($orderNumber) {
-            $order = Order::where('order_number', $orderNumber)->first();
-
-            // Ownership filter: must be in store's managed IDs
-            if (!$order || !in_array((int) $order->store_id, $storeIds, true)) {
-                return "Pesanan dengan nomor {$orderNumber} tidak ditemukan pada toko yang Anda kelola.";
-            }
-
-            $statusInfo = self::ORDER_STATUS_MAP[$order->status] ?? null;
-            $label = $statusInfo['label'] ?? $order->status;
-            $weight = (float) ($order->actual_weight ?: $order->weight ?: 0);
-            $total = (float) ($order->total_amount ?: $order->total_price ?: 0);
-            $custName = optional($order->customer)->name ?? 'Pelanggan';
-
-            return "Pesanan {$orderNumber} di toko Anda: Pelanggan {$custName}, Status '{$label}', Berat {$weight} kg, Total tagihan Rp " . number_format($total, 0, ',', '.') . ".";
+        // Procedural how-to questions must NOT be intercepted as store data queries
+        if (str_starts_with($norm, 'bagaimana') || str_starts_with($norm, 'cara ') || str_starts_with($norm, 'gimana cara') || str_starts_with($norm, 'alur ') || str_starts_with($norm, 'panduan ')) {
+            return null;
         }
 
-        // 1. Top customers (nama saja, tanpa kontak)
-        if (str_contains($normalizedMessage, 'top customer') || str_contains($normalizedMessage, 'paling sering') || str_contains($normalizedMessage, 'paling loyal') || str_contains($normalizedMessage, 'pelanggan teratas') || str_contains($normalizedMessage, 'pelanggan paling loyal')) {
+        // 1. Identitas: "siapa saya", "toko saya apa", "siapa sy", "nama toko"
+        if (str_contains($norm, 'siapa saya') || str_contains($norm, 'toko saya apa') || str_contains($norm, 'siapa sy') || str_contains($norm, 'nama toko') || str_contains($norm, 'profil saya') || str_contains($norm, 'siapa akun ini') || str_contains($norm, 'peran saya')) {
+            return $this->storeDashboardService->getIdentityResponse($user, $store, $norm);
+        }
+
+        // 2. Menu Navigasi Nyata Dashboard & Aksi
+        if (str_contains($norm, 'menu apa') || str_contains($norm, 'ada menu apa') || str_contains($norm, 'daftar menu') || str_contains($norm, 'tambah layanan') || str_contains($norm, 'assign kurir') || str_contains($norm, 'tugaskan kurir') || str_contains($norm, 'navigasi')) {
+            return $this->storeDashboardService->getMenuNavigationResponse($norm);
+        }
+
+        // 3. Check if query is looking up specific order number
+        preg_match('/ord-[a-z0-9-]+/i', $normalizedMessage, $matches);
+        $orderNumber = !empty($matches[0]) ? strtoupper($matches[0]) : null;
+        if ($orderNumber) {
+            return $this->storeDashboardService->getOrderByNumberResponse($store, $orderNumber);
+        }
+
+        // 4. Ringkasan / Rekap / Dashboard / Kondisi Toko
+        if (str_contains($norm, 'dashboard') || str_contains($norm, 'rekap') || str_contains($norm, 'ringkasan') || str_contains($norm, 'kondisi toko') || str_contains($norm, 'performa toko') || str_contains($norm, 'kondisi gerai') || str_contains($norm, 'status toko') || str_contains($norm, 'gimana toko') || str_contains($norm, 'bagaimana toko')) {
+            return $this->storeDashboardService->getSummaryResponse($store);
+        }
+
+        // 5. Antrean Terlama / Paling Lama Nunggu
+        if (str_contains($norm, 'paling lama menunggu') || str_contains($norm, 'paling lama nunggu') || str_contains($norm, 'plg lama nunggu') || str_contains($norm, 'paling lama antri') || str_contains($norm, 'paling lama antre') || str_contains($norm, 'terlama menunggu') || str_contains($norm, 'terlama nunggu') || str_contains($norm, 'menunggu paling lama') || str_contains($norm, 'nunggu paling lama') || (str_contains($norm, 'lama') && (str_contains($norm, 'menunggu') || str_contains($norm, 'nunggu') || str_contains($norm, 'antri')))) {
+            return $this->storeDashboardService->getOldestWaitingOrderResponse($store);
+        }
+
+        // 6. Tabel Pesanan Masuk / Terbaru
+        if (str_contains($norm, 'daftar pesanan masuk') || str_contains($norm, 'daftar pesanan') || str_contains($norm, 'list pesanan') || str_contains($norm, 'tabel pesanan') || str_contains($norm, 'daftar order')) {
+            return $this->storeDashboardService->getRecentOrdersTableResponse($store);
+        }
+
+        // 7. Pesanan Baru / Masuk (Kartu 1) - jangan potong pertanyaan statistik keseluruhan 'pesanan masuk toko saya'
+        if (!str_contains($norm, 'pesanan masuk toko') && !str_contains($norm, 'berapa pesanan masuk toko') && !str_contains($norm, 'berapa pesanan toko') && !str_contains($norm, 'pesanan di toko') &&
+            (str_contains($norm, 'pesanan masuk') || str_contains($norm, 'pesanan baru') || str_contains($norm, 'orderan baru') || str_contains($norm, 'orderan masuk') || str_contains($norm, 'psnan msk') || str_contains($norm, 'order masuk') || (str_contains($norm, 'pesanan') && str_contains($norm, 'baru')))) {
+            return $this->storeDashboardService->getNewOrdersResponse($store);
+        }
+
+        // 8. Sedang Diproses (Kartu 2)
+        if (str_contains($norm, 'proses') || str_contains($norm, 'diproses') || str_contains($norm, 'dicuci') || str_contains($norm, 'disetrika') || str_contains($norm, 'dproses') || str_contains($norm, 'sedang diproses') || str_contains($norm, 'lagi dicuci') || str_contains($norm, 'lagi diproses') || str_contains($norm, 'lg diproses')) {
+            return $this->storeDashboardService->getProcessingOrdersResponse($store);
+        }
+
+        // 9. Sedang Diantar / Lagi Diantar
+        if (str_contains($norm, 'lagi diantar') || str_contains($norm, 'sedang diantar') || str_contains($norm, 'lagi antar') || str_contains($norm, 'sedang antar') || str_contains($norm, 'lagi dianter') || str_contains($norm, 'sedang dianter') || str_contains($norm, 'kurir jalan') || str_contains($norm, 'kurir otw') || str_contains($norm, 'diantar kurir')) {
+            return $this->storeDashboardService->getOutForDeliveryResponse($store);
+        }
+
+        // 10. Siap Diantar (Kartu 3)
+        if (str_contains($norm, 'siap diantar') || str_contains($norm, 'siap antar') || str_contains($norm, 'siap dianter') || str_contains($norm, 'siap anter')) {
+            return $this->storeDashboardService->getReadyForDeliveryResponse($store);
+        }
+
+        // 11. Selesai Hari Ini (Kartu 4)
+        if (str_contains($norm, 'selesai hari ini') || str_contains($norm, 'selesai hr ini') || str_contains($norm, 'kelar hari ini') || str_contains($norm, 'kelar hr ini') || (str_contains($norm, 'selesai') && (str_contains($norm, 'hari ini') || str_contains($norm, 'hr ini')))) {
+            return $this->storeDashboardService->getCompletedTodayResponse($store);
+        }
+
+        // 12. Omset Hari Ini (Kartu 5)
+        if (str_contains($norm, 'omset') || str_contains($norm, 'omzet') || str_contains($norm, 'pendapatan') || str_contains($norm, 'pemasukan') || str_contains($norm, 'duit masuk') || str_contains($norm, 'uang masuk')) {
+            return $this->storeDashboardService->getTodayRevenueResponse($store);
+        }
+
+        // 13. Kurir Aktif & Total Kurir
+        if (str_contains($norm, 'kurir') && !str_contains($norm, 'pelamar') && !str_contains($norm, 'kandidat')) {
+            return $this->storeDashboardService->getActiveCouriersResponse($store);
+        }
+
+        // 14. Top customers
+        if (str_contains($norm, 'top customer') || str_contains($norm, 'paling sering') || str_contains($norm, 'paling loyal') || str_contains($norm, 'pelanggan teratas') || str_contains($norm, 'pelanggan paling loyal')) {
             return $this->getStoreTopCustomersResponse($user);
         }
 
-        // 2. Best-selling services
-        if (str_contains($normalizedMessage, 'terlaris') || str_contains($normalizedMessage, 'paling laku') || str_contains($normalizedMessage, 'paling laris') || str_contains($normalizedMessage, 'bestseller') || str_contains($normalizedMessage, 'paling banyak dipesan')) {
+        // 15. Best-selling services
+        if (str_contains($norm, 'terlaris') || str_contains($norm, 'paling laku') || str_contains($norm, 'paling laris') || str_contains($norm, 'bestseller') || str_contains($norm, 'paling banyak dipesan')) {
             return $this->getStoreBestsellersResponse($user);
         }
 
-        // 3. Operational settings, radius, address, approval status
-        if (str_contains($normalizedMessage, 'radius') || str_contains($normalizedMessage, 'jangkauan') || str_contains($normalizedMessage, 'approval') || str_contains($normalizedMessage, 'disetujui admin') || str_contains($normalizedMessage, 'status persetujuan') || str_contains($normalizedMessage, 'status approval') || str_contains($normalizedMessage, 'terdaftar di mana') || str_contains($normalizedMessage, 'tutup gak') || str_contains($normalizedMessage, 'minggu tutup') || (str_contains($normalizedMessage, 'alamat') && str_contains($normalizedMessage, 'toko'))) {
-            return $this->getStoreSettingsResponse($user, $normalizedMessage);
+        // 16. Operational settings, radius, address, approval status
+        if (str_contains($norm, 'radius') || str_contains($norm, 'jangkauan') || str_contains($norm, 'approval') || str_contains($norm, 'disetujui admin') || str_contains($norm, 'status persetujuan') || str_contains($norm, 'status approval') || str_contains($norm, 'terdaftar di mana') || str_contains($norm, 'tutup gak') || str_contains($norm, 'minggu tutup') || (str_contains($norm, 'alamat') && str_contains($norm, 'toko'))) {
+            return $this->getStoreSettingsResponse($user, $norm);
         }
 
-        // 4. Action orders & status breakdown
-        if (str_contains($normalizedMessage, 'belum ditimbang') || str_contains($normalizedMessage, 'blm ditimbang') || str_contains($normalizedMessage, 'siap diantar') || str_contains($normalizedMessage, 'butuh tindakan') || str_contains($normalizedMessage, 'perlu tindakan') || str_contains($normalizedMessage, 'perlu diproses') || str_contains($normalizedMessage, 'perlu proses') || str_contains($normalizedMessage, 'lagi dicuci') || str_contains($normalizedMessage, 'orderan baru') || str_contains($normalizedMessage, 'pesanan baru') || str_contains($normalizedMessage, 'belum kelar') || str_contains($normalizedMessage, 'blm kelar') || str_contains($normalizedMessage, 'msh diproses') || str_contains($normalizedMessage, 'masih diproses') || str_contains($normalizedMessage, 'nunggu jemput') || str_contains($normalizedMessage, 'menunggu penjemputan') || str_contains($normalizedMessage, 'status orderan toko') || str_contains($normalizedMessage, 'status pesanan toko saat ini')) {
-            return $this->getStoreActionOrdersResponse($user, $normalizedMessage);
-        }
-
-        // 5. Check if query is asking for applicants / courier candidates
-        if (str_contains($normalizedMessage, 'pelamar') || str_contains($normalizedMessage, 'kandidat') || str_contains($normalizedMessage, 'rekrut')) {
+        // 17. Pelamar / kandidat kurir
+        if (str_contains($norm, 'pelamar') || str_contains($norm, 'kandidat') || str_contains($norm, 'rekrut')) {
             return $this->getStoreApplicantsResponse($user);
         }
 
-        // 6. Check if query is asking for store couriers
-        if (str_contains($normalizedMessage, 'kurir') && !str_contains($normalizedMessage, 'tugas')) {
-            return $this->getStoreCouriersResponse($user);
-        }
-
-        // 7. Check if query is asking for store omzet / revenue
-        if (str_contains($normalizedMessage, 'omset') || str_contains($normalizedMessage, 'omzet') || str_contains($normalizedMessage, 'pendapatan') || str_contains($normalizedMessage, 'pemasukan') || str_contains($normalizedMessage, 'duit masuk') || str_contains($normalizedMessage, 'uang masuk')) {
-            return $this->getStoreRevenueResponse($user, $normalizedMessage);
-        }
-
-        // 8. Check if query is asking for store services & prices
-        if (str_contains($normalizedMessage, 'harga') || str_contains($normalizedMessage, 'layanan') || str_contains($normalizedMessage, 'tarif') || str_contains($normalizedMessage, 'menu servis') || str_contains($normalizedMessage, 'list harga')) {
+        // 18. Services & prices
+        if (str_contains($norm, 'harga') || str_contains($norm, 'layanan') || str_contains($norm, 'tarif') || str_contains($norm, 'menu servis') || str_contains($norm, 'list harga')) {
             return $this->getStoreServicesResponse($user);
         }
 
-        // 9. Check if query is asking for store complaints
-        if (str_contains($normalizedMessage, 'komplain') || str_contains($normalizedMessage, 'keluhan') || str_contains($normalizedMessage, 'dispute')) {
+        // 19. Complaints
+        if (str_contains($norm, 'komplain') || str_contains($norm, 'keluhan') || str_contains($norm, 'dispute')) {
             return $this->getStoreComplaintsResponse($user);
         }
 
-        // 10. Check if query is asking for store operational hours
-        if (str_contains($normalizedMessage, 'jam') || str_contains($normalizedMessage, 'buka') || str_contains($normalizedMessage, 'operasional')) {
+        // 20. Operational hours
+        if (str_contains($norm, 'jam') || str_contains($norm, 'buka') || str_contains($norm, 'operasional')) {
             return $this->getStoreHoursResponse($user);
         }
 
-        // 11. Check if query is asking for store rating & reviews
-        if (str_contains($normalizedMessage, 'rating') || str_contains($normalizedMessage, 'bintang') || str_contains($normalizedMessage, 'ulasan toko') || str_contains($normalizedMessage, 'ulasan') || str_contains($normalizedMessage, 'review')) {
-            $store = Store::whereIn('id', $storeIds)->first();
+        // 21. Rating & reviews
+        if (str_contains($norm, 'rating') || str_contains($norm, 'bintang') || str_contains($norm, 'ulasan toko') || str_contains($norm, 'ulasan') || str_contains($norm, 'review')) {
+            $storeName = $this->getStoreDisplayName($store);
             $rating = number_format((float) ($store->average_rating ?? 5.0), 1);
             $revCount = (int) ($store->review_count ?? 0);
-            return "Toko {$store->name} memiliki rating {$rating}/5 dari {$revCount} ulasan pelanggan.";
+            return "{$storeName} memiliki rating {$rating}/5 dari {$revCount} ulasan pelanggan.";
         }
 
         return null;
@@ -826,12 +932,12 @@ class AiDataQueryService
             return 'Anda belum memiliki toko mitra yang dikelola.';
         }
 
-        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+        $storeNames = $this->getStoreNamesList($storeIds);
         $query = Order::whereIn('store_id', $storeIds);
         $totalOrders = (clone $query)->count();
 
         if ($totalOrders === 0) {
-            return "Toko yang Anda kelola ({$storeNames}) belum mencatatkan transaksi terbayar hari ini. Saran tindakan: Anda dapat mempromosikan layanan toko atau memastikan jam operasional toko aktif di /store/settings.";
+            return "{$storeNames} belum mencatatkan transaksi terbayar hari ini. Saran tindakan: Anda dapat mempromosikan layanan toko atau memastikan jam operasional toko aktif di /store/settings.";
         }
 
         $storageTimezone = config('app.timezone', 'UTC');
@@ -932,26 +1038,26 @@ class AiDataQueryService
                 ? "Pemasukan hari ini lebih tinggi {$diffFmt} dibanding kemarin."
                 : "Pemasukan hari ini lebih rendah {$diffFmt} dibanding kemarin.";
 
-            return "Perbandingan omzet toko {$storeNames} (hanya transaksi terbayar):\n- Hari ini: {$todayFmt}\n- Kemarin: {$yesterdayFmt}\n{$compStr}";
+            return "Perbandingan omzet {$storeNames} (hanya transaksi terbayar):\n- Hari ini: {$todayFmt}\n- Kemarin: {$yesterdayFmt}\n{$compStr}";
         }
 
         if (str_contains($norm, 'kemarin')) {
-            return "Omzet kemarin untuk toko {$storeNames} adalah {$yesterdayFmt} (hanya transaksi yang telah terbayar).";
+            return "Omzet kemarin untuk {$storeNames} adalah {$yesterdayFmt} (hanya transaksi yang telah terbayar).";
         }
 
         if (str_contains($norm, 'minggu ini') || str_contains($norm, 'pekan ini')) {
-            return "Total pendapatan toko {$storeNames} minggu ini adalah {$weekFmt} (hanya transaksi yang telah terbayar).";
+            return "Total pendapatan {$storeNames} minggu ini adalah {$weekFmt} (hanya transaksi yang telah terbayar).";
         }
 
         if (str_contains($norm, 'bulan ini')) {
-            return "Total omzet toko {$storeNames} bulan ini adalah {$monthFmt} (hanya transaksi yang telah terbayar). Total keseluruhan: {$totalFmt}.";
+            return "Total omzet {$storeNames} bulan ini adalah {$monthFmt} (hanya transaksi yang telah terbayar). Total keseluruhan: {$totalFmt}.";
         }
 
         if (str_contains($norm, 'hari ini')) {
-            return "Omzet hari ini untuk toko {$storeNames} adalah {$todayFmt} (hanya transaksi yang telah terbayar). Total omzet keseluruhan: {$totalFmt}.";
+            return "Omzet hari ini untuk {$storeNames} adalah {$todayFmt} (hanya transaksi yang telah terbayar). Total omzet keseluruhan: {$totalFmt}.";
         }
 
-        return "Ringkasan omzet toko {$storeNames} (hanya transaksi terbayar):\n- Hari ini: {$todayFmt}\n- Kemarin: {$yesterdayFmt}\n- Minggu ini: {$weekFmt}\n- Bulan ini: {$monthFmt}\n- Total omzet: {$totalFmt}";
+        return "Ringkasan omzet {$storeNames} (hanya transaksi terbayar):\n- Hari ini: {$todayFmt}\n- Kemarin: {$yesterdayFmt}\n- Minggu ini: {$weekFmt}\n- Bulan ini: {$monthFmt}\n- Total omzet: {$totalFmt}";
     }
 
     public function getStoreActionOrdersResponse(User $user, string $message = ''): string
@@ -961,7 +1067,7 @@ class AiDataQueryService
             return 'Anda belum memiliki toko mitra yang dikelola.';
         }
 
-        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+        $storeNames = $this->getStoreNamesList($storeIds);
         $query = Order::whereIn('store_id', $storeIds);
 
         // Belum ditimbang: actual_weight null or 0, in active pre-weighed or receiving states
@@ -1008,41 +1114,41 @@ class AiDataQueryService
 
         if (str_contains($norm, 'timbang')) {
             if ($unweighed === 0) {
-                return "Semua cucian yang tiba di toko {$storeNames} sudah ditimbang. Tidak ada antrean penimbangan saat ini.";
+                return "Semua cucian yang tiba di {$storeNames} sudah ditimbang. Tidak ada antrean penimbangan saat ini.";
             }
-            return "Toko {$storeNames} memiliki {$unweighed} pesanan yang belum ditimbang. Silakan timbang pakaian fisik dan masukkan angka timbangan di menu Pesanan Toko (/store/orders).";
+            return "{$storeNames} memiliki {$unweighed} pesanan yang belum ditimbang. Silakan timbang pakaian fisik dan masukkan angka timbangan di menu Pesanan Toko (/store/orders).";
         }
 
         if (str_contains($norm, 'siap diantar') || str_contains($norm, 'siap antar')) {
             if ($readyDelivery === 0) {
-                return "Saat ini belum ada pesanan yang siap diantar di toko {$storeNames}.";
+                return "Saat ini belum ada pesanan yang siap diantar di {$storeNames}.";
             }
-            return "Toko {$storeNames} memiliki {$readyDelivery} pesanan yang sudah selesai dikerjakan dan siap diantar oleh kurir.";
+            return "{$storeNames} memiliki {$readyDelivery} pesanan yang sudah selesai dikerjakan dan siap diantar oleh kurir.";
         }
 
         if (str_contains($norm, 'jemput')) {
             if ($waitingPickup === 0) {
-                return "Saat ini tidak ada pesanan yang menunggu penjemputan kurir untuk toko {$storeNames}.";
+                return "Saat ini tidak ada pesanan yang menunggu penjemputan kurir untuk {$storeNames}.";
             }
-            return "Toko {$storeNames} memiliki {$waitingPickup} pesanan yang sedang menunggu penjemputan oleh kurir.";
+            return "{$storeNames} memiliki {$waitingPickup} pesanan yang sedang menunggu penjemputan oleh kurir.";
         }
 
         if (str_contains($norm, 'dicuci') || str_contains($norm, 'diproses')) {
             if ($inProcess === 0) {
-                return "Saat ini tidak ada cucian yang sedang dalam tahap pencucian di toko {$storeNames}.";
+                return "Saat ini tidak ada cucian yang sedang dalam tahap pencucian di {$storeNames}.";
             }
-            return "Toko {$storeNames} memiliki {$inProcess} pesanan cucian yang sedang diproses/dicuci.";
+            return "{$storeNames} memiliki {$inProcess} pesanan cucian yang sedang diproses/dicuci.";
         }
 
         if (str_contains($norm, 'baru') || str_contains($norm, 'orderan baru')) {
-            return "Hari ini ada {$newToday} pesanan baru yang masuk di toko {$storeNames}.";
+            return "Hari ini ada {$newToday} pesanan baru yang masuk di {$storeNames}.";
         }
 
         if (str_contains($norm, 'selesai') && str_contains($norm, 'hari ini')) {
-            return "Hari ini ada {$completedToday} pesanan yang telah selesai di toko {$storeNames}.";
+            return "Hari ini ada {$completedToday} pesanan yang telah selesai di {$storeNames}.";
         }
 
-        return "Ringkasan status operasional pesanan di toko {$storeNames}:\n"
+        return "Ringkasan status operasional pesanan di {$storeNames}:\n"
             . "- Belum ditimbang: {$unweighed} pesanan\n"
             . "- Menunggu penjemputan kurir: {$waitingPickup} pesanan\n"
             . "- Sedang dicuci / diproses: {$inProcess} pesanan\n"
@@ -1058,7 +1164,7 @@ class AiDataQueryService
             return 'Anda belum memiliki toko mitra yang dikelola.';
         }
 
-        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+        $storeNames = $this->getStoreNamesList($storeIds);
 
         $top = Order::whereIn('store_id', $storeIds)
             ->whereNotNull('customer_id')
@@ -1070,10 +1176,10 @@ class AiDataQueryService
             ->get();
 
         if ($top->isEmpty()) {
-            return "Toko {$storeNames} belum memiliki data riwayat pesanan dari pelanggan.";
+            return "{$storeNames} belum memiliki data riwayat pesanan dari pelanggan.";
         }
 
-        $lines = ["Pelanggan teratas di toko {$storeNames} berdasarkan frekuensi pesanan:"];
+        $lines = ["Pelanggan teratas di {$storeNames} berdasarkan frekuensi pesanan:"];
         $rank = 1;
         foreach ($top as $item) {
             $name = optional($item->customer)->name ?? 'Pelanggan Setia';
@@ -1091,7 +1197,7 @@ class AiDataQueryService
             return 'Anda belum memiliki toko mitra yang dikelola.';
         }
 
-        $storeNames = Store::whereIn('id', $storeIds)->pluck('name')->implode(', ');
+        $storeNames = $this->getStoreNamesList($storeIds);
 
         $best = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
@@ -1104,10 +1210,10 @@ class AiDataQueryService
             ->get();
 
         if ($best->isEmpty()) {
-            return "Toko {$storeNames} belum mencatatkan transaksi layanan. Layanan terpopuler pada platform yang dapat Anda tawarkan adalah Cuci Komplit Kiloan dan Dry Clean.";
+            return "{$storeNames} belum mencatatkan transaksi layanan. Layanan terpopuler pada platform yang dapat Anda tawarkan adalah Cuci Komplit Kiloan dan Dry Clean.";
         }
 
-        $lines = ["Layanan terlaris di toko {$storeNames}:"];
+        $lines = ["Layanan terlaris di {$storeNames}:"];
         $rank = 1;
         foreach ($best as $item) {
             $lines[] = "{$rank}. {$item->service_name} (total {$item->total_qty} unit dipesan dalam {$item->order_count} pesanan)";
@@ -1129,12 +1235,13 @@ class AiDataQueryService
             return 'Data toko Anda tidak ditemukan.';
         }
 
+        $storeName = $this->getStoreDisplayName($store);
         $norm = strtolower($message);
 
         // Check if query is specifically asking about radius
         if (str_contains($norm, 'radius') || str_contains($norm, 'jangkauan')) {
             $radius = $store->service_radius_km ? number_format((float) $store->service_radius_km, 2) : '5.00';
-            return "Radius jangkauan layanan toko {$store->name} adalah {$radius} km. Anda dapat memperbarui radius jangkauan layanan melalui Dashboard Mitra di Pengaturan Toko (/store/settings).";
+            return "Radius jangkauan layanan {$storeName} adalah {$radius} km. Anda dapat memperbarui radius jangkauan layanan melalui Dashboard Mitra di Pengaturan Toko (/store/settings).";
         }
 
         // Check if query is specifically asking about approval status
@@ -1146,14 +1253,14 @@ class AiDataQueryService
                 default => ucfirst($store->status ?? 'pending'),
             };
             $activeLabel = $store->is_active ? 'Aktif' : 'Nonaktif / Tutup Sementara';
-            return "Status toko {$store->name}: Status pendaftaran '{$statusLabel}', Status operasional '{$activeLabel}'.";
+            return "Status {$storeName}: Status pendaftaran '{$statusLabel}', Status operasional '{$activeLabel}'.";
         }
 
         // Check if query is specifically asking about store address
         if (str_contains($norm, 'alamat') || str_contains($norm, 'lokasi') || str_contains($norm, 'terdaftar')) {
             $cityProv = array_filter([$store->city, $store->province]);
             $cityProvStr = !empty($cityProv) ? ' (' . implode(', ', $cityProv) . ')' : '';
-            return "Alamat toko {$store->name} terdaftar di: {$store->address}{$cityProvStr}. Anda dapat memperbarui lokasi di /store/settings.";
+            return "Alamat {$storeName} terdaftar di: {$store->address}{$cityProvStr}. Anda dapat memperbarui lokasi di /store/settings.";
         }
 
         // General settings overview
@@ -1167,7 +1274,7 @@ class AiDataQueryService
         $cityProv = array_filter([$store->city, $store->province]);
         $cityProvStr = !empty($cityProv) ? ' (' . implode(', ', $cityProv) . ')' : '';
 
-        return "Pengaturan gerai {$store->name}:\n- Alamat: {$store->address}{$cityProvStr}\n- Radius layanan: {$radius} km\n- Status toko: {$statusLabel} (Operasional: " . ($store->is_active ? 'Aktif' : 'Nonaktif') . ")\nPengaturan dapat dikelola di /store/settings dan profil akun di /store/profile.";
+        return "Pengaturan gerai {$storeName}:\n- Alamat: {$store->address}{$cityProvStr}\n- Radius layanan: {$radius} km\n- Status toko: {$statusLabel} (Operasional: " . ($store->is_active ? 'Aktif' : 'Nonaktif') . ")\nPengaturan dapat dikelola di /store/settings dan profil akun di /store/profile.";
     }
 
     public function getStoreCouriersResponse(User $user): string
@@ -1178,17 +1285,22 @@ class AiDataQueryService
         }
 
         $store = Store::whereIn('id', $storeIds)->first();
+        $storeName = $this->getStoreDisplayName($store);
         $couriers = Courier::whereIn('store_id', $storeIds)->with('user')->get();
 
+        $totalCouriers = $couriers->count();
+        $activeCouriers = $couriers->where('is_available', true)->count();
+        $inactiveCouriers = $totalCouriers - $activeCouriers;
+
         if ($couriers->isEmpty()) {
-            return "Toko {$store->name} belum memiliki kurir terikat.";
+            return "{$storeName} belum memiliki kurir terikat.";
         }
 
-        $lines = ["Toko {$store->name} memiliki {$couriers->count()} kurir terikat:"];
+        $lines = ["{$storeName} memiliki total {$totalCouriers} kurir terikat ({$activeCouriers} kurir aktif / siap tugas, {$inactiveCouriers} tidak aktif):"];
         foreach ($couriers as $c) {
             $name = $c->user?->name ?? 'Kurir';
             $vehicle = $c->vehicle_type ?? 'Motor';
-            $status = $c->is_available ? 'siap tugas' : 'tidak aktif';
+            $status = $c->is_available ? 'aktif (siap tugas)' : 'tidak aktif';
             $lines[] = "- {$name} ({$vehicle}, status: {$status})";
         }
 
@@ -1203,6 +1315,7 @@ class AiDataQueryService
         }
 
         $store = Store::whereIn('id', $storeIds)->first();
+        $storeName = $this->getStoreDisplayName($store);
 
         $rejectedIds = DB::table('audit_logs')
             ->where('action', 'STORE_COURIER_REJECT')
@@ -1225,10 +1338,10 @@ class AiDataQueryService
         $candidates = $candidatesQuery->with('user')->get();
 
         if ($candidates->isEmpty()) {
-            return "Saat ini belum ada pelamar kurir baru yang siap direkrut untuk toko {$store->name}.";
+            return "Saat ini belum ada pelamar kurir baru yang siap direkrut untuk {$storeName}.";
         }
 
-        $lines = ["Toko {$store->name} memiliki {$candidates->count()} kandidat/pelamar kurir siap direkrut:"];
+        $lines = ["{$storeName} memiliki {$candidates->count()} kandidat/pelamar kurir siap direkrut:"];
         foreach ($candidates as $c) {
             $name = $c->user?->name ?? 'Pelamar Kurir';
             $vehicle = $c->vehicle_type ?? 'Motor';
@@ -1246,17 +1359,17 @@ class AiDataQueryService
         }
 
         $store = Store::whereIn('id', $storeIds)->first();
+        $storeName = $this->getStoreDisplayName($store);
         $prices = ServicePrice::whereIn('store_id', $storeIds)
             ->where('is_active', true)
             ->with('service')
             ->get();
 
         if ($prices->isEmpty()) {
-            $storeName = $store->name ?? 'Toko Anda';
-            return "Toko {$storeName} belum memiliki daftar layanan dan harga aktif yang terdaftar.";
+            return "{$storeName} belum memiliki daftar layanan dan harga aktif yang terdaftar.";
         }
 
-        $lines = ["Daftar layanan dan harga di toko {$store->name}:"];
+        $lines = ["Daftar layanan dan harga di {$storeName}:"];
         foreach ($prices as $p) {
             $svcName = optional($p->service)->name ?? 'Layanan';
             $unit = optional($p->service)->unit ?? 'kg';
@@ -1275,15 +1388,16 @@ class AiDataQueryService
         }
 
         $store = Store::whereIn('id', $storeIds)->first();
+        $storeName = $this->getStoreDisplayName($store);
         $disputes = Dispute::whereHas('order', function ($q) use ($storeIds) {
             $q->whereIn('store_id', $storeIds);
         })->latest()->take(5)->get();
 
         if ($disputes->isEmpty()) {
-            return "Saat ini tidak ada komplain pelanggan pada toko {$store->name}.";
+            return "Saat ini tidak ada komplain pelanggan pada {$storeName}.";
         }
 
-        $lines = ["Toko {$store->name} memiliki {$disputes->count()} komplain pelanggan:"];
+        $lines = ["{$storeName} memiliki {$disputes->count()} komplain pelanggan:"];
         foreach ($disputes as $d) {
             $ordNum = optional($d->order)->order_number ?? 'Pesanan';
             $reason = $d->reason ?: 'Keluhan pelanggan';
@@ -1305,6 +1419,7 @@ class AiDataQueryService
             return 'Data toko Anda tidak ditemukan.';
         }
 
+        $storeName = $this->getStoreDisplayName($store);
         $rawHours = $store->operational_hours;
         if (is_string($rawHours)) {
             $decoded = json_decode($rawHours, true);
@@ -1324,9 +1439,9 @@ class AiDataQueryService
             if (str_contains($norm, 'minggu')) {
                 $sun = $rawHours['sunday'] ?? null;
                 if (!empty($sun['closed'])) {
-                    return "Hari Minggu toko {$store->name} libur / tutup.";
+                    return "Hari Minggu {$storeName} libur / tutup.";
                 } elseif (!empty($sun['open']) && !empty($sun['close'])) {
-                    return "Hari Minggu toko {$store->name} buka dari jam {$sun['open']} sampai {$sun['close']} WIB.";
+                    return "Hari Minggu {$storeName} buka dari jam {$sun['open']} sampai {$sun['close']} WIB.";
                 }
             }
 
@@ -1342,11 +1457,11 @@ class AiDataQueryService
         } else {
             $hours = (string) ($store->operational_hours ?: 'Senin - Minggu: 08:00 - 20:00 WIB');
             if (str_contains($norm, 'minggu') && str_contains(strtolower($hours), 'minggu')) {
-                return "Jadwal operasional toko {$store->name}: {$hours}.";
+                return "Jadwal operasional {$storeName}: {$hours}.";
             }
         }
 
-        return "Jadwal operasional toko {$store->name}: {$hours}. Anda dapat mengubah jadwal operasional di Pengaturan Toko (/store/settings).";
+        return "Jadwal operasional {$storeName}: {$hours}. Anda dapat mengubah jadwal operasional di Pengaturan Toko (/store/settings).";
     }
 
     /**
@@ -1536,29 +1651,33 @@ class AiDataQueryService
         }
 
         // 7. Platform overview & revenue & orders (agregat platform)
-        $totalOrders = Order::count();
-        $activeStores = Store::where('status', 'approved')->where('is_active', true)->count();
-        $pendingStores = Store::where('status', 'pending')->count();
-        $totalStores = Store::count();
+        if (str_contains($normalizedMessage, 'platform') || str_contains($normalizedMessage, 'ringkasan') || str_contains($normalizedMessage, 'overview') || str_contains($normalizedMessage, 'ekosistem') || str_contains($normalizedMessage, 'sistem') || str_contains($normalizedMessage, 'rekap') || str_contains($normalizedMessage, 'total transaksi') || str_contains($normalizedMessage, 'omzet platform') || str_contains($normalizedMessage, 'kondisi platform') || str_contains($normalizedMessage, 'semua toko') || str_contains($normalizedMessage, 'total toko')) {
+            $totalOrders = Order::count();
+            $activeStores = Store::where('status', 'approved')->where('is_active', true)->count();
+            $pendingStores = Store::where('status', 'pending')->count();
+            $totalStores = Store::count();
 
-        $storageTimezone = config('app.timezone', 'UTC');
-        $startOfTodayStorage = Carbon::now('Asia/Jakarta')->startOfDay()->setTimezone($storageTimezone);
-        $endOfTodayStorage = Carbon::now('Asia/Jakarta')->endOfDay()->setTimezone($storageTimezone);
+            $storageTimezone = config('app.timezone', 'UTC');
+            $startOfTodayStorage = Carbon::now('Asia/Jakarta')->startOfDay()->setTimezone($storageTimezone);
+            $endOfTodayStorage = Carbon::now('Asia/Jakarta')->endOfDay()->setTimezone($storageTimezone);
 
-        $todayRevenue = (float) Payment::where('status', 'paid')
-            ->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
-            ->sum('amount');
+            $todayRevenue = (float) Payment::where('status', 'paid')
+                ->whereBetween('paid_at', [$startOfTodayStorage, $endOfTodayStorage])
+                ->sum('amount');
 
-        $totalRevenue = (float) Payment::where('status', 'paid')->sum('amount');
-        if ($totalRevenue === 0.0) {
-            $totalRevenue = (float) Order::where('payment_status', 'paid')->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+            $totalRevenue = (float) Payment::where('status', 'paid')->sum('amount');
+            if ($totalRevenue === 0.0) {
+                $totalRevenue = (float) Order::where('payment_status', 'paid')->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+            }
+
+            $todayRevFmt = 'Rp ' . number_format($todayRevenue, 0, ',', '.');
+            $totalRevFmt = 'Rp ' . number_format($totalRevenue, 0, ',', '.');
+
+            $stats = $this->statsService->getPlatformStats();
+            return "{$stats} Jumlah toko aktif ({$activeStores} toko mitra aktif di platform, {$pendingStores} menunggu persetujuan dari total {$totalStores} toko terdaftar). Omzet Platform: Hari ini {$todayRevFmt}, Total omzet terbayar {$totalRevFmt}.";
         }
 
-        $todayRevFmt = 'Rp ' . number_format($todayRevenue, 0, ',', '.');
-        $totalRevFmt = 'Rp ' . number_format($totalRevenue, 0, ',', '.');
-
-        $stats = $this->statsService->getPlatformStats();
-        return "{$stats} Jumlah toko aktif ({$activeStores} toko mitra aktif di platform, {$pendingStores} menunggu persetujuan dari total {$totalStores} toko terdaftar). Omzet Platform: Hari ini {$todayRevFmt}, Total omzet terbayar {$totalRevFmt}.";
+        return null;
     }
 
     public function getSuperAdminApprovalsResponse(User $user, string $message = ''): string
@@ -1890,8 +2009,13 @@ class AiDataQueryService
     public function isAccountInquiry(string $normalized): bool
     {
         $patterns = [
+            'siapa saya', 'saya siapa', 'siapakah saya', 'siapa aku',
+            'siapa diriku', 'siapakah diriku', 'siapa diri saya',
+            'role saya', 'peran saya', 'nama saya', 'saya login sebagai apa',
             'akun saya', 'profil saya', 'alamat saya', 'berapa alamat',
-            'alamat tersimpan', 'data akun saya',
+            'alamat tersimpan', 'data akun saya', 'status akun saya',
+            'apa role saya', 'role akun', 'siapa nama saya', 'status login saya',
+            'toko saya apa', 'toko yang saya kelola', 'toko tugas saya',
         ];
 
         foreach ($patterns as $p) {

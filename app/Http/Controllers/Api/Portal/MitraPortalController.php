@@ -7,13 +7,18 @@ use App\Models\AuditLog;
 use App\Models\Courier;
 use App\Models\Dispute;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\OrderItem;
 use App\Models\Review;
+use App\Models\Role;
 use App\Models\ServicePrice;
 use App\Models\Store;
+use App\Models\StorePayoutAccount;
 use App\Models\StoreStaff;
 use App\Models\User;
+use App\Notifications\NotificationTrigger;
 use App\Http\Requests\Mitra\UpdateStoreProfileRequest;
+use App\Services\Store\StoreDashboardService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,8 +30,20 @@ class MitraPortalController extends Controller
     /**
      * Resolve store for authenticated mitra (covers store owner AND active store staff).
      */
-    protected function resolveStore(User $user): ?Store
+    protected function resolveStore(User $user, ?string $storeId = null): ?Store
     {
+        if ($storeId) {
+            $store = Store::where('id', $storeId)
+                ->where(function ($q) use ($user) {
+                    $q->where('owner_user_id', $user->id)
+                      ->orWhereHas('staff', fn ($s) => $s->where('user_id', $user->id)->where('is_active', true));
+                })
+                ->first();
+            if ($store) {
+                return $store;
+            }
+        }
+
         // 1. Check if user is the store owner
         $owned = Store::where('owner_user_id', $user->id)->first();
         if ($owned) {
@@ -332,10 +349,11 @@ class MitraPortalController extends Controller
     /**
      * GET /api/v1/store/dashboard
      */
-    public function dashboard(Request $request): JsonResponse
+    public function dashboard(Request $request, ?StoreDashboardService $dashboardService = null): JsonResponse
     {
+        $dashboardService = $dashboardService ?? app(StoreDashboardService::class);
         $user = $request->user();
-        $store = $this->resolveStore($user);
+        $store = $this->resolveStore($user, $request->query('store_id'));
 
         if (! $store) {
             return response()->json([
@@ -344,87 +362,20 @@ class MitraPortalController extends Controller
             ], 404);
         }
 
-        $newOrders = Order::where('store_id', $store->id)
-            ->whereIn('status', ['created', 'pending_pickup'])
-            ->count();
-
-        $processingOrders = Order::where('store_id', $store->id)
-            ->whereIn('status', [
-                'at_store', 'received', 'weighed', 'awaiting_price_approval',
-                'price_approved', 'awaiting_payment', 'paid', 'processing',
-            ])
-            ->count();
-
-        $readyForDelivery = Order::where('store_id', $store->id)
-            ->whereIn('status', ['ready_for_delivery', 'delivery_assigned', 'out_for_delivery'])
-            ->count();
-
-        $completedToday = Order::where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereDate('completed_at', today())
-            ->count();
-
-        $todayRevenue = (float) Order::where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereDate('completed_at', today())
-            ->sum('total_amount');
-
-        $statusLabels = [
-            'created' => 'Menunggu Penjemputan',
-            'pending_pickup' => 'Menunggu Penjemputan',
-            'pickup_assigned' => 'Kurir Ditugaskan (Jemput)',
-            'picked_up' => 'Cucian Dijemput',
-            'at_store' => 'Tiba di Gerai',
-            'received' => 'Tiba di Gerai',
-            'weighed' => 'Selesai Ditimbang',
-            'awaiting_price_approval' => 'Menunggu Konfirmasi Harga',
-            'price_approved' => 'Harga Disetujui',
-            'awaiting_payment' => 'Menunggu Pembayaran',
-            'paid' => 'Sudah Dibayar',
-            'processing' => 'Sedang Diproses',
-            'ready_for_delivery' => 'Siap Diantar',
-            'delivery_assigned' => 'Kurir Ditugaskan (Antar)',
-            'out_for_delivery' => 'Sedang Diantar',
-            'completed' => 'Pesanan Selesai',
-            'cancelled' => 'Dibatalkan',
-        ];
-
-        $recentOrders = Order::where('store_id', $store->id)
-            ->with('customer:id,name')
-            ->latest()
-            ->limit(10)
-            ->get()
-            ->map(function ($order) use ($statusLabels) {
-                $rawCreated = $order->getRawOriginal('created_at');
-                return [
-                    'id' => (string) $order->id,
-                    'order_number' => $order->order_number,
-                    'customer_name' => $order->customer?->name ?? 'Pelanggan',
-                    'status' => strtoupper($order->status),
-                    'status_label' => $statusLabels[strtolower($order->status)] ?? strtoupper($order->status),
-                    'total_amount' => (float) ($order->total_amount ?? $order->final_price ?? $order->estimated_price ?? 0),
-                    'created_at' => $this->formatTimestamp($rawCreated, $order->created_at),
-                ];
-            });
+        $data = $dashboardService->getDashboardData($store);
 
         return response()->json([
             'success' => true,
             'data' => [
-                'store' => [
-                    'id' => (string) $store->id,
-                    'name' => $store->name,
-                    'approval_status' => $store->status,
-                    'operational_status' => $store->is_active ? 'active' : 'inactive',
-                    'rejection_reason' => $store->rejection_reason ?? null,
-                ],
+                'store' => $data['store'],
                 'metrics' => [
-                    'new_orders' => $newOrders,
-                    'processing_orders' => $processingOrders,
-                    'ready_for_delivery' => $readyForDelivery,
-                    'completed_today' => $completedToday,
-                    'today_revenue' => $todayRevenue,
+                    'new_orders' => $data['metrics']['new_orders'],
+                    'processing_orders' => $data['metrics']['processing_orders'],
+                    'ready_for_delivery' => $data['metrics']['ready_for_delivery'],
+                    'completed_today' => $data['metrics']['completed_today'],
+                    'today_revenue' => $data['metrics']['today_revenue'],
                 ],
-                'recent_orders' => $recentOrders,
+                'recent_orders' => $data['recent_orders'],
             ],
         ]);
     }
@@ -454,7 +405,15 @@ class MitraPortalController extends Controller
             ->pluck('resource_id')
             ->toArray();
 
-        $pelamarQuery = Courier::whereNull('store_id')->where('is_verified', true);
+        $pelamarQuery = Courier::where(function ($q) use ($store) {
+            $q->where(function ($sub) use ($store) {
+                $sub->where('store_id', $store->id)
+                    ->where('is_verified', false);
+            })->orWhere(function ($sub) {
+                $sub->whereNull('store_id')
+                    ->where('is_verified', true);
+            });
+        });
         if (! empty($rejectedIds)) {
             $pelamarQuery->whereNotIn('id', $rejectedIds);
         }
@@ -957,6 +916,7 @@ class MitraPortalController extends Controller
         }
 
         $assigned = Courier::where('store_id', $store->id)
+            ->where('is_verified', true)
             ->with('user')
             ->get()
             ->map(function ($c) {
@@ -986,8 +946,15 @@ class MitraPortalController extends Controller
             ->pluck('resource_id')
             ->toArray();
 
-        $candidatesQuery = Courier::whereNull('store_id')
-            ->where('is_verified', true);
+        $candidatesQuery = Courier::where(function ($q) use ($store) {
+            $q->where(function ($sub) use ($store) {
+                $sub->where('store_id', $store->id)
+                    ->where('is_verified', false);
+            })->orWhere(function ($sub) {
+                $sub->whereNull('store_id')
+                    ->where('is_verified', true);
+            });
+        });
 
         if (! empty($rejectedIds)) {
             $candidatesQuery->whereNotIn('id', $rejectedIds);
@@ -1005,7 +972,7 @@ class MitraPortalController extends Controller
                     'phone' => $c->user?->phone,
                     'email' => $c->user?->email,
                     'vehicle_type' => $c->vehicle_type ?? 'Motor',
-                    'verification_status' => 'verified',
+                    'verification_status' => $c->is_verified ? 'verified' : 'pending',
                     'applied_at' => $this->formatTimestamp($rawCreated, $c->created_at),
                 ];
             });
@@ -1040,7 +1007,7 @@ class MitraPortalController extends Controller
 
         $courier = Courier::findOrFail($courierProfileId);
 
-        if ($courier->store_id && (int) $courier->store_id !== (int) $store->id) {
+        if ($courier->store_id && (int) $courier->store_id !== (int) $store->id && $courier->is_verified) {
             return response()->json([
                 'success' => false,
                 'message' => 'Kurir sudah terikat dan bertugas pada toko lain.',
@@ -1048,8 +1015,24 @@ class MitraPortalController extends Controller
         }
 
         $courier->store_id = $store->id;
+        $courier->is_verified = true;
         $courier->is_available = true;
         $courier->save();
+
+        if ($courier->user) {
+            if ($courier->user->role !== User::ROLE_COURIER && $courier->user->role !== User::ROLE_SUPER_ADMIN) {
+                $courier->user->role = User::ROLE_COURIER;
+                $courier->user->save();
+            }
+            $courierRole = Role::where('name', 'courier')->first();
+            if ($courierRole && ! $courier->user->roles()->where('roles.id', $courierRole->id)->exists()) {
+                $courier->user->roles()->attach($courierRole->id, [
+                    'store_id' => $store->id,
+                    'assigned_at' => now(),
+                    'assigned_by' => $user->id,
+                ]);
+            }
+        }
 
         AuditLog::create([
             'actor_id' => $user->id,
@@ -1061,6 +1044,8 @@ class MitraPortalController extends Controller
             'user_agent' => $request->userAgent(),
             'after_value' => json_encode(['store_id' => $store->id]),
         ]);
+
+        NotificationTrigger::courierRecruited($courier, $store);
 
         return response()->json([
             'success' => true,
@@ -1090,6 +1075,7 @@ class MitraPortalController extends Controller
 
         $courier = Courier::where('store_id', $store->id)->findOrFail($assignmentId);
         $courier->store_id = null;
+        $courier->is_available = false;
         $courier->save();
 
         AuditLog::create([
@@ -1136,7 +1122,7 @@ class MitraPortalController extends Controller
             ], 404);
         }
 
-        if ($courier->store_id !== null && (int) $courier->store_id !== (int) $store->id) {
+        if ($courier->store_id !== null && (int) $courier->store_id !== (int) $store->id && $courier->is_verified) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki izin untuk menolak pelamar kurir dari toko lain.',
@@ -1144,6 +1130,14 @@ class MitraPortalController extends Controller
         }
 
         $reason = $request->input('reason', 'Lamaran tidak memenuhi kualifikasi toko.');
+
+        // Putus keterikatan jika pelamar mendaftar ke toko ini
+        if ($courier->store_id !== null) {
+            $courier->store_id = null;
+            $courier->is_verified = false;
+            $courier->is_available = false;
+            $courier->save();
+        }
 
         AuditLog::create([
             'actor_id' => $user->id,
@@ -1155,9 +1149,13 @@ class MitraPortalController extends Controller
             'user_agent' => $request->userAgent(),
             'after_value' => json_encode([
                 'store_id' => $store->id,
+                'store_name' => $store->name,
                 'reason' => $reason,
+                'rejected_at' => now()->toISOString(),
             ]),
         ]);
+
+        NotificationTrigger::courierRejected($courier, $store, $reason);
 
         return response()->json([
             'success' => true,
@@ -1401,6 +1399,295 @@ class MitraPortalController extends Controller
                 'attachments' => is_array($dispute->evidence) ? $dispute->evidence : [],
                 'created_at' => $this->formatTimestamp($rawCreated, $dispute->created_at),
                 'updated_at' => $this->formatTimestamp($rawUpdated, $dispute->updated_at),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/store/payment-methods & /api/v1/mitra/payment-methods
+     */
+    public function getPaymentMethods(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user, $request->header('X-Store-ID', $request->input('store_id')));
+
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Toko tidak ditemukan atau Anda tidak memiliki akses.',
+            ], 404);
+        }
+
+        $supportedBanks = ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'store_id' => (string) $store->id,
+                'store_name' => $store->name,
+                'cod_enabled' => (bool) ($store->cod_enabled ?? true),
+                'qris_enabled' => (bool) ($store->qris_enabled ?? false),
+                'va_enabled' => (bool) ($store->va_enabled ?? false),
+                'va_banks' => $store->va_banks ?? $supportedBanks,
+                'supported_banks' => $supportedBanks,
+            ],
+        ]);
+    }
+
+    /**
+     * PUT /api/v1/store/payment-methods & /api/v1/mitra/payment-methods
+     */
+    public function updatePaymentMethods(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user, $request->header('X-Store-ID', $request->input('store_id')));
+
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Toko tidak ditemukan atau Anda tidak memiliki akses.',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'cod_enabled' => 'nullable|boolean',
+            'qris_enabled' => 'nullable|boolean',
+            'va_enabled' => 'nullable|boolean',
+            'va_banks' => 'nullable|array',
+            'va_banks.*' => 'string|in:BCA,BNI,BRI,MANDIRI,PERMATA',
+        ]);
+
+        $codEnabled = array_key_exists('cod_enabled', $validated) ? (bool) $validated['cod_enabled'] : (bool) $store->cod_enabled;
+        $qrisEnabled = array_key_exists('qris_enabled', $validated) ? (bool) $validated['qris_enabled'] : (bool) $store->qris_enabled;
+        $vaEnabled = array_key_exists('va_enabled', $validated) ? (bool) $validated['va_enabled'] : (bool) $store->va_enabled;
+
+        // Minimal satu aktif
+        if (!$codEnabled && !$qrisEnabled && !$vaEnabled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Minimal satu metode pembayaran harus aktif.',
+                'error' => [
+                    'code' => 'MINIMUM_ONE_PAYMENT_METHOD',
+                    'message' => 'Minimal satu metode pembayaran harus aktif.',
+                ],
+            ], 422);
+        }
+
+        if ($vaEnabled) {
+            $vaBanks = $validated['va_banks'] ?? $store->va_banks ?? ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'];
+            if (empty($vaBanks)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilih minimal satu bank untuk Virtual Account.',
+                    'error' => [
+                        'code' => 'VA_BANK_REQUIRED',
+                        'message' => 'Pilih minimal satu bank untuk Virtual Account.',
+                    ],
+                ], 422);
+            }
+        } else {
+            $vaBanks = $validated['va_banks'] ?? $store->va_banks;
+        }
+
+        $beforeValue = [
+            'cod_enabled' => (bool) $store->cod_enabled,
+            'qris_enabled' => (bool) $store->qris_enabled,
+            'va_enabled' => (bool) $store->va_enabled,
+            'va_banks' => $store->va_banks,
+        ];
+
+        $store->cod_enabled = $codEnabled;
+        $store->qris_enabled = $qrisEnabled;
+        $store->va_enabled = $vaEnabled;
+        $store->va_banks = $vaBanks;
+        $store->save();
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role ?? $user->roles()->first()?->name ?? 'store_admin',
+            'action' => 'STORE_PAYMENT_METHODS_UPDATE',
+            'resource_type' => 'store',
+            'resource_id' => $store->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'before_value' => json_encode($beforeValue),
+            'after_value' => json_encode([
+                'cod_enabled' => $store->cod_enabled,
+                'qris_enabled' => $store->qris_enabled,
+                'va_enabled' => $store->va_enabled,
+                'va_banks' => $store->va_banks,
+            ]),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengaturan metode pembayaran toko berhasil diperbarui.',
+            'data' => [
+                'store_id' => (string) $store->id,
+                'store_name' => $store->name,
+                'cod_enabled' => (bool) $store->cod_enabled,
+                'qris_enabled' => (bool) $store->qris_enabled,
+                'va_enabled' => (bool) $store->va_enabled,
+                'va_banks' => $store->va_banks ?? ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'],
+                'supported_banks' => ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'],
+            ],
+        ]);
+    }
+
+    /**
+    /**
+     * GET /api/v1/store/payout-account & /api/store/payout-account
+     */
+    public function getPayoutAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        // Ambil store_id dari session (pemilik toko)
+        $store = Store::where('owner_user_id', $user->id)->first();
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Anda bukan pemilik toko.',
+            ], 403);
+        }
+
+        $account = StorePayoutAccount::where('store_id', $store->id)->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => $account ? [
+                'id' => $account->id,
+                'store_id' => (string) $store->id,
+                'bank_code' => $account->bank_code,
+                'account_number' => $account->account_number,
+                'account_number_masked' => '****' . substr($account->account_number, -4),
+                'account_holder_name' => $account->account_holder_name,
+                'created_at' => $account->created_at?->toISOString(),
+                'updated_at' => $account->updated_at?->toISOString(),
+            ] : null,
+        ]);
+    }
+
+    /**
+     * PUT /api/v1/store/payout-account & /api/store/payout-account
+     */
+    public function updatePayoutAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        // Tolak jika bukan pemilik toko
+        $store = Store::where('owner_user_id', $user->id)->first();
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Anda bukan pemilik toko.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'bank_code' => 'required|string|in:BCA,BNI,BRI,MANDIRI,PERMATA,BSI,CIMB,DANAMON,BTN,DANA,LAINNYA',
+            'account_number' => 'required|digits_between:8,20',
+            'account_holder_name' => 'required|string|max:100',
+        ], [
+            'bank_code.required' => 'Bank harus dipilih dari daftar yang tersedia.',
+            'bank_code.in' => 'Bank yang dipilih tidak valid.',
+            'account_number.required' => 'Nomor rekening wajib diisi.',
+            'account_number.digits_between' => 'Nomor rekening harus berupa angka 8–20 digit.',
+            'account_holder_name.max' => 'Nama pemilik rekening maksimal 100 karakter.',
+            'account_holder_name.required' => 'Nama pemilik rekening wajib diisi.',
+        ]);
+
+        $account = StorePayoutAccount::updateOrCreate(
+            ['store_id' => $store->id],
+            [
+                'bank_code' => strtoupper($validated['bank_code']),
+                'account_number' => $validated['account_number'],
+                'account_holder_name' => strtoupper(trim($validated['account_holder_name'])),
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Rekening pencairan dana berhasil disimpan.',
+            'data' => [
+                'id' => $account->id,
+                'store_id' => (string) $store->id,
+                'bank_code' => $account->bank_code,
+                'account_number' => $account->account_number,
+                'account_number_masked' => '****' . substr($account->account_number, -4),
+                'account_holder_name' => $account->account_holder_name,
+                'created_at' => $account->created_at?->toISOString(),
+                'updated_at' => $account->updated_at?->toISOString(),
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/store/orders/{order}/confirm-cod
+     */
+    public function confirmCod(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user, (string) $order->store_id);
+
+        if (! $store || (int) $order->store_id !== (int) $store->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pesanan tidak ditemukan atau tidak berada di gerai Anda.',
+            ], 404);
+        }
+
+        if (strtolower((string) $order->payment_method) !== 'cod') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pesanan ini bukan pesanan dengan metode pembayaran COD.',
+            ], 422);
+        }
+
+        if ($order->payment_status === 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pembayaran COD pesanan sudah berstatus lunas.',
+            ], 422);
+        }
+
+        $order->payment_status = 'paid';
+        $order->paid_at = now();
+        $order->save();
+
+        $payment = Payment::where('order_id', $order->id)->first();
+        if ($payment) {
+            $payment->status = 'paid';
+            $payment->paid_at = now();
+            $payment->save();
+        }
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role ?? $user->roles()->first()?->name ?? 'store_admin',
+            'action' => 'STORE_CONFIRM_COD',
+            'resource_type' => 'order',
+            'resource_id' => $order->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'after_value' => json_encode(['payment_status' => 'paid', 'amount' => $order->total_amount]),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pembayaran COD pesanan berhasil dikonfirmasi oleh toko.',
+            'data' => [
+                'order_id' => (string) $order->id,
+                'order_number' => $order->order_number,
+                'payment_status' => 'PAID',
+                'collected_amount' => (float) ($order->total_amount ?? $order->final_price ?? 0),
+                'collected_by' => $user->name,
             ],
         ]);
     }

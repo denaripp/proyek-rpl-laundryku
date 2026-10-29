@@ -194,13 +194,14 @@ class AiIntentRouter
         $layer1Result = $this->evaluateLayer1($user, $normalized, $orderNumber, $conversationContext);
 
         if ($layer1Result['matched']) {
+            $finalMulti = !empty($layer1Result['multi_intents']) ? $layer1Result['multi_intents'] : $multiIntents;
             return [
                 'intent' => $layer1Result['intent'],
                 'layer' => 'layer_1_rules',
                 'order_number' => $layer1Result['order_number'] ?? $orderNumber,
                 'confidence' => $layer1Result['confidence'],
                 'normalized_message' => $normalized,
-                'multi_intents' => $multiIntents,
+                'multi_intents' => $finalMulti,
                 'context' => $conversationContext,
             ];
         }
@@ -220,6 +221,20 @@ class AiIntentRouter
         }
 
         // --- LAYER 3: Safe Fallback / Clarification ---
+        $primaryRole = $this->resolvePrimaryRole($user);
+        $unknownQueryPayload = null;
+        if (in_array($primaryRole, ['store_admin', 'store_owner', 'super_admin', 'platform_owner', 'platform_admin'], true)) {
+            $unknownQueryPayload = [
+                'raw_query' => $this->normalizer->sanitizePii($rawMessage),
+                'normalized_query' => $this->normalizer->sanitizePii($normalized),
+                'role' => $primaryRole,
+                'user_id' => $user->id,
+                'layer' => 'layer_3_fallback',
+                'reason' => 'intent_unknown',
+                'timestamp' => now()->toIso8601String(),
+            ];
+        }
+
         return [
             'intent' => self::INTENT_UNKNOWN,
             'layer' => 'layer_3_fallback',
@@ -228,6 +243,7 @@ class AiIntentRouter
             'normalized_message' => $normalized,
             'multi_intents' => $multiIntents,
             'context' => $conversationContext,
+            'unknown_query' => $unknownQueryPayload,
         ];
     }
 
@@ -360,6 +376,22 @@ class AiIntentRouter
                 'confidence' => min(1.0, round($topScore / 100, 2)),
                 'order_number' => null,
             ];
+        }
+
+        // Jika ragu antara dua handler untuk admin (mis. kurir aktif vs jumlah kurir, atau omset vs pesanan):
+        // Jangan jatuh ke unknown / klarifikasi umum. Jawab keduanya secara ringkas dari handler yang tersedia.
+        if ($topScore >= 45 && $secondScore >= 40 && in_array($primaryRole, ['store_admin', 'store_owner', 'super_admin', 'platform_owner', 'platform_admin'], true)) {
+            $keys = array_keys($scores);
+            $secondIntent = $keys[1] ?? null;
+            if ($secondIntent && $secondIntent !== $topIntent) {
+                return [
+                    'matched' => true,
+                    'intent' => $topIntent,
+                    'confidence' => min(1.0, round($topScore / 100, 2)),
+                    'order_number' => null,
+                    'multi_intents' => [$topIntent, $secondIntent],
+                ];
+            }
         }
 
         return [
@@ -514,7 +546,7 @@ class AiIntentRouter
         if (str_contains($text, 'pesanan saya') && !str_contains($text, 'berapa') && !str_contains($text, 'harga') && !str_contains($text, 'pengeluaran') && !str_contains($text, 'terakhir') && !str_contains($text, 'terbaru')) {
             $progScore += 45;
         }
-        if ((str_contains($text, 'pesanan') || str_contains($text, 'pakaian')) && (str_contains($text, 'sampai') || str_contains($text, 'dimana') || str_contains($text, 'gimana') || str_contains($text, 'bagaimana') || str_contains($text, 'dianter'))) {
+        if ((str_contains($text, 'pesanan') || str_contains($text, 'pakaian')) && !str_contains($text, 'terakhir') && !str_contains($text, 'terbaru') && !str_contains($text, 'kemarin') && (str_contains($text, 'sampai') || str_contains($text, 'dimana') || str_contains($text, 'gimana') || str_contains($text, 'bagaimana') || str_contains($text, 'dianter') || str_contains($text, 'diantar'))) {
             $progScore += 55;
         }
         // Penalty if query is specifically asking about payment or complaint
@@ -726,7 +758,7 @@ class AiIntentRouter
 
         // --- STORE_STATS (Store managers) ---
         $stStatsScore = 0;
-        if (str_contains($text, 'statistik toko') || str_contains($text, 'performa toko') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'omset') || str_contains($text, 'pendapatan') || str_contains($text, 'pemasukan') || str_contains($text, 'duit masuk') || str_contains($text, 'uang masuk') || str_contains($text, 'rekap toko') || str_contains($text, 'ringkasan toko') || (str_contains($text, 'toko') && (str_contains($text, 'statistik') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'rekap')))) {
+        if (str_contains($text, 'dashboard') || str_contains($text, 'statistik toko') || str_contains($text, 'performa toko') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'omset') || str_contains($text, 'pendapatan') || str_contains($text, 'pemasukan') || str_contains($text, 'duit masuk') || str_contains($text, 'uang masuk') || str_contains($text, 'rekap') || str_contains($text, 'ringkasan hari ini') || str_contains($text, 'kondisi toko') || str_contains($text, 'ringkasan toko') || (str_contains($text, 'toko') && (str_contains($text, 'statistik') || str_contains($text, 'performa') || str_contains($text, 'omzet') || str_contains($text, 'rekap')))) {
             if (in_array($role, ['store_admin', 'store_owner'], true) || str_contains($text, 'toko') || str_contains($text, 'gerai')) {
                 $stStatsScore += 95;
             }
@@ -1129,44 +1161,27 @@ Rules:
         $role = $user->role ?? 'customer';
 
         if ($role === 'courier') {
-            return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai kurir di LaundryKu, Anda dapat menanyakan:\n"
-                . "1. Tugas aktif saat ini (contoh: \"tugas kurir saya\")\n"
-                . "2. Riwayat tugas pengantaran/penjemputan (contoh: \"berapa tugas kurir saya\")\n"
-                . "3. Status pesanan terkait (contoh: \"status pesanan ORD-...\")\n"
-                . "Silakan tanyakan salah satu hal di atas!";
+            return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai kurir di LaundryKu, Anda dapat menanyakan seputar tugas pengantaran aktif, riwayat penugasan, status pesanan, atau toko mitra tempat Anda bertugas.";
         }
 
         if (in_array($role, ['store_admin', 'store_owner'], true)) {
-            return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai pengelola toko mitra di LaundryKu, Anda dapat menanyakan:\n"
-                . "1. Omzet & Keuangan: \"omzet hari ini\", \"omzet kemarin\", \"omzet minggu ini\", \"omzet bulan ini\"\n"
-                . "2. Pesanan & Tindakan: \"pesanan yang belum ditimbang\", \"pesanan siap diantar\", \"pesanan nunggu jemput\"\n"
-                . "3. Pesanan Spesifik: \"status pesanan ORD-...\"\n"
-                . "4. Layanan & Penjualan: \"layanan terlaris\", \"daftar harga layanan toko\"\n"
-                . "5. Kurir & Pelamar: \"daftar kurir toko\", \"pelamar kurir baru\"\n"
-                . "6. Pengaturan Gerai: \"jam operasional toko\", \"radius layanan toko\", \"status approval toko\"\n"
-                . "7. Pelanggan & Ulasan: \"top customer toko\", \"rating dan ulasan toko\", \"komplain toko\"\n"
-                . "8. Panduan Prosedural: \"cara atur jam operasional\", \"cara menimbang pesanan\", \"cara atur radius\"\n"
-                . "Silakan ajukan salah satu pertanyaan di atas!";
+            return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai pengelola toko mitra di LaundryKu, Anda dapat menanyakan seputar:\n"
+                . "• Omzet & Keuangan: omzet hari ini, kemarin, minggu ini, bulan ini\n"
+                . "• Pesanan & Tindakan: pesanan belum ditimbang, pesanan siap diantar, pesanan baru\n"
+                . "• Pengaturan Gerai: jam operasional toko, radius layanan, ulasan toko, kurir toko\n"
+                . "• Layanan & Penjualan: layanan terlaris, daftar harga layanan toko";
         }
 
         if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true)) {
-            return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai admin platform LaundryKu, Anda dapat menanyakan:\n"
-                . "1. Ringkasan Platform: \"ringkasan platform\", \"total toko aktif\", \"total omzet platform\"\n"
-                . "2. Persetujuan & Verifikasi: \"pendaftaran mitra yang menunggu\", \"verifikasi kurir baru\"\n"
-                . "3. Pengguna & Peran: \"jumlah pengguna per peran\", \"berapa total customer dan kurir\"\n"
-                . "4. Komplain & Dispute: \"komplain terbuka platform\", \"dispute yang belum selesai\"\n"
-                . "5. Pelacakan Pesanan Global: \"status pesanan ORD-...\"\n"
-                . "6. Pencarian Data: \"cari toko Berkah\", \"cari user Budi\"\n"
-                . "Silakan ajukan salah satu pertanyaan di atas!";
+            return "Maaf, saya belum memahami maksud pertanyaan Anda. Sebagai admin platform LaundryKu, Anda dapat menanyakan seputar:\n"
+                . "• Ringkasan Platform: ringkasan platform, total toko aktif, total omzet platform\n"
+                . "• Persetujuan & Verifikasi: pendaftaran mitra menunggu, verifikasi kurir baru\n"
+                . "• Pengguna & Peran: jumlah pengguna per peran, total customer dan kurir\n"
+                . "• Komplain & Dispute: komplain terbuka platform, dispute belum selesai";
         }
 
         // Customer default
-        return "Maaf, saya belum memahami maksud pertanyaan Anda seputar layanan LaundryKu. Anda dapat menanyakan hal-hal berikut:\n"
-            . "1. Status cucian Anda (contoh: \"pesanan saya sampai mana\" atau \"apakah sudah dicuci\")\n"
-            . "2. Riwayat dan pengeluaran (contoh: \"berapa kali saya memesan\" atau \"total pengeluaran saya\")\n"
-            . "3. Layanan & harga laundry (contoh: \"daftar layanan\" atau \"harga cuci komplit\")\n"
-            . "4. Komplain & ulasan (contoh: \"komplain saya\" atau \"ulasan saya\")\n"
-            . "Silakan ajukan salah satu pertanyaan di atas!";
+        return "Maaf, saya belum memahami maksud pertanyaan Anda seputar layanan LaundryKu. Anda dapat menanyakan seputar status pesanan cucian, riwayat pesanan, total pengeluaran, daftar layanan, harga, komplain, atau informasi toko mitra LaundryKu.";
     }
 
     /**
@@ -1295,8 +1310,8 @@ Rules:
      */
     protected function isBotIdentity(string $normalized): bool
     {
-        // Exclude user asking about their own identity
-        if (str_contains($normalized, 'siapa saya') || str_contains($normalized, 'nama saya') || str_contains($normalized, 'peran saya')) {
+        // Exclude user asking about their own identity or store
+        if (str_contains($normalized, 'siapa saya') || str_contains($normalized, 'siapa sy') || str_contains($normalized, 'siapa aku') || str_contains($normalized, 'nama saya') || str_contains($normalized, 'peran saya') || str_contains($normalized, 'toko saya') || str_contains($normalized, 'toko sy') || str_contains($normalized, 'nama toko') || str_contains($normalized, 'profil saya')) {
             return false;
         }
 
@@ -1304,7 +1319,9 @@ Rules:
             'siapa anda', 'anda siapa', 'kamu siapa', 'siapa kamu', 'siapa namamu',
             'nama kamu siapa', 'nama anda siapa', 'kamu bot apa', 'apakah kamu bot',
             'apakah anda bot', 'kamu bot', 'bisa bantu apa', 'apa fungsi kamu',
-            'kamu itu apa', 'kamu apa', 'apa kamu',
+            'kamu itu apa', 'kamu apa', 'apa kamu', 'kamu itu siapa', 'anda itu siapa',
+            'siapa anda/kamu', 'siapa kamu/anda', 'kamu siapa sih', 'anda siapa sih',
+            'lu siapa', 'siapa lu', 'lo siapa', 'siapa lo', 'elu siapa', 'siapa elu',
             'kamu landy', 'siapa landy', 'tentang landy', 'kamu robot', 'kmu robot',
             'kamu ai', 'ai laundryku', 'siapa nama asisten', 'asisten pintar',
             'perkenalkan diri', 'kamu dibuat', 'chatbot asisten',
@@ -1314,6 +1331,10 @@ Rules:
             if (str_contains($normalized, $p)) {
                 return true;
             }
+        }
+
+        if (preg_match('/\b(siapa\s*(anda|kamu|lu|lo|elu)|(kamu|anda|lu|lo|elu)\s*(itu|ini)?\s*siapa|siapakah\s*(anda|kamu))\b/iu', $normalized)) {
+            return true;
         }
 
         return false;
@@ -1328,7 +1349,7 @@ Rules:
             'system prompt', 'abaikan instruksi', 'ignore instructions', 'ignore previous', 'print secret',
             'resep ', 'masak ', 'rendang', 'nasi goreng', 'politik', 'pemilu', 'presiden',
             'kalkulus', 'integral', 'turunan fungsi', 'rumus fisika', 'hukum gravitasi', 'newton',
-            'pr fisika', 'pr matematika', 'tugas sekolah', 'tugas kuliah',
+            'pr fisika', 'pr matematika', 'persamaan matematika', 'matematika', 'tugas sekolah', 'tugas kuliah',
             'terjemahkan', 'terjemahan', 'translate', 'bahasa jerman', 'bahasa perancis',
             'bikin kode', 'buatkan kode', 'python', 'javascript', 'php script',
             'sql query', 'drop table', 'delete all', 'rm -rf', 'select *', 'from users', 'from orders', 'where role', 'where 1 1',

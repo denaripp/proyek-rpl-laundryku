@@ -5,14 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import {
-  Card,
-  Badge,
-  Button,
-  Input,
-  Skeleton,
-  ErrorState,
-} from '@/components/ui';
-import {
   getConversationDetail,
   sendChatMessage,
   pollChatMessages,
@@ -24,16 +16,14 @@ import { formatDate, cn } from '@/lib/format';
 import {
   ArrowLeft,
   Send,
-  Image as ImageIcon,
   Paperclip,
   CheckCheck,
   Check,
-  Building2,
-  User,
+  Store,
   ShoppingBag,
-  Clock,
   X,
-  Sparkles,
+  MessageSquare,
+  AlertCircle,
 } from 'lucide-react';
 
 export default function ChatDetailPage({
@@ -115,7 +105,7 @@ export default function ChatDetailPage({
             return prev;
           });
         }
-      } catch (e) {
+      } catch {
         // Fail silently during polling
       }
     }, 3000);
@@ -172,155 +162,178 @@ export default function ChatDetailPage({
 
   return (
     <PublicLayout>
-      <div className="bg-gradient-to-b from-sky-50/60 via-white to-sky-50/40 min-h-[calc(100vh-5rem)] py-6 sm:py-8">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          {/* Header Card */}
-          <Card variant="bento" className="p-4 sm:p-5 mb-4 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/chat"
-                  className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors shrink-0 min-h-[40px]"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </Link>
+      <div className="bg-slate-50 min-h-[calc(100vh-8rem)] py-4 sm:py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-3 sm:space-y-4">
+          {/* Header Card: Store Info & Back Button */}
+          <div className="bg-white border border-navy-100/90 rounded-3xl p-4 sm:p-5 shadow-2xs flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link
+                href="/chat"
+                className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200/80 flex items-center justify-center text-navy-800 transition-colors shrink-0 min-h-[40px] cursor-pointer"
+                aria-label="Kembali ke daftar pesan"
+              >
+                <ArrowLeft className="w-5 h-5" strokeWidth={1.75} />
+              </Link>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-700 shrink-0 font-bold">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h1 className="font-heading font-extrabold text-base text-navy-900 leading-tight">
-                      {conversation?.other_party_name || 'Percakapan Toko'}
-                    </h1>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded border border-teal-200/60">
-                        Admin Toko
-                      </span>
-                      {conversation?.order_number && (
-                        <Link
-                          href={`/orders/${conversation.order_id}`}
-                          className="text-[11px] text-slate-500 hover:text-navy-900 flex items-center gap-1 font-mono"
-                        >
-                          <ShoppingBag className="w-3 h-3" />
-                          <span>{conversation.order_number}</span>
-                        </Link>
-                      )}
-                    </div>
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="w-11 h-11 rounded-xl bg-navy-50 border border-navy-200/80 flex items-center justify-center text-navy-800 shrink-0 font-bold shadow-2xs"
+                  aria-hidden="true"
+                >
+                  <Store className="w-5 h-5" strokeWidth={1.75} />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="font-bold text-sm sm:text-base text-navy-900 leading-tight truncate">
+                    {conversation?.other_party_name || 'Percakapan toko'}
+                  </h1>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-[10px] text-navy-800 font-bold bg-navy-50 px-2 py-0.5 rounded-md border border-navy-100">
+                      Admin toko
+                    </span>
+                    {conversation?.order_number && (
+                      <Link
+                        href={`/orders/${conversation.order_id}`}
+                        className="text-[10px] text-slate-500 hover:text-navy-900 flex items-center gap-1 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 transition-colors"
+                      >
+                        <ShoppingBag className="w-3 h-3 text-slate-400" strokeWidth={1.75} />
+                        <span>#{conversation.order_number}</span>
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
-
-              {conversation?.order_id && (
-                <Link
-                  href={`/orders/${conversation.order_id}`}
-                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200 hover:bg-sky-100 transition-colors"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Lihat Pesanan</span>
-                </Link>
-              )}
             </div>
-          </Card>
+
+            {conversation?.order_id && (
+              <Link
+                href={`/orders/${conversation.order_id}`}
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-navy-800 bg-white hover:bg-navy-50 px-3.5 py-2 rounded-xl border border-slate-200/90 hover:border-navy-200 transition-all shadow-2xs shrink-0"
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-navy-700" strokeWidth={1.75} />
+                <span>Lihat pesanan</span>
+              </Link>
+            )}
+          </div>
 
           {/* Chat Container Card */}
-          <Card variant="default" className="bg-slate-50/80 rounded-3xl border border-slate-200 shadow-sm flex flex-col h-[65vh] sm:h-[70vh] overflow-hidden">
-            {/* Loading */}
+          <div className="bg-slate-50/70 rounded-3xl border border-navy-100/90 shadow-sm flex flex-col h-[65vh] sm:h-[72vh] overflow-hidden">
+            {/* Loading Skeleton */}
             {loading && (
               <div className="flex-1 p-6 space-y-4">
-                <Skeleton className="h-14 w-2/3 rounded-2xl" />
-                <Skeleton className="h-20 w-1/2 ml-auto rounded-2xl" />
-                <Skeleton className="h-14 w-3/5 rounded-2xl" />
+                <div className="h-14 w-2/3 rounded-2xl bg-white border border-slate-200/80 animate-pulse" />
+                <div className="h-20 w-1/2 ml-auto rounded-2xl bg-navy-100/50 animate-pulse" />
+                <div className="h-14 w-3/5 rounded-2xl bg-white border border-slate-200/80 animate-pulse" />
               </div>
             )}
 
-            {/* Error */}
+            {/* Error State */}
             {!loading && error && (
-              <div className="flex-1 flex items-center justify-center p-6">
-                <ErrorState
-                  title="Gagal Memuat Pesan"
-                  message={error}
-                  retryText="Coba Lagi"
-                  onRetry={loadConversation}
-                />
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shadow-2xs">
+                  <AlertCircle className="w-6 h-6" strokeWidth={1.75} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-navy-900">Gagal memuat pesan</h3>
+                  <p className="text-xs text-slate-500 max-w-sm">{error}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadConversation}
+                  className="inline-flex items-center px-4 py-2 bg-navy-700 text-white rounded-xl text-xs font-bold hover:bg-navy-800 transition-colors cursor-pointer shadow-2xs"
+                >
+                  Coba lagi
+                </button>
               </div>
             )}
 
             {/* Messages Feed */}
             {!loading && !error && (
-              <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4">
+              <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-3.5">
                 {messages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                    <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-3">
-                      <Sparkles className="w-6 h-6" />
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 select-none">
+                    <div className="w-14 h-14 rounded-2xl bg-navy-50 text-navy-700 border border-navy-100 flex items-center justify-center mb-3 shadow-2xs">
+                      <MessageSquare className="w-7 h-7" strokeWidth={1.75} />
                     </div>
-                    <p className="text-xs font-semibold text-slate-600">Belum ada riwayat pesan.</p>
-                    <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
-                      Tanyakan detail layanan, request pencucian, atau konsultasikan pesanan Anda di sini.
+                    <p className="text-sm font-bold text-navy-900">Belum ada riwayat pesan</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                      Tanyakan detail layanan, permintaan pencucian, atau konsultasikan pesanan Anda di sini.
                     </p>
                   </div>
                 ) : (
-                  messages.map((msg) => {
+                  messages.map((msg, idx) => {
                     const isMe = msg.sender_id === currentUser?.id;
+                    const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                    const isDifferentDay =
+                      !prevMsg ||
+                      new Date(prevMsg.created_at).toDateString() !==
+                        new Date(msg.created_at).toDateString();
 
                     return (
-                      <div
-                        key={msg.id}
-                        className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}
-                      >
-                        <div
-                          className={cn(
-                            'max-w-[85%] sm:max-w-[70%] p-3.5 sm:p-4 rounded-3xl text-xs space-y-2 shadow-sm',
-                            isMe
-                              ? 'bg-navy-900 text-white rounded-tr-none'
-                              : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
-                          )}
-                        >
-                          {/* Sender Name if incoming */}
-                          {!isMe && msg.sender_name && (
-                            <span className="font-bold text-[11px] text-teal-600 block">
-                              {msg.sender_name}
+                      <React.Fragment key={msg.id}>
+                        {/* Date Divider */}
+                        {isDifferentDay && (
+                          <div className="flex justify-center my-3 select-none">
+                            <span className="text-[10px] font-semibold text-slate-500 bg-white border border-slate-200/90 px-3 py-1 rounded-full shadow-2xs">
+                              {formatDate(msg.created_at, 'DD MMMM YYYY')}
                             </span>
-                          )}
+                          </div>
+                        )}
 
-                          {/* Image Attachment */}
-                          {msg.attachment_url && (
-                            <div className="rounded-2xl overflow-hidden border border-white/20 my-1">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={msg.attachment_url}
-                                alt="Lampiran Foto"
-                                className="w-full max-h-60 object-cover rounded-xl hover:opacity-95 transition-opacity cursor-pointer"
-                                onClick={() => window.open(msg.attachment_url || '', '_blank')}
-                              />
-                            </div>
-                          )}
-
-                          {/* Message Text Body */}
-                          {msg.body && msg.body !== '[Foto]' && (
-                            <p className="leading-relaxed whitespace-pre-wrap">{msg.body}</p>
-                          )}
-
-                          {/* Timestamp & Read Indicator */}
+                        <div className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
                           <div
                             className={cn(
-                              'flex items-center justify-end gap-1.5 text-[10px] pt-1',
-                              isMe ? 'text-slate-400' : 'text-slate-400'
+                              'max-w-[85%] sm:max-w-[70%] p-3.5 sm:p-4 rounded-2xl text-xs space-y-2 shadow-2xs',
+                              isMe
+                                ? 'bg-navy-700 text-white rounded-tr-xs'
+                                : 'bg-white text-navy-950 border border-slate-200/90 rounded-tl-xs'
                             )}
                           >
-                            <span>{formatDate(msg.created_at, 'HH:mm')}</span>
-                            {isMe && (
-                              <span>
-                                {msg.is_read ? (
-                                  <CheckCheck className="w-3.5 h-3.5 text-teal-400" />
-                                ) : (
-                                  <Check className="w-3.5 h-3.5 text-slate-400" />
-                                )}
+                            {/* Sender Name if incoming */}
+                            {!isMe && msg.sender_name && (
+                              <span className="font-bold text-[11px] text-navy-800 block">
+                                {msg.sender_name}
                               </span>
                             )}
+
+                            {/* Image Attachment */}
+                            {msg.attachment_url && (
+                              <div className="rounded-xl overflow-hidden border border-white/20 my-1">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={msg.attachment_url}
+                                  alt="Lampiran foto"
+                                  className="w-full max-h-60 object-cover rounded-xl hover:opacity-95 transition-opacity cursor-pointer"
+                                  onClick={() => window.open(msg.attachment_url || '', '_blank')}
+                                />
+                              </div>
+                            )}
+
+                            {/* Message Text Body */}
+                            {msg.body && msg.body !== '[Foto]' && (
+                              <p className="leading-relaxed whitespace-pre-wrap font-normal">{msg.body}</p>
+                            )}
+
+                            {/* Timestamp & Read Indicator */}
+                            <div
+                              className={cn(
+                                'flex items-center justify-end gap-1.5 text-[10px] pt-0.5 select-none',
+                                isMe ? 'text-sky-200' : 'text-slate-400'
+                              )}
+                            >
+                              <span className="tabular-nums font-medium">{formatDate(msg.created_at, 'HH:mm')}</span>
+                              {isMe && (
+                                <span>
+                                  {msg.is_read ? (
+                                    <CheckCheck className="w-3.5 h-3.5 text-sky-300" strokeWidth={2} />
+                                  ) : (
+                                    <Check className="w-3.5 h-3.5 text-sky-300/80" strokeWidth={1.75} />
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -330,26 +343,28 @@ export default function ChatDetailPage({
 
             {/* Image Preview Bar before sending */}
             {imagePreview && (
-              <div className="px-4 py-2 bg-slate-100/90 border-t border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="px-4 py-2.5 bg-white border-t border-slate-100 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imagePreview} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-slate-300" />
-                  <span className="text-[11px] text-slate-600 truncate max-w-[200px]">
-                    {selectedImage?.name}
-                  </span>
+                  <img src={imagePreview} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-slate-200" />
+                  <div className="text-[11px] truncate max-w-[200px]">
+                    <span className="font-semibold text-navy-900 block truncate">Foto terpilih</span>
+                    <span className="text-slate-500 truncate block">{selectedImage?.name}</span>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={removeSelectedImage}
-                  className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500"
+                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-navy-900 transition-colors cursor-pointer"
+                  title="Hapus foto"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
             )}
 
             {/* Chat Input Bar */}
-            <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white border-t border-slate-200 flex items-center gap-2">
+            <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white border-t border-navy-100/80 flex items-center gap-2">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -362,30 +377,31 @@ export default function ChatDetailPage({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
-                className="w-11 h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors shrink-0 min-h-[44px]"
-                title="Kirim Foto"
+                className="w-11 h-11 rounded-xl bg-navy-50 hover:bg-navy-100 text-navy-800 border border-navy-200/80 flex items-center justify-center transition-all shrink-0 min-h-[44px] cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Kirim foto"
               >
-                <Paperclip className="w-5 h-5 text-teal-600" />
+                <Paperclip className="w-4 h-4 text-navy-700" strokeWidth={1.75} />
               </button>
 
-              <Input
+              <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Ketik pesan untuk toko laundry..."
                 disabled={sending}
-                className="flex-1 text-xs"
+                className="h-11 px-4 text-xs sm:text-sm font-medium text-navy-900 placeholder:text-slate-400 bg-slate-50/70 border border-slate-200 rounded-xl focus:border-navy-700 focus:ring-2 focus:ring-navy-700/15 focus:outline-hidden transition-all flex-1 min-h-[44px]"
               />
 
-              <Button
+              <button
                 type="submit"
                 disabled={sending || (!inputText.trim() && !selectedImage)}
-                className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl px-5 min-h-[44px] shrink-0"
+                className="w-11 h-11 rounded-xl bg-navy-700 hover:bg-navy-800 active:scale-95 text-white flex items-center justify-center transition-all shrink-0 min-h-[44px] shadow-2xs disabled:opacity-40 cursor-pointer"
+                title="Kirim pesan"
               >
-                <Send className="w-4 h-4" />
-              </Button>
+                <Send className="w-4 h-4" strokeWidth={1.75} />
+              </button>
             </form>
-          </Card>
+          </div>
         </div>
       </div>
     </PublicLayout>

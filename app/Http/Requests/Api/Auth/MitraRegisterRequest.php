@@ -31,29 +31,6 @@ class MitraRegisterRequest extends FormRequest
             $mergeData['phone'] = $cleaned;
         }
 
-        // If coordinate fields are omitted (legacy callers / API clients without GPS), attempt geocoding or fallback
-        if (! $this->has('latitude') && ! $this->has('longitude')) {
-            $coords = null;
-            $address = trim(($this->input('store_address') ?? '') . ' ' . ($this->input('city') ?? ''));
-            if ($address !== '') {
-                try {
-                    $geocoder = app(\App\Services\Maps\GeocodingServiceInterface::class);
-                    $coords = $geocoder->geocode($address);
-                } catch (\Throwable $e) {
-                    // Ignore geocoding failure
-                }
-            }
-
-            if ($coords && isset($coords['lat'], $coords['lng'])) {
-                $mergeData['latitude'] = $coords['lat'];
-                $mergeData['longitude'] = $coords['lng'];
-            } elseif ($this->filled('store_name') || $this->filled('store_address')) {
-                // Sensible default coordinates for backward compatibility with existing tests
-                $mergeData['latitude'] = -6.91474400;
-                $mergeData['longitude'] = 107.60981000;
-            }
-        }
-
         if (! empty($mergeData)) {
             $this->merge($mergeData);
         }
@@ -85,9 +62,9 @@ class MitraRegisterRequest extends FormRequest
             'password.min' => 'Password minimal terdiri dari 8 karakter.',
             'store_name.required' => 'Nama toko wajib diisi.',
             'store_address.required' => 'Alamat toko wajib diisi.',
-            'latitude.required' => 'Koordinat latitude wajib diisi.',
+            'latitude.required' => 'Koordinat lokasi toko wajib diisi.',
             'latitude.between' => 'Koordinat latitude di luar rentang valid (-90 hingga 90).',
-            'longitude.required' => 'Koordinat longitude wajib diisi.',
+            'longitude.required' => 'Koordinat lokasi toko wajib diisi.',
             'longitude.between' => 'Koordinat longitude di luar rentang valid (-180 hingga 180).',
         ];
     }
@@ -98,11 +75,24 @@ class MitraRegisterRequest extends FormRequest
             $lat = $this->input('latitude');
             $lng = $this->input('longitude');
 
-            if ($lat !== null && $lng !== null && is_numeric($lat) && is_numeric($lng)) {
-                if ((float) $lat === 0.0 && (float) $lng === 0.0) {
+            if ($lat === null || $lng === null || $lat === '' || $lng === '') {
+                $validator->errors()->add(
+                    'latitude',
+                    'Koordinat lokasi toko wajib diisi dan ditentukan pada peta.'
+                );
+            } elseif (is_numeric($lat) && is_numeric($lng)) {
+                $latVal = (float) $lat;
+                $lngVal = (float) $lng;
+
+                if ($latVal === 0.0 && $lngVal === 0.0) {
                     $validator->errors()->add(
                         'latitude',
                         'Koordinat lokasi tidak boleh titik default (0, 0). Tentukan titik lokasi toko yang valid.'
+                    );
+                } elseif (abs($latVal - (-6.2088)) < 0.0005 && abs($lngVal - 106.8456) < 0.0005) {
+                    $validator->errors()->add(
+                        'latitude',
+                        'Koordinat lokasi toko wajib ditentukan dan tidak boleh menggunakan titik default (-6.2088, 106.8456).'
                     );
                 }
             }

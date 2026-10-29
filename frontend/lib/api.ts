@@ -66,9 +66,12 @@ export function formatFriendlyErrorMessage(
 ): string {
   if (!err) return fallbackMessage;
 
+  const anyErr = err as any;
   const msg =
-    (err as { responseData?: { error?: { message?: string } } })?.responseData?.error?.message ||
-    (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ||
+    anyErr?.responseData?.message ||
+    anyErr?.responseData?.error?.message ||
+    anyErr?.response?.data?.message ||
+    anyErr?.response?.data?.error?.message ||
     (err instanceof Error ? err.message : typeof err === 'string' ? err : '');
 
   if (

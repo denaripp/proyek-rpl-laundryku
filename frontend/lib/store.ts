@@ -42,7 +42,7 @@ export interface StoreItem {
   latitude: number | null;
   longitude: number | null;
   service_radius_km: number;
-  opening_hours: Record<string, string> | null;
+  opening_hours: Record<string, string | { open?: string | null; close?: string | null; is_closed?: boolean | null } | null> | null;
   opening_hours_today?: {
     open?: string;
     close?: string;
@@ -475,3 +475,62 @@ export type {
   AvailableCandidateItem,
 } from './courier';
 
+
+
+export interface StorePaymentMethods {
+  store_id: string;
+  store_name: string;
+  cod_enabled: boolean;
+  qris_enabled: boolean;
+  va_enabled: boolean;
+  va_banks: string[];
+  supported_banks: string[];
+}
+
+export async function getStorePaymentMethods(storeId?: string): Promise<StorePaymentMethods> {
+  const endpoint = storeId ? `/store/payment-methods?store_id=${storeId}` : '/store/payment-methods';
+  const res = await apiClient<ApiSuccessResponse<StorePaymentMethods>>(endpoint);
+  return res.data;
+}
+
+export async function updateStorePaymentMethods(payload: {
+  store_id?: string;
+  cod_enabled: boolean;
+  qris_enabled: boolean;
+  va_enabled: boolean;
+  va_banks?: string[];
+}): Promise<StorePaymentMethods> {
+  const res = await apiClient<ApiSuccessResponse<StorePaymentMethods>>('/store/payment-methods', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export interface StorePayoutAccount {
+  id: number;
+  store_id: string;
+  bank_code: string;
+  account_number: string;
+  account_number_masked: string;
+  account_holder_name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getStorePayoutAccount(): Promise<StorePayoutAccount | null> {
+  const res = await apiClient<ApiSuccessResponse<StorePayoutAccount | null>>('/store/payout-account');
+  return res.data;
+}
+
+export async function updateStorePayoutAccount(payload: {
+  bank_code: string;
+  account_number: string;
+  account_holder_name: string;
+}): Promise<StorePayoutAccount> {
+  const res = await apiClient<ApiSuccessResponse<StorePayoutAccount>>('/store/payout-account', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}

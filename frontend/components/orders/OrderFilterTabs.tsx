@@ -23,18 +23,18 @@ export const OrderFilterTabs: React.FC<OrderFilterTabsProps> = ({
 }) => {
   const tabs = [
     { id: 'all', label: 'Semua', count: counts.all },
-    { id: 'active', label: 'Sedang Berjalan', count: counts.active },
+    { id: 'active', label: 'Sedang berjalan', count: counts.active },
     { id: 'completed', label: 'Selesai', count: counts.completed },
     { id: 'cancelled', label: 'Dibatalkan', count: counts.cancelled },
   ];
 
   return (
     <div
-      className={cn('border-b border-slate-200 overflow-x-auto select-none', className)}
+      className={cn('overflow-x-auto select-none no-scrollbar py-1', className)}
       role="tablist"
       aria-label="Filter status pesanan"
     >
-      <div className="flex items-center gap-6 min-w-max">
+      <div className="inline-flex items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80 min-w-max shadow-2xs">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
 
@@ -46,21 +46,23 @@ export const OrderFilterTabs: React.FC<OrderFilterTabsProps> = ({
               type="button"
               onClick={() => onChange(tab.id)}
               className={cn(
-                'py-2.5 text-xs sm:text-sm font-medium transition-colors relative cursor-pointer flex items-center gap-1.5 focus:outline-hidden',
+                'px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-2 focus:outline-hidden min-h-[38px]',
                 isActive
-                  ? 'text-slate-900 font-semibold'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white text-navy-900 shadow-sm border border-navy-100/80 font-bold'
+                  : 'text-slate-600 hover:text-navy-900 hover:bg-white/50'
               )}
             >
               <span>{tab.label}</span>
-              <span className={cn('text-xs tabular-nums', isActive ? 'text-slate-900 font-semibold' : 'text-slate-400')}>
+              <span
+                className={cn(
+                  'px-1.5 py-0.5 rounded-lg text-[10px] tabular-nums font-bold leading-none',
+                  isActive
+                    ? 'bg-navy-50 text-navy-800'
+                    : 'bg-slate-200/70 text-slate-600'
+                )}
+              >
                 {tab.count}
               </span>
-
-              {/* Active underline indicator */}
-              {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1A3A5C] rounded-full" />
-              )}
             </button>
           );
         })}

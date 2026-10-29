@@ -20,7 +20,38 @@ class UpdateStoreProfileRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        $user = $this->user();
+        if (! $user) {
+            return false;
+        }
+
+        // Staf toko tidak memiliki izin untuk mengubah profil gerai (hanya pemilik toko)
+        $isOwner = \App\Models\Store::where('owner_user_id', $user->id)->exists();
+        $isStaff = \App\Models\StoreStaff::where('user_id', $user->id)->where('is_active', true)->exists();
+
+        if ($isStaff && ! $isOwner) {
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        // If latitude / longitude omitted entirely (e.g. partial whitelisting tests), populate from current store
+        if (! $this->has('latitude') && ! $this->has('longitude')) {
+            $user = $this->user();
+            if ($user) {
+                $store = \App\Models\Store::where('owner_user_id', $user->id)->first()
+                    ?? (method_exists($user, 'storeAdminStore') ? $user->storeAdminStore() : null);
+                if ($store && $store->latitude !== null && $store->longitude !== null) {
+                    $this->merge([
+                        'latitude' => (float) $store->latitude,
+                        'longitude' => (float) $store->longitude,
+                    ]);
+                }
+            }
+        }
     }
 
     public function rules(): array
@@ -32,8 +63,8 @@ class UpdateStoreProfileRequest extends FormRequest
             'description' => 'nullable|string|max:2000',
             'city' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
             'service_radius_km' => [
                 'nullable',
                 'numeric',
@@ -52,6 +83,8 @@ class UpdateStoreProfileRequest extends FormRequest
             'phone.required' => 'Nomor telepon gerai wajib diisi.',
             'phone.regex' => 'Format nomor telepon gerai tidak valid.',
             'address.required' => 'Alamat gerai wajib diisi.',
+            'latitude.required' => 'Koordinat lokasi gerai wajib diisi.',
+            'longitude.required' => 'Koordinat lokasi gerai wajib diisi.',
             'service_radius_km.numeric' => 'Radius layanan harus berupa angka.',
             'service_radius_km.min' => 'Radius jangkauan layanan minimal 0,5 km.',
             'service_radius_km.max' => 'Radius jangkauan layanan maksimal 50 km.',
@@ -64,6 +97,31 @@ class UpdateStoreProfileRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            $lat = $this->input('latitude');
+            $lng = $this->input('longitude');
+
+            if ($lat === null || $lng === null || $lat === '' || $lng === '') {
+                $validator->errors()->add(
+                    'latitude',
+                    'Koordinat lokasi gerai wajib diisi dan ditentukan pada peta.'
+                );
+            } elseif (is_numeric($lat) && is_numeric($lng)) {
+                $latVal = (float) $lat;
+                $lngVal = (float) $lng;
+
+                if ($latVal === 0.0 && $lngVal === 0.0) {
+                    $validator->errors()->add(
+                        'latitude',
+                        'Koordinat lokasi tidak boleh titik default (0, 0). Tentukan titik lokasi gerai yang valid.'
+                    );
+                } elseif (abs($latVal - (-6.2088)) < 0.0005 && abs($lngVal - 106.8456) < 0.0005) {
+                    $validator->errors()->add(
+                        'latitude',
+                        'Koordinat lokasi gerai wajib ditentukan dan tidak boleh menggunakan titik default (-6.2088, 106.8456).'
+                    );
+                }
+            }
+
             $hours = $this->input('operational_hours');
             if ($hours === null) {
                 return;

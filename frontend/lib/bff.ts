@@ -121,23 +121,76 @@ export function detectPortalFromRequest(request: NextRequest, targetPath: string
   if (headerPortal === 'customer') return 'customer';
 
   const normalized = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
-  if (normalized.startsWith('/admin')) return 'admin';
-  if (normalized.startsWith('/store') || normalized.startsWith('/mitra')) return 'mitra';
-  if (normalized.startsWith('/courier') || normalized.startsWith('/kurir')) return 'courier';
+  if (normalized === '/admin' || normalized.startsWith('/admin/')) return 'admin';
+  if (
+    normalized === '/store' ||
+    normalized.startsWith('/store/') ||
+    normalized.startsWith('/store-') ||
+    normalized === '/mitra' ||
+    normalized.startsWith('/mitra/')
+  ) {
+    return 'mitra';
+  }
+  if (
+    normalized === '/courier' ||
+    normalized.startsWith('/courier/') ||
+    normalized.startsWith('/courier-') ||
+    normalized === '/kurir' ||
+    normalized.startsWith('/kurir/')
+  ) {
+    return 'courier';
+  }
+  if (
+    normalized === '/stores' ||
+    normalized.startsWith('/stores/') ||
+    normalized === '/customer' ||
+    normalized.startsWith('/customer/')
+  ) {
+    return 'customer';
+  }
 
   const referer = request.headers.get('referer');
   if (referer) {
     try {
       const pathname = new URL(referer).pathname;
-      if (pathname.startsWith('/admin')) return 'admin';
-      if (pathname.startsWith('/store') || pathname.startsWith('/mitra')) return 'mitra';
-      if (pathname.startsWith('/courier') || pathname.startsWith('/kurir')) return 'courier';
+      if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
+      if (
+        pathname === '/store' ||
+        pathname.startsWith('/store/') ||
+        pathname === '/mitra' ||
+        pathname.startsWith('/mitra/')
+      ) {
+        return 'mitra';
+      }
+      if (
+        pathname === '/courier' ||
+        pathname.startsWith('/courier/') ||
+        pathname === '/kurir' ||
+        pathname.startsWith('/kurir/')
+      ) {
+        return 'courier';
+      }
+      if (
+        pathname === '/stores' ||
+        pathname.startsWith('/stores/') ||
+        pathname === '/orders' ||
+        pathname.startsWith('/orders/') ||
+        pathname === '/chat' ||
+        pathname.startsWith('/chat/') ||
+        pathname === '/profile' ||
+        pathname.startsWith('/profile/') ||
+        pathname === '/customer' ||
+        pathname.startsWith('/customer/') ||
+        pathname === '/'
+      ) {
+        return 'customer';
+      }
     } catch {
       // ignore
     }
   }
 
-  if (request.cookies.has(PORTAL_COOKIE_NAMES.customer)) return 'customer';
+  if (request.cookies.has(PORTAL_COOKIE_NAMES.customer) || request.cookies.has('auth_token')) return 'customer';
   if (request.cookies.has(PORTAL_COOKIE_NAMES.mitra)) return 'mitra';
   if (request.cookies.has(PORTAL_COOKIE_NAMES.courier)) return 'courier';
   if (request.cookies.has(PORTAL_COOKIE_NAMES.admin)) return 'admin';

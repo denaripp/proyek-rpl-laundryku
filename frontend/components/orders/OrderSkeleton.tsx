@@ -10,34 +10,34 @@ export interface OrderSkeletonProps {
 
 export const OrderSkeleton: React.FC<OrderSkeletonProps> = ({ className }) => {
   return (
-    <div
-      className={cn(
-        'divide-y divide-slate-100 border border-slate-200 rounded-lg bg-white overflow-hidden',
-        className
-      )}
-    >
-      {[1, 2, 3, 4].map((i) => (
+    <div className={cn('space-y-4', className)}>
+      {[1, 2, 3].map((i) => (
         <div
           key={i}
-          className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          className="bg-white border border-slate-200/90 rounded-3xl p-5 space-y-4 shadow-2xs animate-pulse"
         >
-          {/* Left info skeleton */}
-          <div className="space-y-2 flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-36 rounded" />
-              <Skeleton className="h-3.5 w-24 rounded" />
-              <Skeleton className="h-3.5 w-28 rounded" />
+          {/* Top Row */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-10 h-10 rounded-xl" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-40 rounded-md" />
+                <Skeleton className="h-3 w-28 rounded-md" />
+              </div>
             </div>
-            <Skeleton className="h-3.5 w-64 rounded" />
+            <Skeleton className="h-6 w-24 rounded-lg" />
           </div>
 
-          {/* Right info skeleton */}
-          <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-            <div className="space-y-1 sm:text-right">
-              <Skeleton className="h-4 w-20 rounded sm:ml-auto" />
-              <Skeleton className="h-3.5 w-16 rounded sm:ml-auto" />
+          {/* Stepper Skeleton placeholder */}
+          <Skeleton className="h-12 w-full rounded-2xl" />
+
+          {/* Bottom Row */}
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+            <Skeleton className="h-4 w-48 rounded-md" />
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-5 w-20 rounded-md" />
+              <Skeleton className="h-8 w-28 rounded-xl" />
             </div>
-            <Skeleton className="h-4 w-14 rounded" />
           </div>
         </div>
       ))}

@@ -24,7 +24,8 @@ return [
         'role' => 'store_admin',
         'title' => 'Panduan Penimbangan Cucian & Penetapan Tagihan Final Toko',
         'keywords' => [
-            'timbang cucian', 'cara timbang', 'input berat', 'berat riil',
+            'timbang cucian', 'cara timbang', 'menimbang', 'cara menimbang',
+            'menimbang cucian', 'cara menimbang cucian', 'input berat', 'berat riil',
             'penimbangan cucian', 'masukkan berat', 'tagihan final',
         ],
         'steps' => [

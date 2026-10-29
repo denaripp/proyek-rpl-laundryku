@@ -165,43 +165,43 @@ class AiKnowledgeBaseService
         $role = $userRole ?? 'customer';
 
         if ($role === 'courier') {
-            return "Berikut topik Panduan yang tersedia untuk Kurir di LaundryKu:\n"
-                . "1. Cara Mengambil & Menjalankan Tugas (tanyakan: \"cara ambil tugas\")\n"
-                . "2. Penagihan & Penyetoran COD Tunai (tanyakan: \"cara tagih cod\")\n"
-                . "3. Mengatur Status Online / Offline (tanyakan: \"cara atur status online\")\n"
-                . "Silakan tanyakan salah satu panduan di atas!";
+            return "Panduan sistem LaundryKu untuk Kurir mencakup:\n"
+                . "• Cara Mengambil & Menjalankan Tugas Pengantaran\n"
+                . "• Penagihan & Penyetoran Pembayaran COD Tunai\n"
+                . "• Pengaturan Status Ketersediaan Online / Offline\n"
+                . "Anda dapat menanyakan panduan di atas secara langsung.";
         }
 
         if (in_array($role, ['store_admin', 'store_owner'], true)) {
-            return "Berikut topik Panduan yang tersedia untuk Mitra Toko di LaundryKu:\n"
-                . "1. Mengelola Pesanan Masuk (tanyakan: \"cara proses pesanan masuk\")\n"
-                . "2. Penimbangan Cucian & Berat Riil (tanyakan: \"cara timbang cucian\")\n"
-                . "3. Menambah Layanan & Mengatur Harga (tanyakan: \"cara tambah layanan\")\n"
-                . "4. Mengatur Jam Buka & Operasional (tanyakan: \"cara atur jam buka\")\n"
-                . "5. Menangani Komplain Pelanggan (tanyakan: \"cara tangani komplain\")\n"
-                . "6. Manajemen & Perekrutan Kurir (tanyakan: \"cara kelola kurir\")\n"
-                . "Silakan tanyakan salah satu panduan di atas!";
+            return "Panduan sistem LaundryKu untuk Mitra Toko mencakup:\n"
+                . "• Pengelolaan Pesanan Masuk & Alur Cucian\n"
+                . "• Penimbangan Cucian & Pengisian Berat Riil\n"
+                . "• Pengaturan Layanan & Daftar Harga Toko\n"
+                . "• Pengaturan Jam Operasional Gerai\n"
+                . "• Penanganan Komplain Pelanggan\n"
+                . "• Manajemen & Perekrutan Kurir Toko\n"
+                . "Anda dapat menanyakan panduan di atas secara langsung.";
         }
 
         if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true)) {
-            return "Berikut topik Panduan untuk Platform Admin di LaundryKu:\n"
-                . "1. Verifikasi & Approval Mitra/Kurir (tanyakan: \"cara setujui toko\")\n"
-                . "2. Monitoring Performa & Ekosistem Platform (tanyakan: \"cara lihat overview platform\")\n"
-                . "3. Manajemen Pengguna & Toko (tanyakan: \"cara kelola pengguna\")\n"
-                . "Silakan tanyakan salah satu panduan di atas!";
+            return "Panduan sistem LaundryKu untuk Platform Admin mencakup:\n"
+                . "• Verifikasi & Persetujuan Mitra dan Kurir\n"
+                . "• Monitoring Performa Platform & Ekosistem\n"
+                . "• Manajemen Pengguna, Hak Akses, dan Toko Mitra\n"
+                . "Anda dapat menanyakan panduan di atas secara langsung.";
         }
 
         // Default Customer
-        return "Berikut topik Panduan yang tersedia di LaundryKu:\n"
-            . "1. Cara Memesan Laundry Baru (tanyakan: \"cara pesan\")\n"
-            . "2. Cara Pembayaran QRIS / VA / COD (tanyakan: \"cara bayar\")\n"
-            . "3. Cara Melacak Status Pesanan (tanyakan: \"cara lacak pesanan\")\n"
-            . "4. Cara Membatalkan Pesanan (tanyakan: \"cara batalkan pesanan\")\n"
-            . "5. Cara Mengajukan Komplain & Garansi (tanyakan: \"cara komplain\")\n"
-            . "6. Cara Memberi Ulasan & Rating (tanyakan: \"cara ulas toko\")\n"
-            . "7. Cara Menambah Alamat Baru via GPS (tanyakan: \"cara tambah alamat\")\n"
-            . "8. Cara Bergabung Jadi Mitra Toko / Kurir (tanyakan: \"cara gabung mitra\")\n"
-            . "Ketik topik yang ingin Anda ketahui!";
+        return "Panduan sistem LaundryKu mencakup:\n"
+            . "• Cara Memesan Laundry Baru & Penjemputan\n"
+            . "• Cara Pembayaran QRIS, Virtual Account, & COD\n"
+            . "• Cara Melacak Status Pesanan & Cucian\n"
+            . "• Kebijakan & Cara Pembatalan Pesanan\n"
+            . "• Pengajuan Komplain & Klaim Garansi\n"
+            . "• Memberi Ulasan & Rating Toko Mitra\n"
+            . "• Menambah Alamat Baru via Titik Peta GPS\n"
+            . "• Cara Bergabung Menjadi Mitra Toko atau Kurir\n"
+            . "Anda dapat menanyakan panduan di atas secara langsung.";
     }
 
     public function getFallbackSnippets(string $query, ?string $userRole = null): string

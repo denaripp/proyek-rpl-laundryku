@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\Portal\CourierPortalController;
 use App\Http\Controllers\Api\Portal\AdminPortalController;
 use App\Http\Controllers\Api\Portal\NotificationPortalController;
 use App\Http\Controllers\Api\ChatbotController;
+use App\Http\Controllers\Api\ChatController;
 
 // ===== Public webhooks =====
 Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])
@@ -97,6 +98,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{order}/set-weight', [OrderController::class, 'setWeight']);
     Route::post('/orders/{order}/assign-courier', [OrderController::class, 'assignCourier']);
+    Route::post('/orders/{order}/pay', [PaymentController::class, 'pay']);
+    Route::get('/orders/{order}/payment', [PaymentController::class, 'showOrderPayment']);
+    Route::post('/orders/{order}/payment/simulate-success', [PaymentController::class, 'simulateSuccess']);
 });
 
 // ===== Tahap 16: Customer profile & address =====
@@ -129,6 +133,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/store-owner/stores/{store}/documents', [StoreDocumentController::class, 'index']);
     Route::get('/store-owner/stores/{store}/documents/{doc}/download', [StoreDocumentController::class, 'download']);
     Route::delete('/store-owner/stores/{store}/documents/{doc}', [StoreDocumentController::class, 'destroy']);
+    Route::get('/store/payout-account', [MitraPortalController::class, 'getPayoutAccount']);
+    Route::put('/store/payout-account', [MitraPortalController::class, 'updatePayoutAccount']);
 });
 
 // ===== Tahap 18: Store dashboard =====
@@ -223,6 +229,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/stores/{store}/reviews', [ReviewController::class, 'index']);
     Route::get('/service-categories', [StoreController::class, 'categories']);
     Route::post('/pricing/estimate', [StoreController::class, 'estimatePrice']);
+    Route::match(['get', 'post'], '/geocode/forward', [CustomerController::class, 'forwardGeocode'])->middleware('throttle:60,1');
+    Route::match(['get', 'post'], '/geocode/reverse', [CustomerController::class, 'reverseGeocode'])->middleware('throttle:60,1');
 
     // ===== Public Chatbot FAQ & Guest Prompt =====
     Route::prefix('chatbot')->group(function () {
@@ -243,6 +251,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/addresses/{address}', [CustomerController::class, 'updateAddress']);
         Route::delete('/addresses/{address}', [CustomerController::class, 'destroyAddress']);
         Route::post('/addresses/{address}/set-default', [CustomerController::class, 'setDefaultAddress']);
+        Route::match(['get', 'post'], '/geocode/forward', [CustomerController::class, 'forwardGeocode'])->middleware('throttle:60,1');
         Route::post('/geocode/reverse', [CustomerController::class, 'reverseGeocode'])->middleware('throttle:30,1');
 
         Route::get('/orders', [OrderController::class, 'index']);
@@ -253,6 +262,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
         Route::get('/orders/{order}/rating', [ReviewController::class, 'orderRating']);
         Route::post('/orders/{order}/rating', [ReviewController::class, 'storeRating']);
+        Route::post('/orders/{order}/pay', [PaymentController::class, 'pay']);
+        Route::get('/orders/{order}/payment', [PaymentController::class, 'showOrderPayment']);
+        Route::post('/orders/{order}/payment/simulate-success', [PaymentController::class, 'simulateSuccess']);
 
         Route::get('/upgrades/courier', [CustomerController::class, 'courierUpgradeStatus']);
         Route::post('/upgrades/courier', [CustomerController::class, 'applyCourierUpgrade']);
@@ -267,6 +279,19 @@ Route::prefix('v1')->group(function () {
             Route::post('/sessions/{id}/messages', [ChatbotController::class, 'sendMessage']);
             Route::delete('/sessions/{id}', [ChatbotController::class, 'destroy']);
         });
+
+        // ===== Human Chat Customer <-> Store (FR-CHAT, US-CHAT) =====
+        Route::prefix('conversations')->group(function () {
+            Route::get('/unread-count', [ChatController::class, 'unreadCount']);
+            Route::get('/', [ChatController::class, 'index']);
+            Route::post('/', [ChatController::class, 'startOrGet']);
+            Route::get('/{id}', [ChatController::class, 'show']);
+            Route::post('/{id}/read', [ChatController::class, 'markAsRead']);
+            Route::post('/{id}/messages', [ChatController::class, 'sendMessage']);
+            Route::get('/{id}/messages', [ChatController::class, 'getMessages']);
+            Route::get('/{id}/attachments/{messageId}', [ChatController::class, 'streamAttachment']);
+        });
+        Route::get('/chat/unread-count', [ChatController::class, 'unreadCount']);
     });
 
     // ===== Protected Customer Portal =====
@@ -282,6 +307,10 @@ Route::prefix('v1')->group(function () {
         Route::put('/password', [MitraPortalController::class, 'updatePassword'])->middleware('throttle:10,1');
         Route::get('/profile', [MitraPortalController::class, 'storeProfile']);
         Route::get('/orders', [MitraPortalController::class, 'orders']);
+        Route::get('/payment-methods', [MitraPortalController::class, 'getPaymentMethods']);
+        Route::put('/payment-methods', [MitraPortalController::class, 'updatePaymentMethods']);
+        Route::get('/payout-account', [MitraPortalController::class, 'getPayoutAccount']);
+        Route::put('/payout-account', [MitraPortalController::class, 'updatePayoutAccount']);
     });
 
     Route::middleware(['auth:sanctum', 'ability:role:store_admin', 'role:store_admin'])->group(function () {
@@ -296,6 +325,11 @@ Route::prefix('v1')->group(function () {
             Route::patch('/services/{id}/status', [MitraPortalController::class, 'toggleServiceStatus']);
             Route::post('/services/bulk-status', [MitraPortalController::class, 'bulkServiceStatus']);
             Route::get('/ledger', [MitraPortalController::class, 'ledger']);
+            Route::get('/payment-methods', [MitraPortalController::class, 'getPaymentMethods']);
+            Route::put('/payment-methods', [MitraPortalController::class, 'updatePaymentMethods']);
+        Route::get('/payout-account', [MitraPortalController::class, 'getPayoutAccount']);
+        Route::put('/payout-account', [MitraPortalController::class, 'updatePayoutAccount']);
+            Route::post('/orders/{order}/confirm-cod', [MitraPortalController::class, 'confirmCod']);
         });
 
         Route::prefix('store-admin')->group(function () {

@@ -389,6 +389,7 @@ class XenditService
 
                 // Tahap 15: queued side-effect notification
                 NotificationTrigger::paymentSuccess($order->customer, $order);
+                NotificationTrigger::orderPaidForStore($order);
 
                 // Untuk pembayaran QR, transisikan status order dan catat ke riwayat status
                 if ($isQr && in_array(strtolower($order->status), ['awaiting_payment', 'payment_required'])) {

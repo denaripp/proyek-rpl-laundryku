@@ -25,12 +25,22 @@ class EnsureUserRole
             abort(401, 'Unauthenticated.');
         }
 
-        // Direct real-time check against database users.role column
+        // Direct real-time check against database users.role column or user_roles table
         $dbRole = \Illuminate\Support\Facades\DB::table('users')
             ->where('id', $user->id)
             ->value('role');
 
-        if (! in_array($dbRole, $roles, true)) {
+        $hasRole = in_array($dbRole, $roles, true);
+
+        if (! $hasRole) {
+            $hasRole = \Illuminate\Support\Facades\DB::table('user_roles')
+                ->join('roles', 'user_roles.role_id', '=', 'roles.id')
+                ->where('user_roles.user_id', $user->id)
+                ->whereIn('roles.name', $roles)
+                ->exists();
+        }
+
+        if (! $hasRole) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json([
                     'message' => 'Forbidden. Akun Anda tidak memiliki hak akses role yang sesuai.',

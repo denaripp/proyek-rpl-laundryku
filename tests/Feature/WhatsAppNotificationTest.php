@@ -3,10 +3,16 @@
 namespace Tests\Feature;
 
 use App\Jobs\SendWhatsAppJob;
+use App\Models\Courier;
+use App\Models\Dispute;
 use App\Models\Notification;
+use App\Models\Order;
 use App\Models\Store;
 use App\Models\User;
 use App\Models\WhatsAppLog;
+use App\Notifications\NotificationTrigger;
+use App\Events\OrderStatusChangedEvent;
+use App\Listeners\SendOrderNotification;
 use App\Services\Notification\NotificationService;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -171,5 +177,325 @@ class WhatsAppNotificationTest extends TestCase
         ]);
         $phone3 = WhatsAppService::resolveRecipientPhone($owner, ['store_id' => $store3->id]);
         $this->assertEquals('0811111111', $phone3);
+    }
+
+    /**
+     * Celah 1: Pesanan dibuat -> owner toko (listener SendOrderNotification, HANYA status awal)
+     */
+    public function test_celah_1_new_order_notifies_store_owner_and_customer_without_duplicates(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $owner = User::factory()->create(['phone' => '081211111111', 'role' => 'store_admin']);
+        $customer = User::factory()->create(['phone' => '081222222222', 'role' => 'customer']);
+        $store = Store::factory()->create([
+            'owner_user_id' => $owner->id,
+            'whatsapp' => '081233333333',
+            'phone' => '081244444444',
+        ]);
+
+        $order = Order::factory()->create([
+            'store_id' => $store->id,
+            'customer_id' => $customer->id,
+            'order_number' => 'ORD-CELAH-1',
+            'status' => 'created',
+        ]);
+        $order->setRelation('store', $store);
+        $order->setRelation('customer', $customer);
+
+        // 1. Initial order creation event (oldStatus: created, newStatus: created)
+        $event = new OrderStatusChangedEvent($order, 'created', 'created', $customer);
+        $listener = app()->make(SendOrderNotification::class);
+        $listener->handle($event);
+
+        // Customer gets in-app + WhatsApp
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $customer->id,
+            'type' => 'order_status',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281222222222',
+            'event' => 'order_status',
+            'status' => 'sent',
+        ]);
+
+        // Store owner gets in-app + WhatsApp (via store whatsapp: 6281233333333)
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'new_order_store',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281233333333',
+            'event' => 'new_order_store',
+            'status' => 'sent',
+        ]);
+
+        // Exactly 1 new_order_store notification for owner
+        $this->assertEquals(1, Notification::where('user_id', $owner->id)->where('type', 'new_order_store')->count());
+
+        // 2. Subsequent status transition (created -> processing) should NOT send new_order_store to owner
+        $transitionEvent = new OrderStatusChangedEvent($order, 'created', 'processing', $customer);
+        $listener->handle($transitionEvent);
+
+        $this->assertEquals(1, Notification::where('user_id', $owner->id)->where('type', 'new_order_store')->count());
+    }
+
+    /**
+     * Celah 2: CourierPortalController::transitionTask -> picked_up & out_for_delivery -> customer
+     */
+    public function test_celah_2_courier_task_transition_notifies_customer(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $customer = User::factory()->create(['phone' => '081299990001', 'role' => 'customer']);
+        $order = Order::factory()->create([
+            'customer_id' => $customer->id,
+            'order_number' => 'ORD-CELAH-2',
+            'status' => 'picked_up',
+        ]);
+        $order->setRelation('customer', $customer);
+
+        // Picked up
+        NotificationTrigger::courierTaskTransitioned($order, 'picked_up');
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $customer->id,
+            'type' => 'picked_up',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990001',
+            'event' => 'picked_up',
+            'status' => 'sent',
+        ]);
+
+        // Out for delivery
+        NotificationTrigger::courierTaskTransitioned($order, 'out_for_delivery');
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $customer->id,
+            'type' => 'out_for_delivery',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990001',
+            'event' => 'out_for_delivery',
+            'status' => 'sent',
+        ]);
+    }
+
+    /**
+     * Celah 3: CourierPortalController::confirmCod -> customer (pembayaran COD diterima)
+     */
+    public function test_celah_3_courier_confirm_cod_notifies_customer(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $customer = User::factory()->create(['phone' => '081299990002', 'role' => 'customer']);
+        $order = Order::factory()->create([
+            'customer_id' => $customer->id,
+            'order_number' => 'ORD-CELAH-3',
+            'total_amount' => 50000,
+            'payment_status' => 'paid',
+        ]);
+        $order->setRelation('customer', $customer);
+
+        NotificationTrigger::codPaymentReceived($order);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $customer->id,
+            'type' => 'cod_payment_received',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990002',
+            'event' => 'cod_payment_received',
+            'status' => 'sent',
+        ]);
+    }
+
+    /**
+     * Celah 4: Pembayaran lunas, selesai, dibatalkan -> owner toko
+     */
+    public function test_celah_4_order_paid_completed_cancelled_notifies_store_owner(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $owner = User::factory()->create(['phone' => '081299990004', 'role' => 'store_admin']);
+        $store = Store::factory()->create(['owner_user_id' => $owner->id, 'whatsapp' => '081299990004', 'phone' => '081299990004']);
+        $order = Order::factory()->create([
+            'store_id' => $store->id,
+            'order_number' => 'ORD-CELAH-4',
+        ]);
+        $order->setRelation('store', $store);
+
+        // Paid
+        NotificationTrigger::orderPaidForStore($order);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'order_paid_store',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990004',
+            'event' => 'order_paid_store',
+            'status' => 'sent',
+        ]);
+
+        // Completed
+        NotificationTrigger::orderCompletedForStore($order);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'order_completed_store',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990004',
+            'event' => 'order_completed_store',
+            'status' => 'sent',
+        ]);
+
+        // Cancelled
+        NotificationTrigger::orderCancelledForStore($order, 'Pelanggan membatalkan');
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'order_cancelled_store',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990004',
+            'event' => 'order_cancelled_store',
+            'status' => 'sent',
+        ]);
+    }
+
+    /**
+     * Celah 5: Dispute opened -> owner toko + admin; dispute resolved -> owner toko
+     */
+    public function test_celah_5_dispute_notifications_to_store_and_admins(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $owner = User::factory()->create(['phone' => '081299990005', 'role' => 'store_admin']);
+        $admin = User::factory()->create(['phone' => '081299990006', 'role' => 'super_admin']);
+        $store = Store::factory()->create(['owner_user_id' => $owner->id, 'whatsapp' => '081299990005', 'phone' => '081299990005']);
+
+        $customer = User::factory()->create();
+        $order = Order::factory()->create(['store_id' => $store->id, 'customer_id' => $customer->id, 'order_number' => 'ORD-DISP-1']);
+        $order->setRelation('store', $store);
+        $order->setRelation('customer', $customer);
+
+        $dispute = Dispute::create([
+            'complaint_number' => 'DSP-001',
+            'order_id' => $order->id,
+            'opened_by' => $customer->id,
+            'reason' => 'item_damaged',
+            'description' => 'Dispute description',
+            'status' => 'complaint_submitted',
+        ]);
+        $dispute->setRelation('order', $order);
+
+        // 1. Dispute opened
+        NotificationTrigger::disputeOpenedForStoreAndAdmins($order, $dispute);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'dispute_opened_store',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $admin->id,
+            'type' => 'dispute_opened_admin',
+        ]);
+
+        // 2. Dispute resolved
+        NotificationTrigger::disputeResolvedForStore($order, $dispute, 'refunded');
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'dispute_refunded_store',
+        ]);
+    }
+
+    /**
+     * Celah 6: ready_for_delivery -> kurir yang ditugaskan (jika ada)
+     */
+    public function test_celah_6_ready_for_delivery_notifies_courier_if_assigned(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $courierUser = User::factory()->create(['phone' => '081299990007', 'role' => 'courier']);
+        $store = Store::factory()->create();
+        $order = Order::factory()->create([
+            'store_id' => $store->id,
+            'courier_id' => $courierUser->id,
+            'order_number' => 'ORD-READY-1',
+        ]);
+        $order->setRelation('courier', $courierUser);
+        $order->setRelation('store', $store);
+
+        NotificationTrigger::readyForDeliveryCourier($order);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $courierUser->id,
+            'type' => 'order_ready_courier',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990007',
+            'event' => 'order_ready_courier',
+            'status' => 'sent',
+        ]);
+
+        // When order has no courier, skips silently without throwing
+        $unassignedOrder = Order::factory()->create(['store_id' => $store->id, 'courier_id' => null]);
+        NotificationTrigger::readyForDeliveryCourier($unassignedOrder);
+        $this->assertTrue(true);
+    }
+
+    /**
+     * Celah 7: MitraPortalController recruitCourier & rejectCourier -> user kurir
+     */
+    public function test_celah_7_courier_recruitment_and_rejection_notifies_courier(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+        ]);
+
+        $courierUser = User::factory()->create(['phone' => '081299990008', 'role' => 'courier']);
+        $courier = Courier::factory()->create(['user_id' => $courierUser->id]);
+        $courier->setRelation('user', $courierUser);
+        $store = Store::factory()->create(['name' => 'Toko Laundry Bersih']);
+
+        // Recruited
+        NotificationTrigger::courierRecruited($courier, $store);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $courierUser->id,
+            'type' => 'courier_recruited',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990008',
+            'event' => 'courier_recruited',
+            'status' => 'sent',
+        ]);
+
+        // Rejected
+        NotificationTrigger::courierRejected($courier, $store, 'Kuota kurir penuh');
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $courierUser->id,
+            'type' => 'courier_rejected',
+        ]);
+        $this->assertDatabaseHas('whatsapp_logs', [
+            'recipient_phone' => '6281299990008',
+            'event' => 'courier_rejected',
+            'status' => 'sent',
+        ]);
     }
 }

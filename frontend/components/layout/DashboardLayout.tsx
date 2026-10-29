@@ -716,8 +716,8 @@ export const DashboardLayout = ({
             {/* Profile Dropdown */}
             <Dropdown
               trigger={
-                <div className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all cursor-pointer text-xs shadow-2xs">
-                  <Avatar src={resolvedAvatar} name={resolvedUserName} size="sm" className="w-6 h-6 rounded-lg" />
+                <div className="inline-flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all cursor-pointer text-xs shadow-2xs">
+                  <Avatar src={resolvedAvatar} name={resolvedUserName} size="sm" className="h-8 w-8 shrink-0 rounded-full overflow-hidden" />
                   <span className="font-semibold text-slate-800 max-w-[110px] truncate hidden sm:inline-block">
                     {resolvedUserName}
                   </span>

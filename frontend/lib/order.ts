@@ -74,11 +74,20 @@ export interface OrderDetail {
   actual_weight_kg: number | null;
   estimated_amount: number;
   final_amount: number | null;
+  total_amount?: number;
   delivery_fee: number;
+  platform_fee?: number;
   commission_amount: number;
   pickup_address: AddressSnapshot;
   delivery_address: AddressSnapshot;
   customer_notes?: string;
+  store_notes?: string | null;
+  store_payment_methods?: {
+    cod: boolean;
+    qris: boolean;
+    va: boolean;
+    va_banks: string[];
+  };
   price_approved_at: string | null;
   cancelled_at: string | null;
   completed_at: string | null;
@@ -114,6 +123,13 @@ export interface CreateOrderPayload {
   pickup_address: AddressSnapshot;
   delivery_address?: AddressSnapshot;
   customer_notes?: string;
+  store_notes?: string | null;
+  store_payment_methods?: {
+    cod: boolean;
+    qris: boolean;
+    va: boolean;
+    va_banks: string[];
+  };
   items: {
     service_id: string;
     quantity: number;
@@ -350,11 +366,17 @@ export async function submitPriceApproval(
   id: string,
   payload: { action: 'approve' | 'reject'; reason?: string }
 ): Promise<OrderDetail> {
-  const response = await apiClient<ApiSuccessResponse<OrderDetail>>(`/orders/${id}/price-approval`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  return response.data;
+  if (payload.action === 'approve') {
+    return transitionOrder(id, {
+      to_status: 'PRICE_APPROVED',
+    });
+  } else {
+    const response = await apiClient<ApiSuccessResponse<OrderDetail>>(`/orders/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: payload.reason || 'Pelanggan menolak harga final setelah penimbangan.' }),
+    });
+    return response.data;
+  }
 }
 
 export interface InAppNotificationItem {

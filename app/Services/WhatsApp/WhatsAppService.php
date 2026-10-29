@@ -58,7 +58,8 @@ class WhatsAppService
     public static function resolveRecipientPhone(User $user, array $data = []): ?string
     {
         $role = $user->role ?? null;
-        $isStoreOwner = in_array($role, ['store_admin', 'store_owner'], true) || !empty($data['store_id']);
+        $isStoreOwner = in_array($role, ['store_admin', 'store_owner'], true)
+            || Store::where('owner_user_id', $user->id)->exists();
 
         if ($isStoreOwner) {
             $store = null;

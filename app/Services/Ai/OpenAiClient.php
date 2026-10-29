@@ -19,7 +19,7 @@ class OpenAiClient implements AiClientInterface
         $apiKey = config('ai.api_key', config('ai.openai_api_key'));
 
         if (empty($apiKey)) {
-            if (app()->isLocal() && config('ai.mock_in_local', false)) {
+            if ((app()->isLocal() || app()->runningUnitTests()) && config('ai.mock_in_local', false)) {
                 Log::info('[AI Assistant] API key is not configured; using local simulated response.');
                 return $this->simulateLocalResponse($messages, $tools);
             }
@@ -129,7 +129,30 @@ class OpenAiClient implements AiClientInterface
 
     protected function simulateLocalResponse(array $messages, array $tools): array
     {
-        // Extract the latest user message
+        // 1. Check if the last message is a tool output (Round 2: format answer from tool result)
+        $lastToolMsg = null;
+        foreach (array_reverse($messages) as $m) {
+            if (($m['role'] ?? '') === 'tool') {
+                $lastToolMsg = $m;
+                break;
+            }
+        }
+
+        if ($lastToolMsg !== null) {
+            $toolData = json_decode((string) ($lastToolMsg['content'] ?? '{}'), true);
+            $reply = $this->formatToolResultToAnswer($toolData);
+
+            return [
+                'content' => $reply,
+                'tool_calls' => [],
+                'usage' => [
+                    'prompt_tokens' => 25,
+                    'completion_tokens' => 40,
+                ],
+            ];
+        }
+
+        // 2. Round 1: inspect the user message and determine which tool from $tools to invoke
         $lastUserMsg = '';
         foreach (array_reverse($messages) as $m) {
             if (($m['role'] ?? '') === 'user') {
@@ -138,27 +161,395 @@ class OpenAiClient implements AiClientInterface
             }
         }
 
-        $lower = strtolower($lastUserMsg);
+        $lower = strtolower(trim($lastUserMsg));
+        $toolNames = array_map(fn ($t) => $t['function']['name'] ?? '', $tools);
 
-        if (str_contains($lower, 'halo') || str_contains($lower, 'hai') || str_contains($lower, 'pagi') || str_contains($lower, 'siang') || str_contains($lower, 'sore') || str_contains($lower, 'malam')) {
-            $reply = "Halo! Saya Asisten AI LaundryKu (Mode Simulasi Lokal). Ada yang bisa saya bantu terkait informasi layanan, tarif laundry, atau status pesanan Anda?";
-        } elseif (str_contains($lower, 'harga') || str_contains($lower, 'tarif') || str_contains($lower, 'kiloan') || str_contains($lower, 'biaya')) {
-            $reply = "Tarif standar cuci komplit reguler berkisar mulai dari Rp 8.000/kg. Anda dapat melihat daftar layanan lengkap dan harga khusus pada halaman detail toko mitra terdekat di menu Marketplace.";
-        } elseif (str_contains($lower, 'cari') || str_contains($lower, 'toko') || str_contains($lower, 'laundry terdekat') || str_contains($lower, 'lokasi')) {
-            $reply = "Anda dapat mencari laundry terdekat melalui menu Marketplace di navigasi atas. Sistem kami otomatis mengurutkan toko berdasarkan jarak dan rating tertinggi di sekitar lokasi Anda.";
-        } elseif (str_contains($lower, 'status') || str_contains($lower, 'order') || str_contains($lower, 'pesanan') || str_contains($lower, 'lacak')) {
-            $reply = "Untuk memeriksa status pesanan Anda secara rinci, silakan kunjungi menu Dashboard Pelanggan atau tab Riwayat Pesanan.";
-        } else {
-            $reply = "Halo! Pertanyaan Anda: \"{$lastUserMsg}\". (Catatan: Ini adalah respon simulasi lokal. Masukkan `OPENROUTER_API_KEY` di file `.env` untuk mengaktifkan AI live OpenRouter).";
+        // Extract order number if present (e.g. ORD-...)
+        $orderNumber = null;
+        if (preg_match('/\b(ord-[a-z0-9\-]+)\b/i', $lastUserMsg, $match)) {
+            $orderNumber = strtoupper($match[1]);
         }
 
+        // Bot identity queries: answer directly without tool
+        if (str_contains($lower, 'siapa kamu') || str_contains($lower, 'siapa anda') || str_contains($lower, 'kamu siapa') || str_contains($lower, 'anda siapa') || str_contains($lower, 'siapakah anda') || str_contains($lower, 'siapakah kamu')) {
+            return [
+                'content' => 'Saya LANDY, asisten AI resmi LaundryKu. Saya siap membantu Anda memeriksa informasi pesanan, operasional, layanan, dan data akun Anda.',
+                'tool_calls' => [],
+                'usage' => ['prompt_tokens' => 15, 'completion_tokens' => 25],
+            ];
+        }
+
+        // Match tools from available $tools:
+        $matchedTool = null;
+        $matchedArgs = [];
+
+        // Identity / Profile
+        if (str_contains($lower, 'siapa saya') || str_contains($lower, 'profil') || str_contains($lower, 'nama saya') || str_contains($lower, 'role saya') || str_contains($lower, 'akun saya') || str_contains($lower, 'siapakah saya')) {
+            if (in_array('get_user_profile', $toolNames, true)) {
+                $matchedTool = 'get_user_profile';
+            }
+        }
+
+        // Specific order status / detail
+        if ($orderNumber !== null && $matchedTool === null) {
+            if (in_array('customer_get_order_detail', $toolNames, true)) {
+                $matchedTool = 'customer_get_order_detail';
+                $matchedArgs = ['order_number' => $orderNumber];
+            } elseif (in_array('store_get_order_detail', $toolNames, true)) {
+                $matchedTool = 'store_get_order_detail';
+                $matchedArgs = ['order_number' => $orderNumber];
+            } elseif (in_array('get_customer_order_status', $toolNames, true)) {
+                $matchedTool = 'get_customer_order_status';
+                $matchedArgs = ['order_id' => 1];
+            }
+        }
+
+        // Payments
+        if ($matchedTool === null && (str_contains($lower, 'bayar') || str_contains($lower, 'pembayaran') || str_contains($lower, 'lunas') || str_contains($lower, 'tagihan'))) {
+            if (in_array('customer_get_payment_status', $toolNames, true)) {
+                $matchedTool = 'customer_get_payment_status';
+                if ($orderNumber) $matchedArgs = ['order_number' => $orderNumber];
+            }
+        }
+
+        // Reviews
+        if ($matchedTool === null && (str_contains($lower, 'ulasan') || str_contains($lower, 'rating') || str_contains($lower, 'review'))) {
+            if (in_array('store_get_reviews', $toolNames, true)) {
+                $matchedTool = 'store_get_reviews';
+            } elseif (in_array('customer_get_reviews', $toolNames, true)) {
+                $matchedTool = 'customer_get_reviews';
+            }
+        }
+
+        // Complaints / Disputes
+        if ($matchedTool === null && (str_contains($lower, 'komplain') || str_contains($lower, 'dispute') || str_contains($lower, 'kendala cucian') || str_contains($lower, 'keluhan'))) {
+            if (in_array('platform_get_complaints', $toolNames, true)) {
+                $matchedTool = 'platform_get_complaints';
+            } elseif (in_array('store_get_complaints', $toolNames, true)) {
+                $matchedTool = 'store_get_complaints';
+            } elseif (in_array('customer_get_complaints', $toolNames, true)) {
+                $matchedTool = 'customer_get_complaints';
+            }
+        }
+
+        // Store summary / condition / omzet / performa
+        if ($matchedTool === null && (str_contains($lower, 'ringkasan toko') || str_contains($lower, 'kondisi toko') || str_contains($lower, 'omzet') || str_contains($lower, 'rekap') || str_contains($lower, 'pemasukan') || str_contains($lower, 'performa toko') || str_contains($lower, 'dashboard'))) {
+            if (in_array('store_get_summary', $toolNames, true)) {
+                $matchedTool = 'store_get_summary';
+            }
+        }
+
+        // Store Couriers
+        if ($matchedTool === null && (str_contains($lower, 'kurir') && (str_contains($lower, 'toko') || str_contains($lower, 'daftar') || str_contains($lower, 'siapa')))) {
+            if (in_array('store_get_couriers', $toolNames, true)) {
+                $matchedTool = 'store_get_couriers';
+            }
+        }
+
+        // Services & Prices
+        if ($matchedTool === null && (str_contains($lower, 'layanan') || str_contains($lower, 'tarif') || str_contains($lower, 'harga') || str_contains($lower, 'kiloan'))) {
+            if (in_array('store_get_services', $toolNames, true)) {
+                $matchedTool = 'store_get_services';
+            } elseif (in_array('get_services_and_prices', $toolNames, true)) {
+                $matchedTool = 'get_services_and_prices';
+            }
+        }
+
+        // Courier tasks
+        if ($matchedTool === null && (str_contains($lower, 'tugas') || str_contains($lower, 'jemputan') || str_contains($lower, 'antaran') || str_contains($lower, 'orderan kurir'))) {
+            if (str_contains($lower, 'statistik') || str_contains($lower, 'berapa')) {
+                if (in_array('courier_get_task_stats', $toolNames, true)) {
+                    $matchedTool = 'courier_get_task_stats';
+                }
+            } else {
+                if (in_array('courier_get_tasks', $toolNames, true)) {
+                    $matchedTool = 'courier_get_tasks';
+                }
+            }
+        }
+
+        // Courier profile
+        if ($matchedTool === null && (str_contains($lower, 'kendaraan') || str_contains($lower, 'plat') || str_contains($lower, 'ketersediaan') || str_contains($lower, 'siap tugas'))) {
+            if (in_array('courier_get_profile', $toolNames, true)) {
+                $matchedTool = 'courier_get_profile';
+            }
+        }
+
+        // COD rules
+        if ($matchedTool === null && str_contains($lower, 'cod')) {
+            if (in_array('courier_get_cod_rules', $toolNames, true)) {
+                $matchedTool = 'courier_get_cod_rules';
+            }
+        }
+
+        // Platform overview / stats
+        if ($matchedTool === null && (str_contains($lower, 'platform') || str_contains($lower, 'gmv') || str_contains($lower, 'ekosistem'))) {
+            if (in_array('platform_get_overview', $toolNames, true)) {
+                $matchedTool = 'platform_get_overview';
+            }
+        }
+
+        // Platform users
+        if ($matchedTool === null && (str_contains($lower, 'user') || str_contains($lower, 'pengguna'))) {
+            if (in_array('platform_get_user_stats', $toolNames, true)) {
+                $matchedTool = 'platform_get_user_stats';
+            }
+        }
+
+        // Platform approvals
+        if ($matchedTool === null && (str_contains($lower, 'approval') || str_contains($lower, 'verifikasi') || str_contains($lower, 'persetujuan') || str_contains($lower, 'pending'))) {
+            if (in_array('platform_get_approvals', $toolNames, true)) {
+                $matchedTool = 'platform_get_approvals';
+            }
+        }
+
+        // Latest order or store (e.g. "terakhir pesen di toko apa", "pesanan terakhir", "toko terakhir")
+        if ($matchedTool === null && (str_contains($lower, 'terakhir') || str_contains($lower, 'terbaru') || str_contains($lower, 'paling baru')) && (str_contains($lower, 'pesan') || str_contains($lower, 'pesen') || str_contains($lower, 'toko') || str_contains($lower, 'order') || str_contains($lower, 'laundry') || str_contains($lower, 'cucian'))) {
+            if (in_array('customer_list_orders', $toolNames, true)) {
+                $matchedTool = 'customer_list_orders';
+                $matchedArgs = ['limit' => 1];
+            }
+        }
+
+        // Order list / general orders
+        if ($matchedTool === null && (str_contains($lower, 'pesanan') || str_contains($lower, 'cucian') || str_contains($lower, 'order') || str_contains($lower, 'lacak') || str_contains($lower, 'pesen'))) {
+            if (str_contains($lower, 'berapa') || str_contains($lower, 'statistik') || str_contains($lower, 'jumlah') || str_contains($lower, 'ada berapa')) {
+                if (in_array('customer_get_order_stats', $toolNames, true)) {
+                    $matchedTool = 'customer_get_order_stats';
+                }
+            } else {
+                if (in_array('customer_list_orders', $toolNames, true)) {
+                    $matchedTool = 'customer_list_orders';
+                } elseif (in_array('store_list_orders', $toolNames, true)) {
+                    $matchedTool = 'store_list_orders';
+                }
+            }
+        }
+
+        // If a tool was matched, return a tool call!
+        if ($matchedTool !== null) {
+            return [
+                'content' => null,
+                'tool_calls' => [
+                    [
+                        'id' => 'call_' . uniqid(),
+                        'name' => $matchedTool,
+                        'arguments' => $matchedArgs,
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 20,
+                    'completion_tokens' => 15,
+                ],
+            ];
+        }
+
+        // General questions
+        if (str_contains($lower, 'apa kabar') || str_contains($lower, 'kabar')) {
+            return [
+                'content' => 'Halo! Kabar baik. Ada yang bisa saya bantu terkait layanan laundry atau akun LaundryKu Anda?',
+                'tool_calls' => [],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 20],
+            ];
+        }
+
+        // Fallback natural answer if no specific tool matched
         return [
-            'content' => $reply,
+            'content' => "Halo! Saya LANDY, asisten AI resmi LaundryKu. Saya siap membantu Anda memeriksa informasi pesanan, tarif layanan, informasi toko, dan akun Anda.",
             'tool_calls' => [],
             'usage' => [
                 'prompt_tokens' => 15,
                 'completion_tokens' => 25,
             ],
         ];
+    }
+
+    /**
+     * Convert tool result JSON into a natural, factual Bahasa Indonesia response.
+     */
+    protected function formatToolResultToAnswer(array $data): string
+    {
+        if (isset($data['error'])) {
+            return $data['error'];
+        }
+
+        // 1. User Profile
+        if (isset($data['role']) && isset($data['name'])) {
+            $roleLabel = $data['role'] === 'customer' ? 'Pelanggan' : ($data['role'] === 'store_admin' ? 'Admin Toko' : ($data['role'] === 'courier' ? 'Kurir' : $data['role']));
+            $res = "Halo {$data['name']}! Anda terdaftar sebagai {$roleLabel} di LaundryKu.";
+            if (!empty($data['email'])) $res .= " Email: {$data['email']}.";
+            if (!empty($data['phone'])) $res .= " No. Telepon: {$data['phone']}.";
+            if (isset($data['managed_store']) && is_array($data['managed_store'])) {
+                $res .= " Toko yang Anda kelola: {$data['managed_store']['name']} ({$data['managed_store']['is_active']}, status: {$data['managed_store']['status']}) di {$data['managed_store']['city']}.";
+            }
+            if (isset($data['courier_status']) && is_array($data['courier_status'])) {
+                $res .= " Status kurir: {$data['courier_status']['is_available']} dengan {$data['courier_status']['vehicle_type']} (plat: {$data['courier_status']['plate_number']}) di {$data['courier_status']['store_name']}.";
+            }
+            return $res;
+        }
+
+        // 2. Customer Order Stats
+        if (isset($data['total_orders']) && isset($data['active_orders'])) {
+            $res = "Anda memiliki total {$data['total_orders']} pesanan ({$data['active_orders']} aktif, {$data['completed_orders']} selesai) dengan total pengeluaran {$data['total_spent']}.";
+            if (!empty($data['latest_order_number'])) {
+                $res .= " Pesanan terakhir Anda adalah {$data['latest_order_number']} dengan status {$data['latest_order_status']}.";
+            }
+            return $res;
+        }
+
+        // 3. Customer Order Detail OR Store Order Detail
+        if (isset($data['order_number']) && isset($data['weight_kg']) && isset($data['status_label'])) {
+            $storeName = !empty($data['store_name']) ? " di {$data['store_name']}" : "";
+            $custName = !empty($data['customer_name']) ? " (Pelanggan: {$data['customer_name']})" : "";
+            return "Pesanan {$data['order_number']}{$storeName}{$custName} saat ini berstatus: {$data['status_label']}. Berat cucian: {$data['weight_kg']} kg, total biaya: {$data['total_amount']}, status bayar: {$data['payment_status']}.";
+        }
+
+        // 4. Customer List Orders OR Store List Orders
+        if (isset($data['orders']) && isset($data['total_found'])) {
+            if ($data['total_found'] === 0) {
+                return "Belum ada pesanan yang ditemukan pada akun Anda.";
+            }
+            if (count($data['orders']) === 1) {
+                $ord = $data['orders'][0];
+                return "Pesanan terakhir Anda dilakukan di toko {$ord['store_name']} (No. Pesanan: {$ord['order_number']}) dengan status: {$ord['status_label']} dan total biaya {$ord['total_amount']}.";
+            }
+            $storeNameHeader = isset($data['store_name']) ? " di {$data['store_name']}" : "";
+            $lines = ["Daftar pesanan{$storeNameHeader}:"];
+            foreach ($data['orders'] as $ord) {
+                $cust = !empty($ord['customer_name']) ? " (Pelanggan: {$ord['customer_name']})" : (!empty($ord['store_name']) ? " ({$ord['store_name']})" : "");
+                $lines[] = "- {$ord['order_number']}{$cust}: {$ord['status_label']} — {$ord['total_amount']}";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 5. Payment Status
+        if (isset($data['order_payment_status']) && isset($data['total_bill'])) {
+            $res = "Pesanan {$data['order_number']} memiliki status pembayaran: {$data['order_payment_status']} (Total tagihan: {$data['total_bill']}).";
+            if (!empty($data['payment_record'])) {
+                $res .= " Pembayaran via {$data['payment_record']['method']} sebesar {$data['payment_record']['amount']} ({$data['payment_record']['status']}).";
+            }
+            return $res;
+        }
+
+        // 6. Store Summary
+        if (isset($data['store_name']) && isset($data['metrics'])) {
+            $m = $data['metrics'];
+            return "Ringkasan {$data['store_name']} ({$data['operational_status']}):\n" .
+                "- Pesanan Baru: {$m['new_orders']}\n" .
+                "- Sedang Diproses: {$m['processing_orders']}\n" .
+                "- Siap Diantar: {$m['ready_for_delivery']}\n" .
+                "- Selesai Hari Ini: {$m['completed_today']}\n" .
+                "- Omzet Hari Ini: {$m['today_revenue']}\n" .
+                "- Kurir Aktif: {$m['active_couriers']} dari {$m['total_couriers']} total kurir.";
+        }
+
+        // 7. Store Services
+        if (isset($data['store_name']) && isset($data['services'])) {
+            $lines = ["Daftar layanan {$data['store_name']}:"];
+            foreach ($data['services'] as $s) {
+                $lines[] = "- {$s['service_name']}: {$s['price_per_unit']} per {$s['unit']}";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 8. Store Couriers
+        if (isset($data['store_name']) && isset($data['couriers'])) {
+            if (empty($data['couriers'])) {
+                return "Belum ada kurir yang terhubung ke toko {$data['store_name']}.";
+            }
+            $lines = ["Daftar kurir {$data['store_name']} ({$data['total_couriers']} kurir):"];
+            foreach ($data['couriers'] as $c) {
+                $lines[] = "- {$c['name']} ({$c['vehicle_type']}): {$c['is_available']} | No: {$c['phone']}";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 9. Store Reviews
+        if (isset($data['average_rating']) && isset($data['recent_reviews'])) {
+            $res = "Toko {$data['store_name']} memiliki rating rata-rata {$data['average_rating']} dari {$data['review_count']} ulasan.";
+            if (!empty($data['recent_reviews'])) {
+                $res .= "\nUlasan terbaru:";
+                foreach ($data['recent_reviews'] as $r) {
+                    $res .= "\n- [Bintang {$r['rating']}] {$r['customer_name']}: \"{$r['comment']}\"";
+                }
+            }
+            return $res;
+        }
+
+        // 10. Courier Profile
+        if (isset($data['vehicle_type']) && isset($data['plate_number'])) {
+            return "Profil Kurir: {$data['name']} terafiliasi dengan {$data['store_name']}. Kendaraan: {$data['vehicle_type']} (Plat: {$data['plate_number']}), Status: {$data['is_available']}.";
+        }
+
+        // 11. Courier Tasks
+        if (isset($data['tasks']) && isset($data['total_tasks'])) {
+            if ($data['total_tasks'] === 0) {
+                return "Tidak ada tugas kurir yang aktif saat ini.";
+            }
+            $lines = ["Daftar tugas kurir Anda ({$data['total_tasks']} tugas):"];
+            foreach ($data['tasks'] as $t) {
+                $lines[] = "- Pesanan {$t['order_number']}: {$t['task_type']} ({$t['status']})";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 12. Courier Task Stats
+        if (isset($data['active_tasks']) && isset($data['completed_tasks_today'])) {
+            return "Statistik Kurir: {$data['active_tasks']} tugas aktif, {$data['completed_tasks_today']} tugas selesai hari ini, dan total {$data['total_completed_lifetime']} tugas selesai secara keseluruhan.";
+        }
+
+        // 13. Courier COD Rules
+        if (isset($data['max_cod_amount']) && isset($data['rules'])) {
+            $lines = ["Ketentuan Cash on Delivery (COD) Kurir (Batas Maksimal: {$data['max_cod_amount']}):"];
+            foreach ($data['rules'] as $rule) {
+                $lines[] = "- {$rule}";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 14. Platform Overview
+        if (isset($data['gmv_today']) && isset($data['orders_today']) && isset($data['stores_total'])) {
+            return "Ringkasan Platform LaundryKu:\n" .
+                "- GMV Hari Ini: {$data['gmv_today']}\n" .
+                "- Pesanan Hari Ini: {$data['orders_today']}\n" .
+                "- Pesanan Berjalan: {$data['orders_in_progress']}\n" .
+                "- Toko: {$data['stores_total']} total ({$data['stores_active']} aktif, {$data['stores_pending']} menunggu approval)\n" .
+                "- Pelanggan: {$data['customers_total']} | Kurir: {$data['couriers_total']}.";
+        }
+
+        // 15. Platform User Stats
+        if (isset($data['total_users']) && isset($data['customers'])) {
+            return "Statistik Pengguna Platform LaundryKu:\n" .
+                "- Total Pengguna: {$data['total_users']}\n" .
+                "- Pelanggan: {$data['customers']}\n" .
+                "- Mitra Toko: {$data['store_managers']}\n" .
+                "- Kurir: {$data['couriers']}.";
+        }
+
+        // 16. Platform Approvals
+        if (isset($data['pending_count']) && isset($data['stores_awaiting_approval'])) {
+            if ($data['pending_count'] === 0) {
+                return "Tidak ada toko mitra yang sedang menunggu persetujuan (approval).";
+            }
+            $lines = ["Toko mitra menunggu persetujuan ({$data['pending_count']} toko):"];
+            foreach ($data['stores_awaiting_approval'] as $s) {
+                $lines[] = "- {$s['name']} ({$s['city']}) — Diajukan: {$s['submitted_at']}";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 17. Complaints
+        if (isset($data['total_complaints']) && isset($data['complaints'])) {
+            if ($data['total_complaints'] === 0) {
+                return "Tidak ada komplain atau dispute yang tercatat.";
+            }
+            $lines = ["Daftar komplain ({$data['total_complaints']}):"];
+            foreach ($data['complaints'] as $c) {
+                $lines[] = "- Pesanan {$c['order_number']}: \"{$c['reason']}\" (Status: {$c['status']})";
+            }
+            return implode("\n", $lines);
+        }
+
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }

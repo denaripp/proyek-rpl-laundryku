@@ -2,6 +2,9 @@ import apiClient, { ApiSuccessResponse } from './api';
 import { AddressSnapshot, OrderStatus, PaymentStatus } from './order';
 
 export interface CourierProfileSummary {
+  name?: string;
+  email?: string;
+  phone?: string;
   is_assigned: boolean;
   courier_profile_id?: string;
   vehicle_type?: string;
@@ -54,6 +57,8 @@ export interface CourierTaskItem {
   created_at: string;
   updated_at: string;
 }
+
+export type CourierTask = CourierTaskItem;
 
 export interface AssignedCourierItem {
   assignment_id: string;
