@@ -11,6 +11,7 @@ use App\Models\CourierTask;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\Store;
+use App\Models\User;
 use App\Notifications\NotificationTrigger;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -522,6 +523,119 @@ class CourierPortalController extends Controller
     }
 
     /**
+     * Check if authenticated courier is authorized to operate on this order.
+     */
+    protected function isCourierAuthorizedForOrder(Order $order, Courier $courier): bool
+    {
+        return ((int) $order->courier_id === (int) $courier->user_id)
+            || ((int) $order->courier_id === (int) $courier->id)
+            || CourierTask::where('order_id', $order->id)
+                ->where('courier_id', $courier->id)
+                ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value])
+                ->exists();
+    }
+
+    /**
+     * Resolve the target CourierTask record for the given order and transition status.
+     */
+    protected function resolveTransitionTask(Order $order, Courier $courier, string $toStatus): ?CourierTask
+    {
+        $isDeliveryTransition = in_array(
+            $toStatus,
+            [OrderStatus::OUT_FOR_DELIVERY->value, OrderStatus::DELIVERED->value, OrderStatus::COMPLETED->value],
+            true
+        );
+        $expectedTaskType = $isDeliveryTransition ? 'delivery' : 'pickup';
+
+        // 1. Active task matching expected type
+        $task = CourierTask::where('order_id', $order->id)
+            ->where('courier_id', $courier->id)
+            ->where('task_type', $expectedTaskType)
+            ->whereNotIn('status', [
+                CourierTaskStatus::DELIVERED->value,
+                CourierTaskStatus::FAILED->value,
+                CourierTaskStatus::CANCELLED->value,
+            ])
+            ->latest()
+            ->first();
+
+        // 2. Fallback to latest task of expected type
+        if (! $task) {
+            $task = CourierTask::where('order_id', $order->id)
+                ->where('courier_id', $courier->id)
+                ->where('task_type', $expectedTaskType)
+                ->latest()
+                ->first();
+        }
+
+        // 3. Fallback to any latest task for this order and courier
+        if (! $task) {
+            $task = CourierTask::where('order_id', $order->id)
+                ->where('courier_id', $courier->id)
+                ->latest()
+                ->first();
+        }
+
+        return $task;
+    }
+
+    /**
+     * Map target order status transition to corresponding courier task status.
+     */
+    protected function mapTaskStatus(string $toStatus, ?CourierTask $task): ?string
+    {
+        $taskStatusMap = [
+            OrderStatus::COURIER_TO_CUSTOMER->value => CourierTaskStatus::ACCEPTED->value,
+            OrderStatus::PICKED_UP->value => CourierTaskStatus::PICKED_UP->value,
+            OrderStatus::IN_TRANSIT_TO_STORE->value => CourierTaskStatus::PICKED_UP->value,
+            'at_store' => CourierTaskStatus::DELIVERED->value,
+            OrderStatus::OUT_FOR_DELIVERY->value => CourierTaskStatus::ACCEPTED->value,
+            OrderStatus::COMPLETED->value => CourierTaskStatus::DELIVERED->value,
+            OrderStatus::DELIVERED->value => CourierTaskStatus::DELIVERED->value,
+        ];
+
+        return $taskStatusMap[$toStatus] ?? $task?->status;
+    }
+
+    /**
+     * Update or close courier task upon status transition.
+     */
+    protected function updateCourierTaskOnTransition(Order $order, ?CourierTask $task, string $toStatus): void
+    {
+        if (! $task) {
+            return;
+        }
+
+        $task->status = $this->mapTaskStatus($toStatus, $task) ?? $task->status;
+
+        if (in_array($toStatus, ['at_store', OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value], true)) {
+            $taskType = $task->task_type ?? ($toStatus === 'at_store' ? 'pickup' : 'delivery');
+            CourierTask::closeActiveFor($order, $taskType);
+        } else {
+            $task->save();
+        }
+    }
+
+    /**
+     * Log audit and trigger notification for courier task transition.
+     */
+    protected function recordTransitionAuditAndNotification(Request $request, Order $order, User $user, string $toStatus): void
+    {
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'COURIER_TASK_TRANSITION',
+            'resource_type' => 'order',
+            'resource_id' => $order->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'after_value' => json_encode(['to_status' => $toStatus, 'note' => $request->input('note')]),
+        ]);
+
+        NotificationTrigger::courierTaskTransitioned($order, $toStatus);
+    }
+
+    /**
      * POST /api/v1/courier/tasks/{orderId}/transition
      */
     public function transitionTask(Request $request, $orderId): JsonResponse
@@ -544,14 +658,7 @@ class CourierPortalController extends Controller
             ], 404);
         }
 
-        $isAuthorized = ((int) $order->courier_id === (int) $courier->user_id)
-            || ((int) $order->courier_id === (int) $courier->id)
-            || CourierTask::where('order_id', $order->id)
-                ->where('courier_id', $courier->id)
-                ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value])
-                ->exists();
-
-        if (! $isAuthorized) {
+        if (! $this->isCourierAuthorizedForOrder($order, $courier)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki hak akses untuk mengubah tugas pesanan ini.',
@@ -588,34 +695,7 @@ class CourierPortalController extends Controller
             ], 422);
         }
 
-        // Determine whether this transition belongs to delivery or pickup
-        $isDeliveryTransition = in_array($toStatus, [OrderStatus::OUT_FOR_DELIVERY->value, OrderStatus::DELIVERED->value, OrderStatus::COMPLETED->value], true);
-        $expectedTaskType = $isDeliveryTransition ? 'delivery' : 'pickup';
-
-        // Find the active task for this courier and task type
-        $task = CourierTask::where('order_id', $order->id)
-            ->where('courier_id', $courier->id)
-            ->where('task_type', $expectedTaskType)
-            ->whereNotIn('status', [CourierTaskStatus::DELIVERED->value, CourierTaskStatus::FAILED->value, CourierTaskStatus::CANCELLED->value])
-            ->latest()
-            ->first();
-
-        // Fallback to latest task of expected type for this courier
-        if (! $task) {
-            $task = CourierTask::where('order_id', $order->id)
-                ->where('courier_id', $courier->id)
-                ->where('task_type', $expectedTaskType)
-                ->latest()
-                ->first();
-        }
-
-        // Generic fallback to any latest task for this order and courier
-        if (! $task) {
-            $task = CourierTask::where('order_id', $order->id)
-                ->where('courier_id', $courier->id)
-                ->latest()
-                ->first();
-        }
+        $task = $this->resolveTransitionTask($order, $courier, $toStatus);
 
         $effectiveOrderStatus = ($toStatus === OrderStatus::DELIVERED->value) ? OrderStatus::COMPLETED->value : $toStatus;
         $order->status = $effectiveOrderStatus;
@@ -636,37 +716,8 @@ class CourierPortalController extends Controller
             ]
         );
 
-        if ($task) {
-            $taskStatusMap = [
-                OrderStatus::COURIER_TO_CUSTOMER->value => CourierTaskStatus::ACCEPTED->value,
-                OrderStatus::PICKED_UP->value => CourierTaskStatus::PICKED_UP->value,
-                OrderStatus::IN_TRANSIT_TO_STORE->value => CourierTaskStatus::PICKED_UP->value,
-                'at_store' => CourierTaskStatus::DELIVERED->value,
-                OrderStatus::OUT_FOR_DELIVERY->value => CourierTaskStatus::ACCEPTED->value,
-                OrderStatus::COMPLETED->value => CourierTaskStatus::DELIVERED->value,
-                OrderStatus::DELIVERED->value => CourierTaskStatus::DELIVERED->value,
-            ];
-            $task->status = $taskStatusMap[$toStatus] ?? $task->status;
-            if (in_array($toStatus, ['at_store', OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value], true)) {
-                $taskType = $task->task_type ?? ($toStatus === 'at_store' ? 'pickup' : 'delivery');
-                CourierTask::closeActiveFor($order, $taskType);
-            } else {
-                $task->save();
-            }
-        }
-
-        AuditLog::create([
-            'actor_id' => $user->id,
-            'actor_role' => $user->role,
-            'action' => 'COURIER_TASK_TRANSITION',
-            'resource_type' => 'order',
-            'resource_id' => $order->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'after_value' => json_encode(['to_status' => $toStatus, 'note' => $request->input('note')]),
-        ]);
-
-        NotificationTrigger::courierTaskTransitioned($order, $toStatus);
+        $this->updateCourierTaskOnTransition($order, $task, $toStatus);
+        $this->recordTransitionAuditAndNotification($request, $order, $user, $toStatus);
 
         return response()->json([
             'success' => true,
