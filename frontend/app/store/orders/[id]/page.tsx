@@ -16,6 +16,7 @@ import {
 import {
   getOrder,
   transitionOrder,
+  assignCourier,
   OrderDetail,
   ORDER_STATUS_META,
   OrderStatus,
@@ -130,6 +131,56 @@ export default function StoreAdminOrderDetailPage({
         'Gagal melakukan transisi status pesanan.';
       setActionErrorMsg(errorMsg);
       return null;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Assign Pickup Courier Handler
+  const handleAssignPickupCourier = async () => {
+    if (!order) return;
+    setActionLoading(true);
+    setActionErrorMsg(null);
+    setActionSuccessMsg(null);
+    try {
+      await assignCourier(order.id, { task_type: 'pickup' });
+      await loadOrderDetail();
+      setActionSuccessMsg('Kurir berhasil ditugaskan untuk menjemput cucian.');
+    } catch (err: unknown) {
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal menugaskan kurir penjemputan.';
+      setActionErrorMsg(errorMsg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Assign Delivery Courier Handler
+  const handleAssignDeliveryCourier = async () => {
+    if (!order) return;
+    setActionLoading(true);
+    setActionErrorMsg(null);
+    setActionSuccessMsg(null);
+    try {
+      await assignCourier(order.id, { task_type: 'delivery' });
+      await loadOrderDetail();
+      setActionSuccessMsg('Kurir berhasil ditugaskan untuk mengantar cucian.');
+    } catch (err: unknown) {
+      const anyErr = err as any;
+      const errorMsg =
+        anyErr?.responseData?.message ||
+        anyErr?.responseData?.error?.message ||
+        anyErr?.response?.data?.message ||
+        anyErr?.response?.data?.error?.message ||
+        anyErr?.message ||
+        'Gagal menugaskan kurir pengantaran.';
+      setActionErrorMsg(errorMsg);
     } finally {
       setActionLoading(false);
     }
@@ -292,7 +343,7 @@ export default function StoreAdminOrderDetailPage({
                     </p>
                     <div className="pt-1">
                       <Button
-                        onClick={() => executeTransition('PICKUP_ASSIGNED', {}, 'Kurir ditugaskan untuk menjemput cucian.')}
+                        onClick={handleAssignPickupCourier}
                         disabled={actionLoading}
                         className="bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[40px] shadow-2xs"
                       >
@@ -519,7 +570,7 @@ export default function StoreAdminOrderDetailPage({
                     </p>
                     <div className="pt-1">
                       <Button
-                        onClick={() => executeTransition('DELIVERY_ASSIGNED', {}, 'Kurir pengantaran ditugaskan.')}
+                        onClick={handleAssignDeliveryCourier}
                         disabled={actionLoading}
                         className="bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2 px-5 rounded-xl text-xs min-h-[40px] shadow-2xs"
                       >
