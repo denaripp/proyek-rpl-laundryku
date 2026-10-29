@@ -39,3 +39,15 @@ export function getE2EStoreId(): string {
   const lines = output.trim().split('\n');
   return lines[lines.length - 1].trim();
 }
+
+export function getOrderDbStatus(orderId: string): string {
+  const output = runArtisan(`tinker --execute="echo (string) App\\Models\\Order::find(${orderId})->getRawOriginal('status');"`);
+  const lines = output.trim().split('\n');
+  return lines[lines.length - 1].trim();
+}
+
+export function getLatestCourierTaskCourierId(orderId: string): number {
+  const output = runArtisan(`tinker --execute="echo App\\Models\\CourierTask::where('order_id', ${orderId})->latest('id')->value('courier_id');"`);
+  const lines = output.trim().split('\n');
+  return parseInt(lines[lines.length - 1].trim(), 10);
+}

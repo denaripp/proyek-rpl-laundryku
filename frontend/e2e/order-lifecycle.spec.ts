@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { seedE2E, processQueues, getWhatsAppLogCount, getE2EStoreId } from './helpers';
+import { seedE2E, processQueues, getWhatsAppLogCount, getE2EStoreId, getOrderDbStatus, getLatestCourierTaskCourierId } from './helpers';
 
 test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
   let storeId: string;
@@ -165,10 +165,10 @@ test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
     await expect(page.locator('text=berhasil diperbarui')).toBeVisible({ timeout: 10000 });
     processQueues();
 
-    // Reload & Assert: Badge "Tugas aktif saya" = 0 setelah tiba di toko
+    // Reload & Assert: Badge "Tugas aktif" kurir = 0 setelah tiba di toko
     await page.reload();
     await page.waitForLoadState('networkidle');
-    const activeTab = page.locator('button:has-text("Tugas aktif saya")');
+    const activeTab = page.locator('button:has-text("Tugas aktif")');
     await expect(activeTab).toContainText('0');
 
     await context.close();
@@ -287,6 +287,11 @@ test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
     await expect(page.locator('text=Gagal menugaskan kurir')).not.toBeVisible();
     processQueues();
 
+    // Assert nama kurir tampil sebagai kurir pengantar DAN status order di DB = courier_assigned_for_delivery
+    await expect(page.locator('text=Kurir E2E Cirebon').first()).toBeVisible({ timeout: 10000 });
+    const dbStatus = getOrderDbStatus(order1Id);
+    expect(dbStatus).toBe('courier_assigned_for_delivery');
+
     await context.close();
   });
 
@@ -373,6 +378,12 @@ test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
     await expect(mitraPage.locator('text=Gagal menugaskan kurir')).not.toBeVisible();
     await expect(mitraPage.locator('text=Kurir berhasil ditugaskan').or(mitraPage.locator('text=Kurir Ditugaskan Jemput')).or(mitraPage.locator('text=PICKUP_ASSIGNED')).first()).toBeVisible({ timeout: 10000 });
     processQueues();
+
+    // Assert: assign order kedua sukses DAN task baru courier_id = kurir yang sama
+    const order1CourierId = getLatestCourierTaskCourierId(order1Id);
+    const order2CourierId = getLatestCourierTaskCourierId(order2Id);
+    expect(order2CourierId).toBeGreaterThan(0);
+    expect(order2CourierId).toBe(order1CourierId);
 
     await mitraContext.close();
   });
