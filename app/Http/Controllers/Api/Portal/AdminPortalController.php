@@ -136,6 +136,7 @@ class AdminPortalController extends Controller
                      ->whereNull('stores.deleted_at');
             })
             ->whereNull('orders.deleted_at')
+            ->orderByDesc('orders.id')
             ->orderByDesc('orders.created_at')
             ->limit(10)
             ->select([
@@ -165,6 +166,7 @@ class AdminPortalController extends Controller
         // 10 Recent Audit Logs (optimized via single join)
         $recentLogs = DB::table('audit_logs')
             ->leftJoin('users', 'audit_logs.actor_id', '=', 'users.id')
+            ->orderByDesc('audit_logs.id')
             ->orderByDesc('audit_logs.created_at')
             ->limit(10)
             ->select([

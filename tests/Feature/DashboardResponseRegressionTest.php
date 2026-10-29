@@ -65,6 +65,13 @@ class DashboardResponseRegressionTest extends TestCase
             'status' => 'paid',
         ]);
 
+        $auditLog = AuditLog::create([
+            'actor_id' => $admin->id,
+            'action' => 'ADMIN_TEST_ACTION',
+            'resource_type' => 'order',
+            'resource_id' => $order1->id,
+        ]);
+
         Sanctum::actingAs($admin, ['role:super_admin']);
 
         $res = $this->getJson('/api/v1/admin/dashboard/metrics');
@@ -76,6 +83,7 @@ class DashboardResponseRegressionTest extends TestCase
         $this->assertArrayHasKey('orders_by_status', $json['data']);
         $this->assertArrayHasKey('users_by_role', $json['data']);
         $this->assertArrayHasKey('recent_orders', $json['data']);
+        $this->assertArrayHasKey('recent_logs', $json['data']);
 
         // Check KPI metrics
         $metrics = $json['data']['metrics'];
@@ -92,6 +100,27 @@ class DashboardResponseRegressionTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $usersByRole['customer']);
         $this->assertGreaterThanOrEqual(1, $usersByRole['store_admin']);
         $this->assertGreaterThanOrEqual(1, $usersByRole['courier']);
+
+        // Check recent_orders values (ensure IDs are not overwritten by users.id or stores.id)
+        $recentOrders = $json['data']['recent_orders'];
+        $this->assertNotEmpty($recentOrders);
+        $latestRecentOrder = $recentOrders[0];
+        $this->assertEquals((string) $order2->id, $latestRecentOrder['id']);
+        $this->assertEquals($order2->order_number, $latestRecentOrder['order_number']);
+        $this->assertEquals($customer->name, $latestRecentOrder['customer_name']);
+        $this->assertEquals($store->name, $latestRecentOrder['store_name']);
+        $this->assertEquals('pending_pickup', $latestRecentOrder['status']);
+        $this->assertEquals(25000.0, $latestRecentOrder['nominal']);
+
+        // Check recent_logs values (ensure IDs are not overwritten by users.id)
+        $recentLogs = $json['data']['recent_logs'];
+        $this->assertNotEmpty($recentLogs);
+        $latestLog = $recentLogs[0];
+        $this->assertEquals((string) $auditLog->id, $latestLog['id']);
+        $this->assertEquals('ADMIN_TEST_ACTION', $latestLog['action']);
+        $this->assertEquals('order', $latestLog['entity_type']);
+        $this->assertEquals((string) $order1->id, $latestLog['entity_id']);
+        $this->assertEquals($admin->name, $latestLog['actor_name']);
     }
 
     public function test_admin_overview_response_structure_and_values()

@@ -362,13 +362,25 @@
 - **Rencana Refactoring (Tahap 3)**: Logika penutupan task kurir ini akan diekstrak dan disatukan ke dalam service tersendiri (`CourierAssignmentService` / `CourierTaskService`) atau lewat domain event (`OrderStatusChanged`) agar mematuhi prinsip Single Source of Truth (DRY) tanpa duplikasi query update task.
 
 ## [2026-10-29] Aktivasi OPcache di Laragon (Tahap 2 Poin 1)
-- **Konfigurasi `php.ini`**:
-  - `zend_extension=opcache`
-  - `opcache.enable=1`
-  - `opcache.memory_consumption=128`
-  - `opcache.max_accelerated_files=20000`
-  - `opcache.validate_timestamps=1`
-  - `opcache.revalidate_freq=0` (wajib untuk dev lingkungan lokal agar setiap perubahan kode langsung terbaca).
+- **File Konfigurasi**: `C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.ini` (php.ini aktif yang diload oleh Apache Laragon).
+- **Langkah Aktivasi**:
+  1. Buka file `C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.ini`.
+  2. Pastikan ekstensi opcache dimuat:
+     `zend_extension=opcache`
+  3. Konfigurasi setting OPcache berikut di bagian `[opcache]`:
+     ```ini
+     opcache.enable=1
+     opcache.enable_cli=1
+     opcache.memory_consumption=128
+     opcache.interned_strings_buffer=8
+     opcache.max_accelerated_files=20000
+     opcache.validate_timestamps=1
+     opcache.revalidate_freq=0
+     opcache.save_comments=1
+     ```
+     *(Catatan: `opcache.validate_timestamps=1` dan `opcache.revalidate_freq=0` wajib untuk development lokal agar perubahan kode PHP langsung terbaca seketika tanpa perlu restart Apache setiap kali edit file).*
+  4. Restart Apache di Laragon:
+     Klik tombol **Stop** lalu **Start All** pada Laragon, atau jalankan restart service Apache.
 - **Hasil Benchmark TTFB (`/api/v1/chatbot/faq`)**:
   - Sebelum OPcache: 173.5 ms
   - Setelah OPcache: 37.3 ms (peningkatan kecepatan ~78.5%).
