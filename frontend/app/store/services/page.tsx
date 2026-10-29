@@ -31,7 +31,7 @@ import {
 } from '@/lib/store';
 import { getStoreStatus, StoreStatusData } from '@/lib/profile';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser, getActiveStoreId } from '@/lib/auth';
+import { getStoredUser, AuthUser, getActiveStoreId, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, cn } from '@/lib/format';
 import {
   Plus,
@@ -456,7 +456,7 @@ export default function StoreServicesPage() {
       userRole="store_admin"
       userName={currentUser?.name || 'Admin Toko'}
       userEmail={currentUser?.email || currentUser?.phone || 'admin@toko.id'}
-      onLogout={logout}
+      onLogout={() => logoutAndRedirectHome('mitra')}
     >
       <div className="space-y-6">
         {/* Feedback Alert Toast */}

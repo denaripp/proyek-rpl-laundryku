@@ -17,7 +17,7 @@ import {
   StoreLedgerEntryItem,
 } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
 import {
   TrendingUp,
@@ -70,8 +70,7 @@ export default function StoreLedgerPage() {
   }, [selectedType, selectedDirection, page]);
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await logoutAndRedirectHome('mitra');
   };
 
   const getEntryBadge = (type: string) => {

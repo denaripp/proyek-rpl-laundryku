@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button, Skeleton } from '@/components/ui';
-import { getStoredUser, AuthUser, getActiveStoreId } from '@/lib/auth';
+import { getStoredUser, AuthUser, getActiveStoreId, logoutAndRedirectHome } from '@/lib/auth';
 import { getStoreMetrics, StoreMetricsData } from '@/lib/store';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { formatRupiah, formatTanggalWaktu } from '@/lib/format';
@@ -81,10 +81,7 @@ export default function StoreDashboardOverviewPage() {
       userRole="store_admin"
       userName={currentUser?.name || 'Admin Toko'}
       userEmail={currentUser?.email || currentUser?.phone || 'admin@toko.id'}
-      onLogout={async () => {
-        await fetch('/api/auth/mitra/logout', { method: 'POST' }).catch(() => null);
-        window.location.href = '/mitra/login';
-      }}
+      onLogout={() => logoutAndRedirectHome('mitra')}
     >
       <div className="space-y-6">
         {/* Compact Workspace Header */}

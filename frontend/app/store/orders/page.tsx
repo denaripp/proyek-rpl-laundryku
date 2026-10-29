@@ -14,7 +14,7 @@ import {
 } from '@/components/ui';
 import { getOrders, OrderDetail, ORDER_STATUS_META } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
 import {
   Calendar,
@@ -54,8 +54,7 @@ export default function StoreAdminOrdersPage() {
   }, []);
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await logoutAndRedirectHome('mitra');
   };
 
   // Filter orders by active tab

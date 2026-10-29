@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { hasRole, getSafeRedirectPath } from '@/lib/auth';
+import { hasRole, getSafeRedirectPath, logoutAndRedirectHome } from '@/lib/auth';
 import { adminApi, ADMIN_LOGIN_PATH } from '@/lib/admin';
 import {
   LayoutDashboard,
@@ -236,8 +236,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   const handleLogout = async () => {
-    await adminApi.logout();
-    router.push(ADMIN_LOGIN_PATH);
+    await logoutAndRedirectHome('admin');
   };
 
   return (

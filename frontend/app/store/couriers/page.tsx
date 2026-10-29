@@ -22,7 +22,7 @@ import {
   AvailableCandidateItem,
 } from '@/lib/courier';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
   Truck,
@@ -77,8 +77,7 @@ export default function StoreAdminCouriersPage() {
   }, []);
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await logoutAndRedirectHome('mitra');
   };
 
   // Recruit candidate (Enforces single-store constraint)

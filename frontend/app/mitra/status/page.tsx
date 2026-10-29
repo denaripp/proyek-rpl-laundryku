@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { logoutAndRedirectHome } from '@/lib/auth';
 import {
   Clock,
   Store,
@@ -50,15 +51,7 @@ export default function MitraStatusPage() {
   }, []);
 
   const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/mitra/logout', { method: 'POST' });
-    } catch {
-      // Ignore
-    }
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('laundryku_mitra_user');
-    }
-    router.push('/mitra/login');
+    await logoutAndRedirectHome('mitra');
   };
 
   const store = user?.stores?.[0];

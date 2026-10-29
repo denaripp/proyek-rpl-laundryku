@@ -13,7 +13,7 @@ import {
 } from '@/components/ui';
 import { getStoreAdminRatings, RatingItem } from '@/lib/rating';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
   Star,
@@ -68,7 +68,7 @@ export default function StoreAdminRatingsPage() {
       userRole="store_admin"
       userName={currentUser?.name || 'Admin Toko'}
       userEmail={currentUser?.email || currentUser?.phone || 'admin@toko.id'}
-      onLogout={logout}
+      onLogout={() => logoutAndRedirectHome('mitra')}
     >
       <div className="space-y-6">
         {/* Header */}

@@ -19,6 +19,7 @@ import {
   sendOtp,
   login,
   logout,
+  logoutAndRedirectHome,
   requestPasswordSetup,
   setupPassword,
   getStoredUser,
@@ -388,9 +389,7 @@ function AuthContent() {
   }
 
   async function handleLogout() {
-    await logoutUser();
-    setCurrentUser(null);
-    success('Berhasil Keluar', 'Sesi Anda telah diakhiri.');
+    await logoutAndRedirectHome('customer');
   }
 
   // Render Logged In User State

@@ -21,7 +21,7 @@ import {
 } from '@/lib/courier';
 import { ORDER_STATUS_META, OrderStatus, confirmCourierCod } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
 import { usePolling } from '@/hooks/usePolling';
 import {
@@ -96,9 +96,7 @@ export default function CourierTasksPage() {
   });
 
   const handleLogout = async () => {
-    await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
-    if (typeof window !== 'undefined') localStorage.removeItem('laundryku_courier_user');
-    router.push('/courier/login');
+    await logoutAndRedirectHome('courier');
   };
 
   // Claim Task Handler

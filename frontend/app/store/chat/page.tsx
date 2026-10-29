@@ -19,7 +19,7 @@ import {
   ConversationItem,
   ChatMessageItem,
 } from '@/lib/chat';
-import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatDate, cn } from '@/lib/format';
 import {
   MessageSquare,
@@ -140,8 +140,7 @@ export default function StoreChatPage() {
   });
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await logoutAndRedirectHome('mitra');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

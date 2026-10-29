@@ -42,6 +42,7 @@ import {
   setActiveStoreId,
   OwnedStoreItem,
   logout,
+  logoutAndRedirectHome,
   fetchPortalSession,
   hasRole,
 } from '@/lib/auth';
@@ -319,23 +320,16 @@ export const DashboardLayout = ({
       return;
     }
 
-    if (isStorePortal) {
-      await fetch('/api/auth/mitra/logout', { method: 'POST' }).catch(() => null);
-      if (typeof window !== 'undefined') localStorage.removeItem('laundryku_mitra_user');
-      router.push('/mitra/login');
-    } else if (isCourierPortal) {
-      await fetch('/api/auth/courier/logout', { method: 'POST' }).catch(() => null);
-      if (typeof window !== 'undefined') localStorage.removeItem('laundryku_courier_user');
-      router.push('/courier/login');
-    } else if (userRole === 'super_admin') {
-      await fetch('/api/auth/admin/logout', { method: 'POST' }).catch(() => null);
-      if (typeof window !== 'undefined') localStorage.removeItem('laundryku_admin_user');
-      router.push('/admin/login');
-    } else {
-      await logout();
-      router.push('/auth');
-    }
-  }, [isStorePortal, isCourierPortal, onLogout, router, userRole]);
+    const portal = isStorePortal
+      ? 'mitra'
+      : isCourierPortal
+      ? 'courier'
+      : userRole === 'super_admin'
+      ? 'admin'
+      : 'customer';
+
+    await logoutAndRedirectHome(portal);
+  }, [isStorePortal, isCourierPortal, onLogout, userRole]);
 
   const roleNavItems: Record<UserRole, { label: string; href: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[]> = {
     customer: [

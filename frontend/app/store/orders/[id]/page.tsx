@@ -22,7 +22,7 @@ import {
   OrderStatus,
 } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { getStoredUser, logout, AuthUser, LOGIN_PATH } from '@/lib/auth';
+import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate } from '@/lib/format';
 import {
   ArrowLeft,
@@ -98,8 +98,7 @@ export default function StoreAdminOrderDetailPage({
   }, [orderId]);
 
   const handleLogout = async () => {
-    await logout();
-    router.push(LOGIN_PATH);
+    await logoutAndRedirectHome('mitra');
   };
 
   // Generic Transition Handler

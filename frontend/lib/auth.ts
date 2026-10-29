@@ -441,6 +441,49 @@ export async function logout(): Promise<void> {
   clearAuthSession();
 }
 
+export async function logoutAndRedirectHome(
+  portal?: 'customer' | 'mitra' | 'courier' | 'admin'
+): Promise<void> {
+  try {
+    const targetPortal =
+      portal ||
+      (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')
+        ? 'admin'
+        : typeof window !== 'undefined' && window.location.pathname.startsWith('/courier')
+        ? 'courier'
+        : typeof window !== 'undefined' && (window.location.pathname.startsWith('/store') || window.location.pathname.startsWith('/mitra'))
+        ? 'mitra'
+        : 'customer');
+
+    if (targetPortal === 'admin') {
+      await fetch('/api/auth/admin/logout', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      }).catch(() => null);
+    } else if (targetPortal === 'mitra') {
+      await fetch('/api/auth/mitra/logout', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      }).catch(() => null);
+    } else if (targetPortal === 'courier') {
+      await fetch('/api/auth/courier/logout', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      }).catch(() => null);
+    } else {
+      await logout();
+    }
+  } catch {
+    // Ignore network errors on logout
+  } finally {
+    clearAuthSession();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('laundryku_auth_change'));
+      window.location.replace('/');
+    }
+  }
+}
+
 export async function fetchPortalSession(
   portal: 'customer' | 'mitra' | 'courier' | 'admin' = 'customer'
 ): Promise<AuthUser | null> {
