@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { DynamicStoreMap } from '@/components/map/DynamicStoreMap';
@@ -31,6 +31,7 @@ import {
 
 const DEFAULT_LAT = -6.8900;
 const DEFAULT_LNG = 107.6150;
+const FALLBACK_LOCATION_LABEL = 'Lokasi belum diatur';
 
 function formatAddressLocationLabel(addr: AddressItem): string {
   if (addr.label && addr.city && !addr.label.toLowerCase().includes(addr.city.toLowerCase())) {
@@ -45,8 +46,12 @@ export default function StoreSearchPage() {
     lat: DEFAULT_LAT,
     lng: DEFAULT_LNG,
   });
-  const [locationLabel, setLocationLabel] = useState<string>('Bandung (Titik Default)');
+  const [locationLabel, setLocationLabel] = useState<string>(FALLBACK_LOCATION_LABEL);
+  const [locationResolved, setLocationResolved] = useState<boolean>(false);
   const [isLocating, setIsLocating] = useState<boolean>(false);
+
+  // Tracks if the user intentionally overrode location manually (drop-down, map drag, or GPS click)
+  const isManualOverrideRef = useRef<boolean>(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -65,41 +70,65 @@ export default function StoreSearchPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Apply active/default address location
-  const applyAddressLocation = useCallback((addrList: AddressItem[]) => {
-    setSavedAddresses(addrList);
-    const activeAddr = addrList.find((a) => a.is_default) || addrList[0];
-
-    if (activeAddr && activeAddr.latitude != null && activeAddr.longitude != null) {
-      const lat = Number(activeAddr.latitude);
-      const lng = Number(activeAddr.longitude);
-      if (!isNaN(lat) && !isNaN(lng)) {
-        setCustomerLocation({ lat, lng });
-        setLocationLabel(formatAddressLocationLabel(activeAddr));
+  // Request browser GPS with strict 5-second timeout
+  const requestBrowserGps = useCallback((timeoutMs = 5000): Promise<{ lat: number; lng: number } | null> => {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined' || !navigator.geolocation) {
+        resolve(null);
         return;
       }
-    }
+      let completed = false;
+      const timer = setTimeout(() => {
+        if (!completed) {
+          completed = true;
+          resolve(null);
+        }
+      }, timeoutMs);
 
-    // Titik default hanya dipakai jika belum ada alamat utama atau koordinatnya kosong
-    setCustomerLocation({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
-    setLocationLabel('Bandung (Titik Default)');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!completed) {
+            completed = true;
+            clearTimeout(timer);
+            resolve({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+          }
+        },
+        () => {
+          if (!completed) {
+            completed = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
+        },
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 }
+      );
+    });
   }, []);
 
-  const refreshSavedAddresses = useCallback(async () => {
-    if (isAuthenticated()) {
-      try {
-        const addrRes = await getAddresses();
-        applyAddressLocation(addrRes);
-      } catch {
-        // ignore
-      }
-    }
-  }, [applyAddressLocation]);
-
-  // Listen for address changes from profile or other tabs
+  // Listen for address changes from profile or other tabs (only if user hasn't chosen manual override)
   useEffect(() => {
-    const onAddressChanged = () => {
-      refreshSavedAddresses();
+    const onAddressChanged = async () => {
+      if (isAuthenticated() && !isManualOverrideRef.current) {
+        try {
+          const addrRes = await getAddresses();
+          setSavedAddresses(addrRes);
+          const activeAddr = addrRes.find((a) => a.is_default) || addrRes[0];
+          if (activeAddr && activeAddr.latitude != null && activeAddr.longitude != null) {
+            const lat = Number(activeAddr.latitude);
+            const lng = Number(activeAddr.longitude);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              setCustomerLocation({ lat, lng });
+              setLocationLabel(formatAddressLocationLabel(activeAddr));
+              setLocationResolved(true);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
     };
     window.addEventListener('address-changed', onAddressChanged);
     window.addEventListener('focus', onAddressChanged);
@@ -107,78 +136,160 @@ export default function StoreSearchPage() {
       window.removeEventListener('address-changed', onAddressChanged);
       window.removeEventListener('focus', onAddressChanged);
     };
-  }, [refreshSavedAddresses]);
+  }, []);
 
-  // Load Initial Metadata & Active Order
+  // Load Initial Metadata & Resolve Location
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadInitialData() {
+      // 1. Fetch service categories
       try {
         const catRes = await getServiceCategories();
-        setCategories(catRes);
-
-        if (isAuthenticated()) {
-          try {
-            const addrRes = await getAddresses();
-            applyAddressLocation(addrRes);
-          } catch {
-            // ignore
-          }
-
-          // Fetch active orders
-          try {
-            const orders = await getOrders({ role: 'customer' });
-            const ongoing = (Array.isArray(orders) ? orders : []).find(
-              (o: OrderDetail) =>
-                o.status !== 'COMPLETED' &&
-                o.status !== 'CANCELLED' &&
-                o.status !== 'PAYMENT_FAILED' &&
-                o.status !== 'PAYMENT_EXPIRED'
-            );
-            if (ongoing) {
-              setActiveOrder(ongoing);
-            }
-          } catch {
-            // ignore
-          }
+        if (!isCancelled) {
+          setCategories(catRes);
         }
       } catch {
         // ignore
       }
+
+      // 2. Fetch active orders if authenticated
+      if (isAuthenticated()) {
+        try {
+          const orders = await getOrders({ role: 'customer' });
+          const ongoing = (Array.isArray(orders) ? orders : []).find(
+            (o: OrderDetail) =>
+              o.status !== 'COMPLETED' &&
+              o.status !== 'CANCELLED' &&
+              o.status !== 'PAYMENT_FAILED' &&
+              o.status !== 'PAYMENT_EXPIRED'
+          );
+          if (ongoing && !isCancelled) {
+            setActiveOrder(ongoing);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 3. Resolve location with strict priorities:
+      // If user has already made a manual selection before async finishes, do NOT overwrite
+      if (isManualOverrideRef.current || isCancelled) {
+        return;
+      }
+
+      let resolvedCoords: { lat: number; lng: number } | null = null;
+      let resolvedLabel: string = FALLBACK_LOCATION_LABEL;
+
+      // Priority (a): Default / first saved address of authenticated customer
+      if (isAuthenticated()) {
+        try {
+          const addrRes = await getAddresses();
+          if (!isCancelled) {
+            setSavedAddresses(addrRes);
+          }
+          const activeAddr = addrRes.find((a) => a.is_default) || addrRes[0];
+          if (activeAddr && activeAddr.latitude != null && activeAddr.longitude != null) {
+            const lat = Number(activeAddr.latitude);
+            const lng = Number(activeAddr.longitude);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              resolvedCoords = { lat, lng };
+              resolvedLabel = formatAddressLocationLabel(activeAddr);
+            }
+          }
+        } catch {
+          // Jika getAddresses gagal (network/401), lanjut ke GPS tanpa macet di skeleton
+        }
+      }
+
+      if (isManualOverrideRef.current || isCancelled) {
+        return;
+      }
+
+      // Priority (b): Browser GPS with 5s timeout if (a) did not yield coordinates
+      if (!resolvedCoords) {
+        const gpsCoords = await requestBrowserGps(5000);
+        if (gpsCoords && !isManualOverrideRef.current && !isCancelled) {
+          resolvedCoords = gpsCoords;
+          resolvedLabel = 'Lokasi GPS Saat Ini';
+        }
+      }
+
+      if (isManualOverrideRef.current || isCancelled) {
+        return;
+      }
+
+      // Priority (c): Fallback with "Lokasi belum diatur" label
+      if (!resolvedCoords) {
+        resolvedCoords = { lat: DEFAULT_LAT, lng: DEFAULT_LNG };
+        resolvedLabel = FALLBACK_LOCATION_LABEL;
+      }
+
+      if (!isCancelled) {
+        setCustomerLocation(resolvedCoords);
+        setLocationLabel(resolvedLabel);
+        setLocationResolved(true);
+      }
     }
+
     loadInitialData();
-  }, [applyAddressLocation]);
 
-  // Fetch Nearby Stores
-  const fetchStores = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getNearbyStores({
-        lat: customerLocation.lat,
-        lng: customerLocation.lng,
-        radius_km: radiusKm,
-        search: searchQuery.trim() || undefined,
-        category_slug: selectedCategory !== 'all' ? selectedCategory : undefined,
-      });
-      setStores(res.stores);
-      setMeta(res.meta);
-    } catch (err: unknown) {
-      setError(formatFriendlyErrorMessage(err, 'Gagal memuat daftar toko.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [customerLocation, radiusKm, searchQuery, selectedCategory]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [requestBrowserGps]);
 
+  // Fetch Nearby Stores with AbortController
+  const fetchStores = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await getNearbyStores(
+          {
+            lat: customerLocation.lat,
+            lng: customerLocation.lng,
+            radius_km: radiusKm,
+            search: searchQuery.trim() || undefined,
+            category_slug: selectedCategory !== 'all' ? selectedCategory : undefined,
+          },
+          { signal }
+        );
+        setStores(res.stores);
+        setMeta(res.meta);
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === 'AbortError' || signal?.aborted) {
+          return;
+        }
+        setError(formatFriendlyErrorMessage(err, 'Gagal memuat daftar toko.'));
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [customerLocation, radiusKm, searchQuery, selectedCategory]
+  );
+
+  // Fetch stores ONLY after location is resolved, with AbortController
   useEffect(() => {
-    fetchStores();
-  }, [fetchStores]);
+    if (!locationResolved) return;
 
-  // Use Browser GPS Geolocation
+    const controller = new AbortController();
+    fetchStores(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [locationResolved, fetchStores]);
+
+  // Manual Trigger: Browser GPS Geolocation
   const handleUseGPS = () => {
     if (!navigator.geolocation) {
       alert('Perangkat Anda tidak mendukung geolokasi browser.');
       return;
     }
+    isManualOverrideRef.current = true;
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -188,21 +299,24 @@ export default function StoreSearchPage() {
           lng: pos.coords.longitude,
         });
         setLocationLabel('Lokasi GPS Saat Ini');
+        setLocationResolved(true);
       },
       (err) => {
         setIsLocating(false);
         alert(`Gagal mendeteksi lokasi GPS: ${err.message}. Pastikan izin lokasi aktif.`);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 5000 }
     );
   };
 
-  // Select Saved Address
+  // Manual Trigger: Select Saved Address
   const handleSelectSavedAddress = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const addrId = e.target.value;
     if (!addrId) return;
     const addr = savedAddresses.find((a) => a.id === addrId);
     if (!addr) return;
+
+    isManualOverrideRef.current = true;
 
     if (addr.latitude != null && addr.longitude != null) {
       const lat = Number(addr.latitude);
@@ -210,18 +324,23 @@ export default function StoreSearchPage() {
       if (!isNaN(lat) && !isNaN(lng)) {
         setCustomerLocation({ lat, lng });
         setLocationLabel(formatAddressLocationLabel(addr));
+        setLocationResolved(true);
         return;
       }
     }
 
     // Jika koordinatnya kosong, gunakan titik default
     setCustomerLocation({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
-    setLocationLabel('Bandung (Titik Default)');
+    setLocationLabel(FALLBACK_LOCATION_LABEL);
+    setLocationResolved(true);
   };
 
+  // Manual Trigger: Map Pin Click/Drag
   const handleLocationChange = (lat: number, lng: number) => {
+    isManualOverrideRef.current = true;
     setCustomerLocation({ lat, lng });
     setLocationLabel(`Koordinat Kustom (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    setLocationResolved(true);
   };
 
   const filteredStores = React.useMemo(() => {
@@ -277,11 +396,30 @@ export default function StoreSearchPage() {
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">
                 {user ? `Halo, ${user.name}! Mau cuci apa hari ini?` : 'Temukan laundry di sekitar Anda'}
               </h1>
-              <div className="flex items-center gap-2 text-xs text-navy-200">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-navy-200">
                 <MapPin className="w-3.5 h-3.5 text-sky-400 shrink-0" strokeWidth={1.75} />
-                <span className="truncate">
-                  Lokasi Anda: <strong className="text-white font-semibold">{locationLabel}</strong>
-                </span>
+                {!locationResolved ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span>Mendeteksi lokasi:</span>
+                    <span className="inline-block w-24 h-3.5 bg-navy-800 rounded animate-pulse" />
+                  </span>
+                ) : (
+                  <>
+                    <span className="truncate">
+                      Lokasi Anda: <strong className="text-white font-semibold">{locationLabel}</strong>
+                    </span>
+                    {locationLabel === FALLBACK_LOCATION_LABEL && (
+                      <button
+                        type="button"
+                        onClick={handleUseGPS}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 border border-sky-400/30 text-[11px] font-semibold transition-colors cursor-pointer"
+                      >
+                        <Navigation className="w-3 h-3 text-sky-300" />
+                        <span>Pilih lokasi</span>
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
@@ -291,7 +429,15 @@ export default function StoreSearchPage() {
                 <select
                   onChange={handleSelectSavedAddress}
                   className="py-2 px-3 text-xs bg-navy-800/90 border border-navy-700 rounded-xl text-white focus:outline-hidden focus:ring-1 focus:ring-navy-400 cursor-pointer max-w-xs truncate"
-                  defaultValue=""
+                  value={
+                    savedAddresses.find(
+                      (a) =>
+                        a.latitude != null &&
+                        a.longitude != null &&
+                        Number(a.latitude) === customerLocation.lat &&
+                        Number(a.longitude) === customerLocation.lng
+                    )?.id || ''
+                  }
                 >
                   <option value="" disabled className="text-slate-400">
                     Pilih alamat tersimpan...
@@ -467,14 +613,21 @@ export default function StoreSearchPage() {
             </summary>
             <div className="p-2 pt-0 border-t border-slate-100">
               <div className="h-[360px] rounded-xl overflow-hidden border border-slate-200 mt-2">
-                <DynamicStoreMap
-                  customerLocation={customerLocation}
-                  stores={filteredStores}
-                  selectedStoreId={selectedStoreId}
-                  onStoreSelect={(store) => setSelectedStoreId(store.id)}
-                  onLocationChange={handleLocationChange}
-                  searchRadiusKm={radiusKm}
-                />
+                {locationResolved ? (
+                  <DynamicStoreMap
+                    customerLocation={customerLocation}
+                    stores={filteredStores}
+                    selectedStoreId={selectedStoreId}
+                    onStoreSelect={(store) => setSelectedStoreId(store.id)}
+                    onLocationChange={handleLocationChange}
+                    searchRadiusKm={radiusKm}
+                  />
+                ) : (
+                  <div className="h-full w-full bg-slate-100 animate-pulse flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <MapPin className="w-6 h-6 animate-bounce text-slate-400" />
+                    <span className="text-xs font-medium">Menentukan lokasi layanan...</span>
+                  </div>
+                )}
               </div>
             </div>
           </details>
@@ -498,6 +651,29 @@ export default function StoreSearchPage() {
                 <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
                 <span>Muat ulang</span>
               </button>
+            </div>
+          ) : !locationResolved ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column Skeleton */}
+              <div className="lg:col-span-6 space-y-3">
+                <div className="h-4 w-48 bg-slate-200 rounded animate-pulse" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-40 bg-white border border-slate-200/90 rounded-2xl animate-pulse" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column Skeleton */}
+              <div className="hidden lg:block lg:col-span-6 lg:sticky lg:top-24">
+                <div className="bg-white border border-navy-200/90 rounded-3xl p-3.5 shadow-sm">
+                  <div className="h-4 w-36 bg-slate-200 rounded animate-pulse mb-3" />
+                  <div className="h-[520px] rounded-2xl bg-slate-100 animate-pulse border border-slate-200 flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <MapPin className="w-6 h-6 animate-bounce text-slate-400" />
+                    <span className="text-xs font-medium">Menentukan lokasi layanan...</span>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

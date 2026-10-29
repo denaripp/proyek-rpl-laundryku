@@ -174,7 +174,8 @@ export async function getStore(id: string): Promise<StoreItem> {
  * Fetch nearby stores with Haversine distance and is_serviceable flag
  */
 export async function getNearbyStores(
-  params: GetNearbyStoresParams
+  params: GetNearbyStoresParams,
+  options?: { signal?: AbortSignal }
 ): Promise<{ stores: StoreItem[]; meta: StoreNearbyMeta }> {
   const query = new URLSearchParams();
   query.set('lat', params.lat.toString());
@@ -185,7 +186,7 @@ export async function getNearbyStores(
   if (params.category_slug) query.set('category_slug', params.category_slug);
 
   const endpoint = `/stores/nearby?${query.toString()}`;
-  const res = await apiClient<ApiSuccessResponse<StoreItem[]> & { meta: StoreNearbyMeta }>(endpoint);
+  const res = await apiClient<ApiSuccessResponse<StoreItem[]> & { meta: StoreNearbyMeta }>(endpoint, { signal: options?.signal });
   return {
     stores: res.data,
     meta: res.meta,
