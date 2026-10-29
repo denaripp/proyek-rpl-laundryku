@@ -360,3 +360,15 @@
 ## [2026-10-29] Utang Teknis: Duplikasi Logika Penutupan Task Kurir (T009)
 - **Konteks**: Pada perbaikan bug penutupan task kurir (commit `a06b183`), logika transisi task kurir menjadi `delivered` (`completed_at = now()`) ditaruh di dua tempat: `CourierPortalController::transitionTask` (alur aksi kurir di portal kurir) dan `OrderService::transition` (alur perubahan status order oleh mitra toko/sistem).
 - **Rencana Refactoring (Tahap 3)**: Logika penutupan task kurir ini akan diekstrak dan disatukan ke dalam service tersendiri (`CourierAssignmentService` / `CourierTaskService`) atau lewat domain event (`OrderStatusChanged`) agar mematuhi prinsip Single Source of Truth (DRY) tanpa duplikasi query update task.
+
+## [2026-10-29] Aktivasi OPcache di Laragon (Tahap 2 Poin 1)
+- **Konfigurasi `php.ini`**:
+  - `zend_extension=opcache`
+  - `opcache.enable=1`
+  - `opcache.memory_consumption=128`
+  - `opcache.max_accelerated_files=20000`
+  - `opcache.validate_timestamps=1`
+  - `opcache.revalidate_freq=0` (wajib untuk dev lingkungan lokal agar setiap perubahan kode langsung terbaca).
+- **Hasil Benchmark TTFB (`/api/v1/chatbot/faq`)**:
+  - Sebelum OPcache: 173.5 ms
+  - Setelah OPcache: 37.3 ms (peningkatan kecepatan ~78.5%).
