@@ -53,3 +53,8 @@ Thumbs.db
 # *.pem
 # *.key
 # *.p12
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
