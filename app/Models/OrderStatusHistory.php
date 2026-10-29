@@ -27,7 +27,7 @@ class OrderStatusHistory extends Model
         'created_at' => 'datetime',
     ];
 
-    public $timestamps = false; // only created_at
+    const UPDATED_AT = null;
 
     // ========== RELATIONSHIPS ==========
 

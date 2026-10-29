@@ -6,6 +6,7 @@ use App\Models\Courier;
 use App\Models\CourierTask;
 use App\Models\Order;
 use App\Models\AuditLog;
+use App\Models\OrderStatusHistory;
 use App\Services\Maps\GoogleMapsService;
 use App\Models\User;
 use App\Notifications\NotificationTrigger;
@@ -66,9 +67,24 @@ class CourierAssignmentService
             ]);
 
             // Update order status
+            $previousStatus = $order->status;
             $statusField = $taskType === 'pickup' ? 'courier_assigned' : 'courier_assigned_for_delivery';
             $order->status = $statusField;
             $order->save();
+
+            $actor = auth()->user() ?? ($courier->user_id ? User::find($courier->user_id) : null);
+            OrderStatusHistory::create([
+                'order_id' => $order->id,
+                'status' => $statusField,
+                'previous_status' => $previousStatus ?? $order->getOriginal('status') ?? 'created',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles()->first()?->name ?? $actor?->role ?? null,
+                'reason' => "Courier assigned for {$taskType}",
+                'metadata' => [
+                    'courier_id' => $courier->id,
+                    'task_type' => $taskType,
+                ],
+            ]);
 
             // Log audit
             AuditLog::create([

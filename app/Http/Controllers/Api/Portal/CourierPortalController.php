@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Courier;
 use App\Models\CourierTask;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
 use App\Models\Store;
 use App\Notifications\NotificationTrigger;
 use Carbon\Carbon;
@@ -580,6 +581,19 @@ class CourierPortalController extends Controller
             $order->completed_at = now();
         }
         $order->save();
+
+        OrderStatusHistory::create([
+            'order_id' => $order->id,
+            'status' => $effectiveOrderStatus,
+            'previous_status' => $currentStatus ?? $order->getOriginal('status') ?? 'created',
+            'actor_id' => $user->id,
+            'actor_role' => $user->role ?? $user->roles()->first()?->name ?? 'courier',
+            'reason' => 'Courier task transition to ' . $effectiveOrderStatus,
+            'metadata' => [
+                'task_id' => $task?->id,
+                'requested_status' => $toStatus,
+            ],
+        ]);
 
         if ($task) {
             $taskStatusMap = [
