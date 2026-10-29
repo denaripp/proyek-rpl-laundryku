@@ -119,6 +119,9 @@ export default function StoreAdminOrderDetailPage({
       setOrder(res);
       setTransitionNote('');
       setActionSuccessMsg(`Status pesanan berhasil diubah ke '${ORDER_STATUS_META[toStatus]?.label || toStatus}'.`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('laundryku_sidebar_count_refresh'));
+      }
       return res;
     } catch (err: unknown) {
       const anyErr = err as any;
@@ -146,6 +149,9 @@ export default function StoreAdminOrderDetailPage({
       await assignCourier(order.id, { task_type: 'pickup' });
       await loadOrderDetail();
       setActionSuccessMsg('Kurir berhasil ditugaskan untuk menjemput cucian.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('laundryku_sidebar_count_refresh'));
+      }
     } catch (err: unknown) {
       const anyErr = err as any;
       const rawErrorField = anyErr?.responseData?.error ?? anyErr?.response?.data?.error;
@@ -172,6 +178,9 @@ export default function StoreAdminOrderDetailPage({
       await assignCourier(order.id, { task_type: 'delivery' });
       await loadOrderDetail();
       setActionSuccessMsg('Kurir berhasil ditugaskan untuk mengantar cucian.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('laundryku_sidebar_count_refresh'));
+      }
     } catch (err: unknown) {
       const anyErr = err as any;
       const rawErrorField = anyErr?.responseData?.error ?? anyErr?.response?.data?.error;

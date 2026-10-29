@@ -37,8 +37,11 @@ export default function StoreAdminOrdersPage() {
     try {
       const user = getStoredUser();
       setCurrentUser(user);
-      const res = await getOrders({ role: 'store_admin' });
+      const res = await getOrders({ role: 'store_admin', per_page: 50 });
       setOrders(res || []);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('laundryku_sidebar_count_refresh'));
+      }
     } catch (err: unknown) {
       setError(formatFriendlyErrorMessage(err, 'Gagal memuat pesanan toko.'));
     } finally {

@@ -386,7 +386,7 @@ class MitraPortalController extends Controller
     public function sidebarCounts(Request $request): JsonResponse
     {
         $user = $request->user();
-        $store = $this->resolveStore($user);
+        $store = $this->resolveStore($user, $request->query('store_id'));
 
         if (! $store) {
             return response()->json([
