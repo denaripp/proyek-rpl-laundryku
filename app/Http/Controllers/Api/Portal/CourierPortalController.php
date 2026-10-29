@@ -22,7 +22,7 @@ class CourierPortalController extends Controller
      */
     protected function resolveCourier(Request $request): ?Courier
     {
-        return Courier::where('user_id', $request->user()->id)->first();
+        return Courier::with(['user:id,name,email,phone', 'store'])->where('user_id', $request->user()->id)->first();
     }
 
     /**
@@ -205,7 +205,7 @@ class CourierPortalController extends Controller
             ], 403);
         }
 
-        $store = $courier->store_id ? Store::find($courier->store_id) : null;
+        $store = $courier->store;
         $rawStarted = $courier->getRawOriginal('created_at');
 
         $availableTasks = $store
@@ -227,13 +227,15 @@ class CourierPortalController extends Controller
                 })->count()
             : 0;
 
-        $activeTasks = CourierTask::where('courier_id', $courier->id)
-            ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
-            ->count();
+        $taskStats = DB::table('courier_tasks')
+            ->where('courier_id', $courier->id)
+            ->selectRaw("
+                COUNT(CASE WHEN status IN ('assigned', 'accepted', 'arrived', 'picked_up') THEN 1 END) as active_tasks,
+                COUNT(CASE WHEN status = 'delivered' THEN 1 END) as completed_tasks
+            ")->first();
 
-        $completedTasks = CourierTask::where('courier_id', $courier->id)
-            ->where('status', 'delivered')
-            ->count();
+        $activeTasks = (int) ($taskStats->active_tasks ?? 0);
+        $completedTasks = (int) ($taskStats->completed_tasks ?? 0);
 
         return response()->json([
             'success' => true,

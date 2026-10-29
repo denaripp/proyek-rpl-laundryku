@@ -166,42 +166,34 @@ class StoreDashboardService
      */
     public function getDashboardData(Store $store): array
     {
-        $newOrders = Order::where('store_id', $store->id)
-            ->whereIn('status', ['created', 'pending_pickup'])
-            ->count();
+        $orderStats = Order::where('store_id', $store->id)
+            ->selectRaw("
+                COUNT(CASE WHEN status IN ('created', 'pending_pickup') THEN 1 END) as new_orders,
+                COUNT(CASE WHEN status IN ('at_store', 'received', 'weighed', 'awaiting_price_approval', 'price_approved', 'awaiting_payment', 'paid', 'processing') THEN 1 END) as processing_orders,
+                COUNT(CASE WHEN status IN ('ready_for_delivery', 'delivery_assigned', 'out_for_delivery') THEN 1 END) as ready_for_delivery,
+                COUNT(CASE WHEN status = 'ready_for_delivery' THEN 1 END) as ready_for_delivery_only,
+                COUNT(CASE WHEN status IN ('delivery_assigned', 'out_for_delivery') THEN 1 END) as out_for_delivery_only,
+                COUNT(CASE WHEN status = 'completed' AND DATE(completed_at) = CURDATE() THEN 1 END) as completed_today,
+                COALESCE(SUM(CASE WHEN status = 'completed' AND DATE(completed_at) = CURDATE() THEN total_amount ELSE 0 END), 0) as today_revenue
+            ")
+            ->first();
 
-        $processingOrders = Order::where('store_id', $store->id)
-            ->whereIn('status', [
-                'at_store', 'received', 'weighed', 'awaiting_price_approval',
-                'price_approved', 'awaiting_payment', 'paid', 'processing',
-            ])
-            ->count();
+        $courierStats = Courier::where('store_id', $store->id)
+            ->selectRaw("
+                COUNT(*) as total_couriers,
+                COUNT(CASE WHEN is_available = 1 THEN 1 END) as active_couriers
+            ")
+            ->first();
 
-        $readyForDelivery = Order::where('store_id', $store->id)
-            ->whereIn('status', ['ready_for_delivery', 'delivery_assigned', 'out_for_delivery'])
-            ->count();
-
-        $readyOnly = Order::where('store_id', $store->id)
-            ->where('status', 'ready_for_delivery')
-            ->count();
-
-        $outOnly = Order::where('store_id', $store->id)
-            ->whereIn('status', ['delivery_assigned', 'out_for_delivery'])
-            ->count();
-
-        $completedToday = Order::where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereDate('completed_at', today())
-            ->count();
-
-        $todayRevenue = (float) Order::where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereDate('completed_at', today())
-            ->sum('total_amount');
-
-        $courierQuery = Courier::where('store_id', $store->id);
-        $totalCouriers = (clone $courierQuery)->count();
-        $activeCouriers = (clone $courierQuery)->where('is_available', true)->count();
+        $newOrders = (int) ($orderStats->new_orders ?? 0);
+        $processingOrders = (int) ($orderStats->processing_orders ?? 0);
+        $readyForDelivery = (int) ($orderStats->ready_for_delivery ?? 0);
+        $readyOnly = (int) ($orderStats->ready_for_delivery_only ?? 0);
+        $outOnly = (int) ($orderStats->out_for_delivery_only ?? 0);
+        $completedToday = (int) ($orderStats->completed_today ?? 0);
+        $todayRevenue = (float) ($orderStats->today_revenue ?? 0);
+        $totalCouriers = (int) ($courierStats->total_couriers ?? 0);
+        $activeCouriers = (int) ($courierStats->active_couriers ?? 0);
 
         $recentOrders = Order::where('store_id', $store->id)
             ->with('customer:id,name')

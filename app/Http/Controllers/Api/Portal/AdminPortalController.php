@@ -15,6 +15,7 @@ use App\Services\StoreService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class AdminPortalController extends Controller
@@ -29,12 +30,18 @@ class AdminPortalController extends Controller
      */
     public function overview(Request $request): JsonResponse
     {
+        $storeStats = Store::selectRaw("
+            COUNT(*) as total_stores,
+            COUNT(CASE WHEN status = 'submitted' THEN 1 END) as pending_stores,
+            COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_stores
+        ")->first();
+
         return response()->json([
             'metrics' => [
                 'total_users' => User::count(),
-                'total_stores' => Store::count(),
-                'pending_stores' => Store::where('status', 'submitted')->count(),
-                'approved_stores' => Store::where('status', 'approved')->count(),
+                'total_stores' => (int) ($storeStats->total_stores ?? 0),
+                'pending_stores' => (int) ($storeStats->pending_stores ?? 0),
+                'approved_stores' => (int) ($storeStats->approved_stores ?? 0),
                 'total_orders' => Order::count(),
             ],
         ]);
@@ -47,69 +54,127 @@ class AdminPortalController extends Controller
     {
         $period = $request->query('period', 'all_time');
 
-        // Main KPI counts
-        $totalOrders = Order::count();
-        $completedOrders = Order::where('status', 'completed')->count();
-        $totalStores = Store::count();
-        $activeStores = Store::where('status', 'approved')->where('is_active', true)->count();
-        $pendingStores = Store::whereIn('status', ['submitted', 'resubmitted', 'under_review'])->count();
+        // Orders by Status (support both lower & UPPERCASE for frontend status tile lookups)
+        $rawOrderCounts = Order::groupBy('status')->selectRaw('status, count(*) as count')->pluck('count', 'status')->all();
+        $ordersByStatus = [];
+        $totalOrders = 0;
+        foreach ($rawOrderCounts as $status => $count) {
+            $count = (int) $count;
+            $totalOrders += $count;
+            $ordersByStatus[$status] = $count;
+            $ordersByStatus[strtoupper($status)] = $count;
+            if ($status === 'payment_required') {
+                $ordersByStatus['AWAITING_PAYMENT'] = $count;
+            }
+        }
+        $completedOrders = $ordersByStatus['completed'] ?? 0;
 
-        $totalUsers = User::count();
-        $activeUsers = User::where('is_active', true)->count();
-        $suspendedUsers = User::where('is_active', false)->count();
+        // Stores KPI in single query
+        $storeStats = Store::selectRaw("
+            COUNT(*) as total_stores,
+            COUNT(CASE WHEN status = 'approved' AND is_active = 1 THEN 1 END) as active_stores,
+            COUNT(CASE WHEN status IN ('submitted', 'resubmitted', 'under_review') THEN 1 END) as pending_stores
+        ")->first();
 
-        // GMV & Revenue
-        $totalGmv = (float) Payment::where('status', 'paid')->sum('amount');
+        $totalStores = (int) ($storeStats->total_stores ?? 0);
+        $activeStores = (int) ($storeStats->active_stores ?? 0);
+        $pendingStores = (int) ($storeStats->pending_stores ?? 0);
+
+        // Users KPI in single query
+        $userStats = User::selectRaw("
+            COUNT(*) as total_users,
+            COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_users,
+            COUNT(CASE WHEN is_active = 0 THEN 1 END) as suspended_users,
+            COUNT(CASE WHEN role = ? THEN 1 END) as customer_count,
+            COUNT(CASE WHEN role = ? THEN 1 END) as store_admin_count,
+            COUNT(CASE WHEN role = ? THEN 1 END) as courier_count
+        ", [User::ROLE_CUSTOMER, User::ROLE_STORE_ADMIN, User::ROLE_COURIER])->first();
+
+        $totalUsers = (int) ($userStats->total_users ?? 0);
+        $activeUsers = (int) ($userStats->active_users ?? 0);
+        $suspendedUsers = (int) ($userStats->suspended_users ?? 0);
+
+        // GMV & Revenue and Payments by Status in single query
+        $paymentRows = DB::table('payments')
+            ->selectRaw("
+                status,
+                count(*) as count,
+                SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as paid_amount
+            ")
+            ->groupBy('status')
+            ->get();
+
+        $paymentsByStatus = [];
+        $totalGmv = 0.0;
+        foreach ($paymentRows as $pRow) {
+            $paymentsByStatus[$pRow->status] = (int) $pRow->count;
+            if ($pRow->status === 'paid') {
+                $totalGmv = (float) $pRow->paid_amount;
+            }
+        }
+
         if ($totalGmv === 0.0) {
             $totalGmv = (float) Order::where('status', 'completed')->sum('total_amount');
         }
         $totalRevenue = round($totalGmv * 0.10, 2);
 
-        // Orders by Status (support both lower & UPPERCASE for frontend status tile lookups)
-        $rawOrderCounts = Order::groupBy('status')->selectRaw('status, count(*) as count')->pluck('count', 'status')->all();
-        $ordersByStatus = [];
-        foreach ($rawOrderCounts as $status => $count) {
-            $ordersByStatus[$status] = (int) $count;
-            $ordersByStatus[strtoupper($status)] = (int) $count;
-            if ($status === 'payment_required') {
-                $ordersByStatus['AWAITING_PAYMENT'] = (int) $count;
-            }
-        }
-
         // Users by Role
         $usersByRole = [
-            'customer' => User::where('role', User::ROLE_CUSTOMER)->count(),
-            'store_admin' => User::where('role', User::ROLE_STORE_ADMIN)->count(),
-            'courier' => User::where('role', User::ROLE_COURIER)->count(),
+            'customer' => (int) ($userStats->customer_count ?? 0),
+            'store_admin' => (int) ($userStats->store_admin_count ?? 0),
+            'courier' => (int) ($userStats->courier_count ?? 0),
         ];
 
-        // Payments by Status
-        $paymentsByStatus = Payment::groupBy('status')
-            ->selectRaw('status, count(*) as count')
-            ->pluck('count', 'status')
-            ->all();
-
-        // 10 Recent Orders with customer, store, status, amount
-        $recentOrders = Order::with(['customer:id,name', 'store:id,name'])
-            ->latest('created_at')
+        // 10 Recent Orders with customer, store, status, amount (optimized via single join)
+        $recentOrders = DB::table('orders')
+            ->leftJoin('users', function ($join) {
+                $join->on('orders.customer_id', '=', 'users.id')
+                     ->whereNull('users.deleted_at');
+            })
+            ->leftJoin('stores', function ($join) {
+                $join->on('orders.store_id', '=', 'stores.id')
+                     ->whereNull('stores.deleted_at');
+            })
+            ->whereNull('orders.deleted_at')
+            ->orderByDesc('orders.created_at')
             ->limit(10)
+            ->select([
+                'orders.id',
+                'orders.order_number',
+                'users.name as customer_name',
+                'stores.name as store_name',
+                'orders.status',
+                'orders.final_price',
+                'orders.total_amount',
+                'orders.total_price',
+                'orders.created_at',
+            ])
             ->get()
             ->map(function ($order) {
                 return [
                     'id' => (string) $order->id,
                     'order_number' => $order->order_number ?? "ORD-{$order->id}",
-                    'customer_name' => $order->customer?->name ?? 'Pelanggan',
-                    'store_name' => $order->store?->name ?? 'Toko Laundry',
+                    'customer_name' => $order->customer_name ?? 'Pelanggan',
+                    'store_name' => $order->store_name ?? 'Toko Laundry',
                     'status' => $order->status,
                     'nominal' => (float) ($order->final_price ?? $order->total_amount ?? $order->total_price ?? 0),
-                    'created_at' => $order->created_at?->toIso8601String(),
+                    'created_at' => $order->created_at ? Carbon::parse($order->created_at)->toIso8601String() : null,
                 ];
             });
 
-        // 10 Recent Audit Logs
-        $recentLogs = AuditLog::with('actor:id,name')
-            ->latest('created_at')
+        // 10 Recent Audit Logs (optimized via single join)
+        $recentLogs = DB::table('audit_logs')
+            ->leftJoin('users', 'audit_logs.actor_id', '=', 'users.id')
+            ->orderByDesc('audit_logs.created_at')
             ->limit(10)
+            ->select([
+                'audit_logs.id',
+                'audit_logs.action',
+                'audit_logs.resource_type',
+                'audit_logs.resource_id',
+                'users.name as actor_name',
+                'audit_logs.created_at',
+            ])
             ->get()
             ->map(function ($log) {
                 return [
@@ -117,8 +182,8 @@ class AdminPortalController extends Controller
                     'action' => $log->action,
                     'entity_type' => $log->resource_type ?? 'system',
                     'entity_id' => $log->resource_id ? (string) $log->resource_id : null,
-                    'actor_name' => $log->actor?->name ?? 'System',
-                    'created_at' => $this->formatAuditTimestamp($log),
+                    'actor_name' => $log->actor_name ?? 'System',
+                    'created_at' => $log->created_at ? Carbon::parse($log->created_at, 'Asia/Jakarta')->toIso8601String() : null,
                 ];
             });
 
