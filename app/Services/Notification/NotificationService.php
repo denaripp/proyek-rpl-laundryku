@@ -26,8 +26,9 @@ class NotificationService
     public function __construct(array $channels = null)
     {
         $this->channels = $channels ?? [
-            'in_app' => new InAppChannel(),
-            'email'  => new EmailChannel(),
+            'in_app'   => new InAppChannel(),
+            'email'    => new EmailChannel(),
+            'whatsapp' => new WhatsAppChannel(),
         ];
     }
 

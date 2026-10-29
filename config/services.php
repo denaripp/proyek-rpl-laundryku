@@ -52,6 +52,12 @@ return [
         'webhook_token' => env('FONNTE_WEBHOOK_TOKEN'),
     ],
 
+    'whatsapp' => [
+        'enabled' => filter_var(env('WHATSAPP_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'driver' => env('WHATSAPP_DRIVER', 'log'),
+        'fonnte_token' => env('FONNTE_TOKEN', env('FONNTE_API_TOKEN', '')),
+    ],
+
     'otp' => [
         'debug_response' => filter_var(env('OTP_DEBUG_RESPONSE', false), FILTER_VALIDATE_BOOLEAN),
     ],

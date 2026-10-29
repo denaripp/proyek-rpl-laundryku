@@ -11,6 +11,9 @@ use App\Services\Maps\GeocodingServiceInterface;
 use App\Services\Maps\GoogleMapsService;
 use App\Services\Ai\AiClientInterface;
 use App\Services\Ai\OpenAiClient;
+use App\Services\WhatsApp\WhatsAppSender;
+use App\Services\WhatsApp\Drivers\LogWhatsAppSender;
+use App\Services\WhatsApp\Drivers\FonnteWhatsAppSender;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,6 +24,14 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(GeocodingServiceInterface::class, GoogleMapsService::class);
         $this->app->bind(AiClientInterface::class, OpenAiClient::class);
+        $this->app->bind(WhatsAppSender::class, function () {
+            $driver = config('services.whatsapp.driver', 'log');
+
+            return match ($driver) {
+                'fonnte' => new FonnteWhatsAppSender(config('services.whatsapp.fonnte_token')),
+                default => new LogWhatsAppSender(),
+            };
+        });
     }
 
     /**
