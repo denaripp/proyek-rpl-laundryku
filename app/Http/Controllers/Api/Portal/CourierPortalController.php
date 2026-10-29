@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Portal;
 
+use App\Enums\OrderStatus;
+use App\Enums\CourierTaskStatus;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Courier;
@@ -53,12 +55,12 @@ class CourierPortalController extends Controller
 
         $taskType = $currentTask?->task_type ?? $currentPhaseType;
 
-        $isDeliveryWaiting = strtolower($order->status) === 'ready_for_delivery';
+        $isDeliveryWaiting = strtolower($order->status) === OrderStatus::READY_FOR_DELIVERY->value;
 
         $isAssignedToMe = ! $isDeliveryWaiting && (
             ((int) $order->courier_id === (int) $courier->user_id) ||
             ((int) $order->courier_id === (int) $courier->id) ||
-            ($currentTask && (int) $currentTask->courier_id === (int) $courier->id && !in_array($currentTask->status, ['cancelled', 'failed'], true))
+            ($currentTask && (int) $currentTask->courier_id === (int) $courier->id && !in_array($currentTask->status, [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value], true))
         );
 
         $effectiveCourierId = null;
@@ -84,31 +86,31 @@ class CourierPortalController extends Controller
         $rawUpdated = $order->getRawOriginal('updated_at');
 
         $statusMap = [
-            'created' => 'PENDING_PICKUP',
-            'waiting_pickup' => 'PENDING_PICKUP',
+            OrderStatus::CREATED->value => 'PENDING_PICKUP',
+            OrderStatus::WAITING_PICKUP->value => 'PENDING_PICKUP',
             'pending_pickup' => 'PENDING_PICKUP',
             'waiting_for_courier' => 'PENDING_PICKUP',
-            'courier_assigned' => 'PICKUP_ASSIGNED',
+            OrderStatus::COURIER_ASSIGNED->value => 'PICKUP_ASSIGNED',
             'pickup_assigned' => 'PICKUP_ASSIGNED',
-            'courier_to_customer' => 'PICKUP_ASSIGNED',
-            'picked_up' => 'PICKED_UP',
-            'in_transit_to_store' => 'PICKED_UP',
+            OrderStatus::COURIER_TO_CUSTOMER->value => 'PICKUP_ASSIGNED',
+            OrderStatus::PICKED_UP->value => 'PICKED_UP',
+            OrderStatus::IN_TRANSIT_TO_STORE->value => 'PICKED_UP',
             'at_store' => 'AT_STORE',
             'received' => 'AT_STORE',
-            'received_by_store' => 'AT_STORE',
-            'weighed' => 'WEIGHED',
+            OrderStatus::RECEIVED_BY_STORE->value => 'AT_STORE',
+            OrderStatus::WEIGHED->value => 'WEIGHED',
             'awaiting_price_approval' => 'AWAITING_PRICE_APPROVAL',
             'price_approved' => 'PRICE_APPROVED',
             'awaiting_payment' => 'AWAITING_PAYMENT',
-            'paid' => 'PAID',
-            'processing' => 'PROCESSING',
-            'ready_for_delivery' => 'READY_FOR_DELIVERY',
-            'courier_assigned_for_delivery' => 'DELIVERY_ASSIGNED',
+            OrderStatus::PAID->value => 'PAID',
+            OrderStatus::PROCESSING->value => 'PROCESSING',
+            OrderStatus::READY_FOR_DELIVERY->value => 'READY_FOR_DELIVERY',
+            OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value => 'DELIVERY_ASSIGNED',
             'delivery_assigned' => 'DELIVERY_ASSIGNED',
-            'out_for_delivery' => 'OUT_FOR_DELIVERY',
-            'completed' => 'COMPLETED',
-            'delivered' => 'COMPLETED',
-            'cancelled' => 'CANCELLED',
+            OrderStatus::OUT_FOR_DELIVERY->value => 'OUT_FOR_DELIVERY',
+            OrderStatus::COMPLETED->value => 'COMPLETED',
+            OrderStatus::DELIVERED->value => 'COMPLETED',
+            OrderStatus::CANCELLED->value => 'CANCELLED',
         ];
 
         $paymentStatusMap = [
@@ -212,16 +214,16 @@ class CourierPortalController extends Controller
             ? Order::where('store_id', $store->id)
                 ->where(function ($q) {
                     $q->where(function ($sub) {
-                        $sub->whereIn('status', ['created', 'waiting_pickup', 'pending_pickup', 'waiting_for_courier'])
+                        $sub->whereIn('status', [OrderStatus::CREATED->value, OrderStatus::WAITING_PICKUP->value, 'pending_pickup', 'waiting_for_courier'])
                             ->whereNull('courier_id')
                             ->whereDoesntHave('courierTasks', function ($t) {
-                                $t->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                                $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
                             });
                     })->orWhere(function ($sub) {
-                        $sub->where('status', 'ready_for_delivery')
+                        $sub->where('status', OrderStatus::READY_FOR_DELIVERY->value)
                             ->whereDoesntHave('courierTasks', function ($t) {
                                 $t->where('task_type', 'delivery')
-                                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                                    ->whereIn('status', CourierTask::ACTIVE_STATUSES);
                             });
                     });
                 })->count()
@@ -293,17 +295,28 @@ class CourierPortalController extends Controller
                     ->orWhere('courier_id', $courier->id);
             })->orWhereHas('courierTasks', function ($tq) use ($courier) {
                 $tq->where('courier_id', $courier->id)
-                    ->whereNotIn('status', ['cancelled', 'failed']);
+                    ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value]);
             });
         };
 
         $activeStatuses = [
-            'courier_assigned', 'pickup_assigned', 'courier_to_customer', 'picked_up', 'in_transit_to_store',
-            'courier_assigned_for_delivery', 'delivery_assigned', 'out_for_delivery',
+            OrderStatus::COURIER_ASSIGNED->value,
+            'pickup_assigned',
+            OrderStatus::COURIER_TO_CUSTOMER->value,
+            OrderStatus::PICKED_UP->value,
+            OrderStatus::IN_TRANSIT_TO_STORE->value,
+            OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value,
+            'delivery_assigned',
+            OrderStatus::OUT_FOR_DELIVERY->value,
         ];
-        $availablePickupStatuses = ['created', 'waiting_pickup', 'pending_pickup', 'waiting_for_courier'];
-        $availableDeliveryStatuses = ['ready_for_delivery'];
-        $completedStatuses = ['completed', 'delivered'];
+        $availablePickupStatuses = [
+            OrderStatus::CREATED->value,
+            OrderStatus::WAITING_PICKUP->value,
+            'pending_pickup',
+            'waiting_for_courier',
+        ];
+        $availableDeliveryStatuses = [OrderStatus::READY_FOR_DELIVERY->value];
+        $completedStatuses = [OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value];
 
         $query = Order::with(['store:id,name,address', 'customer:id,name,phone', 'items', 'courierTasks']);
 
@@ -317,13 +330,13 @@ class CourierPortalController extends Controller
                         $pq->whereIn('status', $availablePickupStatuses)
                             ->whereNull('courier_id')
                             ->whereDoesntHave('courierTasks', function ($t) {
-                                $t->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                                $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
                             });
                     })->orWhere(function ($dq) use ($availableDeliveryStatuses) {
                         $dq->whereIn('status', $availableDeliveryStatuses)
                             ->whereDoesntHave('courierTasks', function ($t) {
                                 $t->where('task_type', 'delivery')
-                                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                                    ->whereIn('status', CourierTask::ACTIVE_STATUSES);
                             });
                     });
                 });
@@ -345,13 +358,13 @@ class CourierPortalController extends Controller
                                     $pq->whereIn('status', $availablePickupStatuses)
                                         ->whereNull('courier_id')
                                         ->whereDoesntHave('courierTasks', function ($t) {
-                                            $t->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                                            $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
                                         });
                                 })->orWhere(function ($dq) use ($availableDeliveryStatuses) {
                                     $dq->whereIn('status', $availableDeliveryStatuses)
                                         ->whereDoesntHave('courierTasks', function ($t) {
                                             $t->where('task_type', 'delivery')
-                                                ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                                                ->whereIn('status', CourierTask::ACTIVE_STATUSES);
                                         });
                                 });
                             });
@@ -465,7 +478,7 @@ class CourierPortalController extends Controller
             } else {
                 $activeDeliveryTask = CourierTask::where('order_id', $order->id)
                     ->where('task_type', 'delivery')
-                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
+                    ->whereIn('status', CourierTask::ACTIVE_STATUSES)
                     ->first();
                 if ($activeDeliveryTask && (int) $activeDeliveryTask->courier_id !== (int) $courier->id) {
                     return response()->json([
@@ -483,7 +496,7 @@ class CourierPortalController extends Controller
                 ['order_id' => $order->id, 'task_type' => $taskType],
                 [
                     'courier_id' => $courier->id,
-                    'status' => 'accepted',
+                    'status' => CourierTaskStatus::ACCEPTED->value,
                     'assigned_at' => now(),
                     'accepted_at' => now(),
                 ]
@@ -535,7 +548,7 @@ class CourierPortalController extends Controller
             || ((int) $order->courier_id === (int) $courier->id)
             || CourierTask::where('order_id', $order->id)
                 ->where('courier_id', $courier->id)
-                ->whereNotIn('status', ['cancelled', 'failed'])
+                ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value])
                 ->exists();
 
         if (! $isAuthorized) {
@@ -555,14 +568,14 @@ class CourierPortalController extends Controller
         // pickup flow: pickup_assigned -> picked_up -> at_store
         // delivery flow: delivery_assigned -> out_for_delivery -> delivered / completed
         $validTransitions = [
-            'pickup_assigned' => ['picked_up', 'courier_to_customer'],
-            'courier_assigned' => ['picked_up', 'courier_to_customer'],
-            'courier_to_customer' => ['picked_up'],
-            'picked_up' => ['at_store', 'in_transit_to_store'],
-            'in_transit_to_store' => ['at_store'],
-            'courier_assigned_for_delivery' => ['out_for_delivery'],
-            'delivery_assigned' => ['out_for_delivery'],
-            'out_for_delivery' => ['completed', 'delivered'],
+            'pickup_assigned' => [OrderStatus::PICKED_UP->value, OrderStatus::COURIER_TO_CUSTOMER->value],
+            OrderStatus::COURIER_ASSIGNED->value => [OrderStatus::PICKED_UP->value, OrderStatus::COURIER_TO_CUSTOMER->value],
+            OrderStatus::COURIER_TO_CUSTOMER->value => [OrderStatus::PICKED_UP->value],
+            OrderStatus::PICKED_UP->value => ['at_store', OrderStatus::IN_TRANSIT_TO_STORE->value],
+            OrderStatus::IN_TRANSIT_TO_STORE->value => ['at_store'],
+            OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value => [OrderStatus::OUT_FOR_DELIVERY->value],
+            'delivery_assigned' => [OrderStatus::OUT_FOR_DELIVERY->value],
+            OrderStatus::OUT_FOR_DELIVERY->value => [OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value],
         ];
 
         $currentStatus = strtolower($order->status);
@@ -576,14 +589,14 @@ class CourierPortalController extends Controller
         }
 
         // Determine whether this transition belongs to delivery or pickup
-        $isDeliveryTransition = in_array($toStatus, ['out_for_delivery', 'delivered', 'completed'], true);
+        $isDeliveryTransition = in_array($toStatus, [OrderStatus::OUT_FOR_DELIVERY->value, OrderStatus::DELIVERED->value, OrderStatus::COMPLETED->value], true);
         $expectedTaskType = $isDeliveryTransition ? 'delivery' : 'pickup';
 
         // Find the active task for this courier and task type
         $task = CourierTask::where('order_id', $order->id)
             ->where('courier_id', $courier->id)
             ->where('task_type', $expectedTaskType)
-            ->whereNotIn('status', ['delivered', 'failed', 'cancelled'])
+            ->whereNotIn('status', [CourierTaskStatus::DELIVERED->value, CourierTaskStatus::FAILED->value, CourierTaskStatus::CANCELLED->value])
             ->latest()
             ->first();
 
@@ -604,9 +617,9 @@ class CourierPortalController extends Controller
                 ->first();
         }
 
-        $effectiveOrderStatus = ($toStatus === 'delivered') ? 'completed' : $toStatus;
+        $effectiveOrderStatus = ($toStatus === OrderStatus::DELIVERED->value) ? OrderStatus::COMPLETED->value : $toStatus;
         $order->status = $effectiveOrderStatus;
-        if ($effectiveOrderStatus === 'completed') {
+        if ($effectiveOrderStatus === OrderStatus::COMPLETED->value) {
             $order->completed_at = now();
         }
         $order->save();
@@ -625,16 +638,16 @@ class CourierPortalController extends Controller
 
         if ($task) {
             $taskStatusMap = [
-                'courier_to_customer' => 'accepted',
-                'picked_up' => 'picked_up',
-                'in_transit_to_store' => 'picked_up',
-                'at_store' => 'delivered',
-                'out_for_delivery' => 'accepted',
-                'completed' => 'delivered',
-                'delivered' => 'delivered',
+                OrderStatus::COURIER_TO_CUSTOMER->value => CourierTaskStatus::ACCEPTED->value,
+                OrderStatus::PICKED_UP->value => CourierTaskStatus::PICKED_UP->value,
+                OrderStatus::IN_TRANSIT_TO_STORE->value => CourierTaskStatus::PICKED_UP->value,
+                'at_store' => CourierTaskStatus::DELIVERED->value,
+                OrderStatus::OUT_FOR_DELIVERY->value => CourierTaskStatus::ACCEPTED->value,
+                OrderStatus::COMPLETED->value => CourierTaskStatus::DELIVERED->value,
+                OrderStatus::DELIVERED->value => CourierTaskStatus::DELIVERED->value,
             ];
             $task->status = $taskStatusMap[$toStatus] ?? $task->status;
-            if (in_array($toStatus, ['at_store', 'completed', 'delivered'], true)) {
+            if (in_array($toStatus, ['at_store', OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value], true)) {
                 $taskType = $task->task_type ?? ($toStatus === 'at_store' ? 'pickup' : 'delivery');
                 CourierTask::closeActiveFor($order, $taskType);
             } else {

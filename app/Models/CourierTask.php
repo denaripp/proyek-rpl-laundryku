@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CourierTaskStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -63,10 +64,15 @@ class CourierTask extends Model
 
     public function scopePending($query)
     {
-        return $query->where('status', 'assigned');
+        return $query->where('status', CourierTaskStatus::ASSIGNED->value);
     }
 
-    public const ACTIVE_STATUSES = ['assigned', 'accepted', 'arrived', 'picked_up'];
+    public const ACTIVE_STATUSES = [
+        CourierTaskStatus::ASSIGNED->value,
+        CourierTaskStatus::ACCEPTED->value,
+        CourierTaskStatus::ARRIVED->value,
+        CourierTaskStatus::PICKED_UP->value,
+    ];
 
     /**
      * Close active courier tasks for a given order and task type.
@@ -77,13 +83,17 @@ class CourierTask extends Model
             ->where('task_type', $type)
             ->whereIn('status', self::ACTIVE_STATUSES)
             ->update([
-                'status' => 'delivered',
+                'status' => CourierTaskStatus::DELIVERED->value,
                 'completed_at' => now(),
             ]);
     }
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['accepted', 'arrived', 'picked_up']);
+        return $query->whereIn('status', [
+            CourierTaskStatus::ACCEPTED->value,
+            CourierTaskStatus::ARRIVED->value,
+            CourierTaskStatus::PICKED_UP->value,
+        ]);
     }
 }

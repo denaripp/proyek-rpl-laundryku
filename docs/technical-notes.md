@@ -382,5 +382,11 @@
   4. Restart Apache di Laragon:
      Klik tombol **Stop** lalu **Start All** pada Laragon, atau jalankan restart service Apache.
 - **Hasil Benchmark TTFB (`/api/v1/chatbot/faq`)**:
-  - Sebelum OPcache: 173.5 ms
-  - Setelah OPcache: 37.3 ms (peningkatan kecepatan ~78.5%).
+  - `php artisan serve`: 164.5 ms
+  - Laragon VHost (tanpa OPcache): 173.5 ms
+  - Laragon VHost + OPcache: 37.3 ms (peningkatan kecepatan ~78.5% dari VHost awal).
+
+## [2026-10-29] Utang Teknis: Penundaan Eloquent $casts Enum untuk OrderStatus dan CourierTaskStatus (T010)
+- **Konteks**: Pada refactoring Tahap 3c, enum `App\Enums\CourierTaskStatus` dibuat dan magic strings pada alur kurir/order yang disentuh tahap refactoring digantikan dengan nilai enum `OrderStatus::X->value` dan `CourierTaskStatus::X->value`.
+- **Keputusan**: Penambahan Eloquent `$casts` pada model `Order` (`'status' => OrderStatus::class`) dan `CourierTask` (`'status' => CourierTaskStatus::class`) sengaja ditunda dan tidak diaktifkan pada putaran ini untuk menjaga backward compatibility penuh dengan query builder mentah, serialisasi JSON internal, serta fixture test yang masih mengasumsikan tipe string primitif.
+- **Rencana Tindak Lanjut**: Menjadwalkan refactor khusus untuk mengaktifkan `$casts` enum pada model setelah melakukan audit menyeluruh terhadap semua pemanggil `$order->status` dan `$task->status`.

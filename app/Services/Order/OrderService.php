@@ -203,9 +203,9 @@ class OrderService
             $order->save();
 
             // Close corresponding courier tasks if transitioning to milestone completion
-            if (in_array($newStatus, ['at_store', 'received_by_store'], true)) {
+            if (in_array($newStatus, ['at_store', OrderStatus::RECEIVED_BY_STORE->value], true)) {
                 CourierTask::closeActiveFor($order, 'pickup');
-            } elseif ($newStatus === 'completed') {
+            } elseif ($newStatus === OrderStatus::COMPLETED->value) {
                 CourierTask::closeActiveFor($order, 'delivery');
             }
 

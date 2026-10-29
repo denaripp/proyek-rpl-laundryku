@@ -2,6 +2,8 @@
 
 namespace App\Services\Courier;
 
+use App\Enums\OrderStatus;
+use App\Enums\CourierTaskStatus;
 use App\Models\Courier;
 use App\Models\CourierTask;
 use App\Models\Order;
@@ -30,14 +32,14 @@ class CourierAssignmentService
     public function assignCourier(Order $order, string $taskType = 'pickup'): CourierTask
     {
         // Validate order status
-        if ($order->status === 'cancelled') {
+        if ($order->status === OrderStatus::CANCELLED->value) {
             throw new Exception('Cannot assign courier to a cancelled order.');
         }
 
         // Check if a task already exists
         $existing = CourierTask::where('order_id', $order->id)
             ->where('task_type', $taskType)
-            ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
+            ->whereIn('status', CourierTask::ACTIVE_STATUSES)
             ->first();
         if ($existing) {
             throw new Exception('An active task already exists for this order.');
@@ -61,14 +63,16 @@ class CourierAssignmentService
                 'order_id' => $order->id,
                 'courier_id' => $courier->id,
                 'task_type' => $taskType,
-                'status' => 'assigned',
+                'status' => CourierTaskStatus::ASSIGNED->value,
                 'assigned_at' => now(),
                 'distance_km' => $distance,
             ]);
 
             // Update order status
             $previousStatus = $order->status;
-            $statusField = $taskType === 'pickup' ? 'courier_assigned' : 'courier_assigned_for_delivery';
+            $statusField = $taskType === 'pickup' 
+                ? OrderStatus::COURIER_ASSIGNED->value 
+                : OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value;
             $order->status = $statusField;
             $order->save();
 
@@ -206,7 +210,7 @@ class CourierAssignmentService
     {
         return DB::transaction(function () use ($task, $reason) {
             // Mark current task as failed
-            $task->status = 'failed';
+            $task->status = CourierTaskStatus::FAILED->value;
             $task->failed_at = now();
             $task->failure_reason = $reason ?: 'Courier rejected the task';
             $task->save();
@@ -226,7 +230,7 @@ class CourierAssignmentService
             $maxRejections = config('courier.max_rejections', 3);
             // Just a counter — monitoring can alert if exceeded
             $rejectionCount = CourierTask::where('courier_id', $courier->id)
-                ->where('status', 'failed')
+                ->where('status', CourierTaskStatus::FAILED->value)
                 ->where('failure_reason', 'LIKE', '%rejected%')
                 ->count();
             if ($rejectionCount >= $maxRejections) {
@@ -287,7 +291,7 @@ class CourierAssignmentService
 
         $count = 0;
         foreach ($expiredOrders as $order) {
-            $order->status = 'pickup_failed';
+            $order->status = OrderStatus::PICKUP_FAILED->value;
             $order->save();
 
             AuditLog::create([
