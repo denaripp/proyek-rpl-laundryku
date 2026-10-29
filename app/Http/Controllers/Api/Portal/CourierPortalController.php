@@ -635,9 +635,11 @@ class CourierPortalController extends Controller
             ];
             $task->status = $taskStatusMap[$toStatus] ?? $task->status;
             if (in_array($toStatus, ['at_store', 'completed', 'delivered'], true)) {
-                $task->completed_at = now();
+                $taskType = $task->task_type ?? ($toStatus === 'at_store' ? 'pickup' : 'delivery');
+                CourierTask::closeActiveFor($order, $taskType);
+            } else {
+                $task->save();
             }
-            $task->save();
         }
 
         AuditLog::create([

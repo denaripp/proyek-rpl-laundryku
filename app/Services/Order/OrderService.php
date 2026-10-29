@@ -204,21 +204,9 @@ class OrderService
 
             // Close corresponding courier tasks if transitioning to milestone completion
             if (in_array($newStatus, ['at_store', 'received_by_store'], true)) {
-                CourierTask::where('order_id', $order->id)
-                    ->where('task_type', 'pickup')
-                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
-                    ->update([
-                        'status' => 'delivered',
-                        'completed_at' => now(),
-                    ]);
+                CourierTask::closeActiveFor($order, 'pickup');
             } elseif ($newStatus === 'completed') {
-                CourierTask::where('order_id', $order->id)
-                    ->where('task_type', 'delivery')
-                    ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
-                    ->update([
-                        'status' => 'delivered',
-                        'completed_at' => now(),
-                    ]);
+                CourierTask::closeActiveFor($order, 'delivery');
             }
 
             // Record status history

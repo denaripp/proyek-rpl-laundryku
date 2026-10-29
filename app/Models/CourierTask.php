@@ -66,6 +66,22 @@ class CourierTask extends Model
         return $query->where('status', 'assigned');
     }
 
+    public const ACTIVE_STATUSES = ['assigned', 'accepted', 'arrived', 'picked_up'];
+
+    /**
+     * Close active courier tasks for a given order and task type.
+     */
+    public static function closeActiveFor(Order $order, string $type): int
+    {
+        return static::where('order_id', $order->id)
+            ->where('task_type', $type)
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->update([
+                'status' => 'delivered',
+                'completed_at' => now(),
+            ]);
+    }
+
     public function scopeActive($query)
     {
         return $query->whereIn('status', ['accepted', 'arrived', 'picked_up']);
