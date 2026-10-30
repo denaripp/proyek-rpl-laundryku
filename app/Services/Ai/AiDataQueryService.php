@@ -355,7 +355,7 @@ class AiDataQueryService
             foreach ($activeOrders->take(3) as $ao) {
                 $statusInfo = self::ORDER_STATUS_MAP[$ao->status] ?? null;
                 $label = $statusInfo['label'] ?? $ao->status;
-                $weight = (float) ($ao->actual_weight ?: $ao->weight ?: 0);
+                $weight = (float) ($ao->actual_weight ?? 0);
                 if ($weight > 0) {
                     $statements[] = "Pesanan nomor {$ao->order_number} sudah ditimbang dengan berat {$weight} kg (status: '{$label}').";
                 } else {
@@ -438,19 +438,10 @@ class AiDataQueryService
 
         // Aspect B: "sudah ditimbang belum", "berapa beratnya", "timbang"
         if (str_contains($normalizedMessage, 'ditimbang') || str_contains($normalizedMessage, 'timbang') || str_contains($normalizedMessage, 'berat') || str_contains($normalizedMessage, 'kilo') || str_contains($normalizedMessage, 'bobot')) {
-            $isWeighed = !empty($order->weighed_at) || (float) ($order->actual_weight ?? 0) > 0 || in_array($order->status, [
-                'weighed', 'awaiting_price_approval', 'price_approved', 'awaiting_payment',
-                'payment_required', 'paid', 'processing', 'ready_for_delivery',
-                'courier_assigned_for_delivery', 'out_for_delivery', 'delivered', 'completed',
-            ], true);
+            $actualWeight = $order->actual_weight !== null ? (float) $order->actual_weight : null;
 
-            if ($isWeighed) {
-                $weight = (float) ($order->actual_weight ?: $order->weight);
-                if ($weight > 0) {
-                    return "Pesanan nomor {$order->order_number} sudah ditimbang dengan berat {$weight} kg. Tahap status saat ini: '{$statusInfo['label']}'.";
-                }
-
-                return "Pesanan nomor {$order->order_number} sudah ditimbang (berat belum tersedia). Tahap status saat ini: '{$statusInfo['label']}'.";
+            if ($actualWeight !== null && $actualWeight > 0) {
+                return "Pesanan nomor {$order->order_number} sudah ditimbang dengan berat {$actualWeight} kg. Tahap status saat ini: '{$statusInfo['label']}'.";
             }
 
             return "Pesanan nomor {$order->order_number} belum ditimbang oleh pihak toko. Tahap saat ini: {$statusInfo['stage_desc']}.";
