@@ -203,8 +203,9 @@ test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
     await expect(actualWeightRow).toBeVisible({ timeout: 10000 });
     await expect(actualWeightRow.getByText('2.5 kg', { exact: true })).toBeVisible({ timeout: 10000 });
 
-    await expect(financialCard.locator('text=Total tagihan customer:')).toBeVisible({ timeout: 10000 });
-    await expect(financialCard.locator('text=Rp18.500')).toBeVisible({ timeout: 10000 });
+    const totalBillRow = financialCard.locator('div.flex.justify-between', { hasText: 'Total tagihan customer' });
+    await expect(totalBillRow).toBeVisible({ timeout: 10000 });
+    await expect(totalBillRow.locator('text=Rp18.500')).toBeVisible({ timeout: 10000 });
 
     // Pertahankan assert existing
     await expect(mitraPage.locator('text=Biaya jasa (')).toBeVisible({ timeout: 10000 });
