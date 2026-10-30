@@ -439,13 +439,18 @@ class AiDataQueryService
         // Aspect B: "sudah ditimbang belum", "berapa beratnya", "timbang"
         if (str_contains($normalizedMessage, 'ditimbang') || str_contains($normalizedMessage, 'timbang') || str_contains($normalizedMessage, 'berat') || str_contains($normalizedMessage, 'kilo') || str_contains($normalizedMessage, 'bobot')) {
             $isWeighed = !empty($order->weighed_at) || (float) ($order->actual_weight ?? 0) > 0 || in_array($order->status, [
-                'weighed', 'payment_required', 'paid', 'processing', 'ready_for_delivery',
+                'weighed', 'awaiting_price_approval', 'price_approved', 'awaiting_payment',
+                'payment_required', 'paid', 'processing', 'ready_for_delivery',
                 'courier_assigned_for_delivery', 'out_for_delivery', 'delivered', 'completed',
             ], true);
 
             if ($isWeighed) {
                 $weight = (float) ($order->actual_weight ?: $order->weight);
-                return "Pesanan nomor {$order->order_number} sudah ditimbang dengan berat {$weight} kg. Tahap status saat ini: '{$statusInfo['label']}'.";
+                if ($weight > 0) {
+                    return "Pesanan nomor {$order->order_number} sudah ditimbang dengan berat {$weight} kg. Tahap status saat ini: '{$statusInfo['label']}'.";
+                }
+
+                return "Pesanan nomor {$order->order_number} sudah ditimbang (berat belum tersedia). Tahap status saat ini: '{$statusInfo['label']}'.";
             }
 
             return "Pesanan nomor {$order->order_number} belum ditimbang oleh pihak toko. Tahap saat ini: {$statusInfo['stage_desc']}.";
