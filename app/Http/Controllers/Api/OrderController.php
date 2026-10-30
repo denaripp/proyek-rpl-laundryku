@@ -123,6 +123,8 @@ class OrderController extends Controller
             ];
         })->values() : [];
 
+        $financial = $order->calculateFinancialBreakdown();
+
         return array_merge($order->toArray(), [
             'id' => (string) $order->id,
             'order_number' => $order->order_number,
@@ -142,7 +144,12 @@ class OrderController extends Controller
             'final_amount' => $order->final_price !== null ? (float) $order->final_price : null,
             'delivery_fee' => (float) ($order->delivery_fee ?? 0),
             'platform_fee' => (float) ($order->platform_fee ?? 0),
-            'commission_amount' => (float) ($order->commission_amount ?? 0),
+            'service_fee' => $financial['service_fee'],
+            'is_weighed' => $financial['is_weighed'],
+            'commission_rate' => $financial['commission_rate'],
+            'commission_amount' => $financial['commission_amount'],
+            'commission_configured' => $financial['commission_configured'],
+            'store_net_income' => $financial['store_net_income'],
             'pickup_address' => $pickupAddress,
             'delivery_address' => $deliveryAddress,
             'customer_notes' => $order->customer_notes,

@@ -190,6 +190,11 @@ test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
     const saveWeightBtn = mitraPage.getByRole('button', { name: /Simpan penimbangan/i });
     await saveWeightBtn.click();
     await expect(mitraPage.getByText('Menunggu keputusan pelanggan')).toBeVisible({ timeout: 15000 });
+
+    // Assert: panel toko menampilkan "Biaya jasa (" dan angka final setelah ditimbang
+    await expect(mitraPage.locator('text=Biaya jasa (')).toBeVisible({ timeout: 10000 });
+    await expect(mitraPage.locator('text=Rp17.500').first()).toBeVisible({ timeout: 10000 });
+
     processQueues();
     await mitraContext.close();
 

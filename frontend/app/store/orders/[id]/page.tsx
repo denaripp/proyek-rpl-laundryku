@@ -756,37 +756,49 @@ export default function StoreAdminOrderDetailPage({
 
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between text-slate-600">
-                      <span>Estimasi biaya jasa:</span>
+                      <span>{order.is_weighed ? `Biaya jasa (${order.actual_weight_kg ?? order.actual_weight} kg):` : 'Estimasi biaya jasa:'}</span>
                       <span className="font-mono font-semibold tabular-nums text-navy-950">
-                        {formatRupiah(
-                          order.items && order.items.length > 0
-                            ? order.items.reduce((acc, it) => acc + (it.line_estimated_amount || ((it.unit_price || 0) * (it.quantity_estimated || 0))), 0)
-                            : Math.max(0, (order.estimated_amount || 0) - (order.delivery_fee || 0) - (order.platform_fee ?? 1000))
-                        )}
+                        {formatRupiah(order.service_fee ?? 0)}
                       </span>
                     </div>
-                    {order.actual_weight_kg !== null && (
+                    {order.is_weighed && (
                       <div className="flex justify-between text-slate-600">
                         <span>Berat aktual:</span>
-                        <span className="font-mono font-semibold text-navy-900">{order.actual_weight_kg} kg</span>
+                        <span className="font-mono font-semibold text-navy-900">{order.actual_weight_kg ?? order.actual_weight} kg</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-slate-600">
-                      <span>Biaya layanan (platform):</span>
-                      <span className="font-mono font-semibold tabular-nums text-navy-950">{formatRupiah(order.platform_fee ?? 1000)}</span>
-                    </div>
                     <div className="flex justify-between text-slate-600">
                       <span>Ongkos kirim:</span>
                       <span className="font-mono font-semibold tabular-nums text-navy-950">{order.delivery_fee > 0 ? formatRupiah(order.delivery_fee) : 'Gratis'}</span>
                     </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Biaya layanan (platform):</span>
+                      <span className="font-mono font-semibold tabular-nums text-navy-950">{formatRupiah(order.platform_fee ?? 0)}</span>
+                    </div>
+                    {order.is_weighed && (
+                      <>
+                        <div className="flex justify-between text-slate-600">
+                          <span>Komisi platform:</span>
+                          <span className="font-mono font-semibold tabular-nums text-navy-950">
+                            {order.commission_configured ? formatRupiah(order.commission_amount ?? 0) : 'Rp0 (belum diatur)'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-slate-600">
+                          <span>Pendapatan bersih toko:</span>
+                          <span className="font-mono font-semibold tabular-nums text-emerald-700">
+                            {formatRupiah(order.store_net_income ?? 0)}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="border-t border-slate-100 pt-3 flex justify-between items-baseline">
                     <span className="font-semibold text-xs text-slate-600">
-                      {order.final_amount !== null ? 'Total final:' : 'Total estimasi:'}
+                      Total tagihan customer:
                     </span>
                     <span className="font-mono font-bold text-xl text-navy-950 tabular-nums">
-                      {formatRupiah(order.final_amount !== null ? order.final_amount : order.estimated_amount)}
+                      {formatRupiah(order.final_amount !== null && order.final_amount !== undefined ? order.final_amount : order.estimated_amount)}
                     </span>
                   </div>
                 </div>

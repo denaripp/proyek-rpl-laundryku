@@ -199,4 +199,67 @@ class Order extends Model
     {
         return $this->status === 'cancelled';
     }
+
+    public function isWeighed(): bool
+    {
+        return $this->actual_weight !== null;
+    }
+
+    /**
+     * Calculate financial breakdown (service fee, platform commission, store net income).
+     * Single source of truth for order financial breakdown.
+     */
+    public function calculateFinancialBreakdown(): array
+    {
+        $isWeighed = $this->isWeighed();
+
+        // 1. service_fee calculation
+        // Prioritas (1) jumlah items.line_final_amount kalau semua terisi
+        $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+        $hasItems = $items->isNotEmpty();
+        $allLineFinalFilled = $hasItems && $items->every(fn ($it) => $it->line_final_amount !== null && (float) $it->line_final_amount > 0);
+
+        if ($allLineFinalFilled) {
+            $serviceFee = (float) $items->sum('line_final_amount');
+        } elseif ($isWeighed && $this->final_price !== null) {
+            // Prioritas (2) kalau sudah ditimbang: final_price - platform_fee - delivery_fee - pickup_fee
+            $serviceFee = (float) $this->final_price - (float) ($this->platform_fee ?? 0) - (float) ($this->delivery_fee ?? 0) - (float) ($this->pickup_fee ?? 0);
+        } else {
+            // Prioritas (3) kalau belum ditimbang: jumlah line_estimated_amount
+            if ($hasItems) {
+                $serviceFee = (float) $items->sum(function ($it) {
+                    $unitPrice = (float) ($it->unit_price ?? $it->price_per_unit ?? 0);
+                    $qty = (float) ($it->quantity_estimated ?? $it->quantity ?? 0);
+                    $calculatedSubtotal = $unitPrice * $qty;
+                    if ($it->minimum_charge && $calculatedSubtotal < (float) $it->minimum_charge) {
+                        $calculatedSubtotal = (float) $it->minimum_charge;
+                    }
+                    return (float) ($it->line_estimated_amount ?? ($it->total_price ?? ($it->subtotal ?? $calculatedSubtotal)));
+                });
+            } else {
+                $serviceFee = max(0, (float) ($this->estimated_price ?? $this->total_amount ?? 0) - (float) ($this->platform_fee ?? 0) - (float) ($this->delivery_fee ?? 0) - (float) ($this->pickup_fee ?? 0));
+            }
+        }
+
+        $serviceFee = max(0, (float) $serviceFee);
+
+        // 2. Commission calculation
+        $store = $this->relationLoaded('store') ? $this->store : $this->store()->first();
+        $commissionRate = $store?->commission_rate;
+        $commissionConfigured = $commissionRate !== null;
+        $rateNumeric = $commissionConfigured ? (float) $commissionRate : 0.0;
+        $commissionAmount = $commissionConfigured ? (float) round(($rateNumeric / 100) * $serviceFee, 2) : 0.0;
+
+        // 3. store_net_income: service_fee - commission_amount
+        $storeNetIncome = max(0, (float) round($serviceFee - $commissionAmount, 2));
+
+        return [
+            'service_fee' => $serviceFee,
+            'is_weighed' => $isWeighed,
+            'commission_rate' => $rateNumeric,
+            'commission_amount' => $commissionAmount,
+            'commission_configured' => $commissionConfigured,
+            'store_net_income' => $storeNetIncome,
+        ];
+    }
 }

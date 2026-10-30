@@ -84,7 +84,12 @@ export interface OrderDetail {
   platform_fee?: number;
   discount?: number;
   tax?: number;
+  service_fee?: number;
+  is_weighed?: boolean;
+  commission_rate?: number;
   commission_amount: number;
+  commission_configured?: boolean;
+  store_net_income?: number;
   pickup_address: AddressSnapshot;
   delivery_address: AddressSnapshot;
   customer_notes?: string;
