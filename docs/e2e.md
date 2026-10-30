@@ -101,4 +101,4 @@ Untuk menjalankan test suite Laravel, **selalu gunakan script composer**:
 ```powershell
 composer test
 ```
-*(Script ini secara otomatis membersihkan cache sebelum test, mengeksekusi PHPUnit menggunakan database uji `laundryku_test` dari `phpunit.xml`, lalu meng-cache kembali konfigurasi untuk Apache dev server).*
+*(Script ini memanggil runner `bin/test-runner.php` yang membersihkan config cache sebelum pengujian, menjalankan PHPUnit dengan database uji `laundryku_test` dari `phpunit.xml`, dan menggunakan blok `try ... finally` untuk menjamin pemulihan config cache (`php artisan config:cache`) meskipun test gagal atau terjadi error, dengan tetap mempertahankan exit code test. Selain itu, `tests/TestCase.php` dilengkapi database guard yang secara otomatis menolak eksekusi test jika mendeteksi koneksi mengarah ke database utama `laundryku` sebelum operasi destruktif/RefreshDatabase berjalan).*

@@ -16,7 +16,7 @@
 | T010 | Enum / Model | Penundaan Eloquent `$casts` Enum untuk `OrderStatus` dan `CourierTaskStatus` | Deferred | Magic string diganti enum value di file kurir/order; `$casts` model ditunda agar tidak memecah kueri mentah. |
 | T011 | Auth / RBAC | Dua sistem role tidak sinkron: `users.role` vs tabel `roles` | Pending Refactoring | Kolom flat (`super_admin`, `store_admin`, `courier`, `customer`) vs tabel RBAC (`platform_owner`, `platform_admin`, `store_owner`, `store_staff`, `courier`, `customer`). |
 | T012 | Frontend / Store Search | frontend/app/stores/page.tsx ±700 baris setelah fix 77d7cc8. Rencana: extract logika resolusi lokasi ke hook useResolvedLocation() + komponen terpisah untuk peta dan daftar toko. Belum ada test frontend. | Pending Refactoring | Dicatat pada Tahap 1 untuk refactor mendatang. |
-| T013 | Environment / Dev Ops | Laragon Apache thread-safe worker (mod_php) menyebabkan race condition pembacaan .env saat request paralel ("database.sqlite does not exist"). Diatasi dengan config:cache di dev dan pengaman script composer test. | Selesai / Terkendali | Wajib jalankan 'composer dev:cache' setelah edit .env, dan test backend dijalankan via 'composer test'. |
+| T013 | Environment / Dev Ops | Laragon Apache thread-safe worker (mod_php) menyebabkan race condition pembacaan .env saat request paralel ("database.sqlite does not exist"). Diatasi dengan config:cache di dev, script runner 'bin/test-runner.php' (try/finally cache recovery), dan database guard di Tests\TestCase. | Selesai / Terkendali | Wajib jalankan 'composer dev:cache' setelah edit .env, dan test backend dijalankan via 'composer test'. Direct 'php artisan test' dibentengi guard. |
 
 ## Decision Log
 
@@ -435,8 +435,9 @@
 - **Konteks Masalah**: Pada Apache Laragon Windows dengan `mod_php` dan PHP Thread-Safe (TS), request paralel dari runner E2E menyebabkan race condition pada pembacaan `.env` via `getenv()`, sehingga Laravel sesekali fallback ke default driver `sqlite` ("database.sqlite does not exist").
 - **Solusi yang Diterapkan**:
   1. Menggunakan `php artisan config:cache` di lingkungan dev agar Apache worker membaca konfigurasi langsung dari file statis PHP (`bootstrap/cache/config.php`) tanpa memanggil `.env` di runtime.
-  2. **Mitigasi Bahaya Test**: Karena `config:cache` membuat Laravel mengabaikan `<env name="DB_DATABASE" value="laundryku_test"/>` dari `phpunit.xml` dan dapat mengeksekusi `RefreshDatabase` ke database utama (`laundryku`), dibuatkan script composer khusus:
+  2. **Mitigasi Bahaya Test & Pengaman Multi-Lapis**: Karena `config:cache` membuat Laravel mengabaikan `<env name="DB_DATABASE" value="laundryku_test"/>` dari `phpunit.xml` dan berisiko mengeksekusi `RefreshDatabase` ke database utama (`laundryku`), diterapkan pengaman multi-lapis:
      - `composer dev:cache`: mengeksekusi `php artisan config:cache && php artisan queue:restart`
-     - `composer test`: mengeksekusi `php artisan config:clear && php artisan test && php artisan config:cache`
-  3. Pengembang wajib menjalankan `composer dev:cache` setiap kali melakukan perubahan pada `.env`, dan seluruh eksekusi test backend wajib melalui `composer test`.
+     - `composer test`: mengeksekusi runner `bin/test-runner.php` yang membersihkan config cache sebelum pengujian, mengeksekusi test, dan menjamin pemulihan config cache dalam blok `try ... finally` meskipun test gagal atau unhandled error terjadi (mempertahankan exit code test asli).
+     - Database Guard di `tests/TestCase.php`: memeriksa koneksi database aktif sebelum trait testing dan operasi destruktif (`RefreshDatabase`/migrasi) berjalan. Jika koneksi mengarah ke database utama `laundryku` atau database non-test, eksekusi test langsung dibatalkan dengan `RuntimeException`.
+  3. Pengembang wajib menjalankan `composer dev:cache` setiap kali melakukan perubahan pada `.env`, dan seluruh eksekusi test backend wajib melalui `composer test`. Direct `php artisan test` dengan cache aktif otomatis dicegah oleh database guard.
 

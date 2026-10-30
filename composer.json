@@ -41,11 +41,7 @@
             "@php artisan config:cache",
             "@php artisan queue:restart"
         ],
-        "test": [
-            "@php artisan config:clear",
-            "@php artisan test",
-            "@php artisan config:cache"
-        ],
+        "test": "@php bin/test-runner.php",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
