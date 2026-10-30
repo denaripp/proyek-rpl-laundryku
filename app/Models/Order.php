@@ -217,13 +217,13 @@ class Order extends Model
         // Prioritas (1) jumlah items.line_final_amount kalau semua terisi
         $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
         $hasItems = $items->isNotEmpty();
-        $allLineFinalFilled = $hasItems && $items->every(fn ($it) => $it->line_final_amount !== null && (float) $it->line_final_amount > 0);
+        $allLineFinalFilled = $hasItems && $items->every(fn ($it) => $it->line_final_amount !== null && is_numeric($it->line_final_amount));
 
         if ($allLineFinalFilled) {
             $serviceFee = (float) $items->sum('line_final_amount');
         } elseif ($isWeighed && $this->final_price !== null) {
-            // Prioritas (2) kalau sudah ditimbang: final_price - platform_fee - delivery_fee - pickup_fee
-            $serviceFee = (float) $this->final_price - (float) ($this->platform_fee ?? 0) - (float) ($this->delivery_fee ?? 0) - (float) ($this->pickup_fee ?? 0);
+            // Prioritas (2) kalau sudah ditimbang: final_price - platform_fee - delivery_fee - pickup_fee + discount
+            $serviceFee = (float) $this->final_price - (float) ($this->platform_fee ?? 0) - (float) ($this->delivery_fee ?? 0) - (float) ($this->pickup_fee ?? 0) + (float) ($this->discount ?? 0);
         } else {
             // Prioritas (3) kalau belum ditimbang: jumlah line_estimated_amount
             if ($hasItems) {
@@ -237,7 +237,7 @@ class Order extends Model
                     return (float) ($it->line_estimated_amount ?? ($it->total_price ?? ($it->subtotal ?? $calculatedSubtotal)));
                 });
             } else {
-                $serviceFee = max(0, (float) ($this->estimated_price ?? $this->total_amount ?? 0) - (float) ($this->platform_fee ?? 0) - (float) ($this->delivery_fee ?? 0) - (float) ($this->pickup_fee ?? 0));
+                $serviceFee = max(0, (float) ($this->estimated_price ?? $this->total_amount ?? 0) - (float) ($this->platform_fee ?? 0) - (float) ($this->delivery_fee ?? 0) - (float) ($this->pickup_fee ?? 0) + (float) ($this->discount ?? 0));
             }
         }
 
