@@ -441,3 +441,10 @@
      - Database Guard di `tests/TestCase.php`: memeriksa koneksi database aktif sebelum trait testing dan operasi destruktif (`RefreshDatabase`/migrasi) berjalan. Jika koneksi mengarah ke database utama `laundryku` atau database non-test, eksekusi test langsung dibatalkan dengan `RuntimeException`.
   3. Pengembang wajib menjalankan `composer dev:cache` setiap kali melakukan perubahan pada `.env`, dan seluruh eksekusi test backend wajib melalui `composer test`. Direct `php artisan test` dengan cache aktif otomatis dicegah oleh database guard.
 
+## [2026-10-30] Keputusan Tindak Lanjut Bug Field Order (Bug E)
+- **Status `order_items.quantity_actual` & `line_final_amount`**: Ditunda sampai aturan penimbangan multi-item ditetapkan. Dilarang membagi berat total kotor pesanan secara otomatis ke masing-masing item tanpa aturan bisnis yang jelas.
+- **Status `orders.total_price`**: Dipertahankan sebagai nilai estimasi awal (*initial estimated grand total*); jangan disinkronkan secara terburu-buru sebelum seluruh konsumen kode dan laporan diverifikasi menyeluruh.
+- **Status Timestamp Orders (`*_at`)**: Kolom timestamp pada tabel `orders` tidak boleh di-backfill dengan `now()`. Tabel `order_status_history` tetap menjadi satu-satunya sumber kebenaran (*single source of truth*) untuk timeline dan riwayat status pesanan.
+- **Sinkronisasi Timestamp di `OrderService::transition()`**: Sinkronisasi pencatatan timestamp transisi status ke kolom tabel `orders` diputuskan sebagai pekerjaan terpisah pada tahap mendatang.
+
+
