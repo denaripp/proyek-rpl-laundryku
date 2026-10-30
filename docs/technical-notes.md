@@ -447,4 +447,11 @@
 - **Status Timestamp Orders (`*_at`)**: Kolom timestamp pada tabel `orders` tidak boleh di-backfill dengan `now()`. Tabel `order_status_history` tetap menjadi satu-satunya sumber kebenaran (*single source of truth*) untuk timeline dan riwayat status pesanan.
 - **Sinkronisasi Timestamp di `OrderService::transition()`**: Sinkronisasi pencatatan timestamp transisi status ke kolom tabel `orders` diputuskan sebagai pekerjaan terpisah pada tahap mendatang.
 
+## [2026-10-30] Celah Validasi Berat pada Transisi Persetujuan Harga
+- **Konteks Masalah**: Pada `OrderService::transition()`, validasi status transisi `validateTransition()` hanya memeriksa peta transisi yang diizinkan (`getAllowedTransitions`), namun tidak mewajibkan nilai `actual_weight` terisi saat status berpindah ke `awaiting_price_approval`.
+- **Dampak Potensial**:
+  1. Pemanggilan endpoint publik `POST /api/v1/orders/{order}/transition` (`OrderController::transition`) yang mengirim `to_status: "awaiting_price_approval"` tanpa payload `actual_weight_kg`/`weight` dapat meloloskan pesanan ke tahap persetujuan harga dengan `actual_weight` bernilai `NULL`.
+  2. Override oleh platform admin via `adminTransition()` memanggil `OrderService::transition()` secara langsung tanpa mekanisme validasi pengisian berat.
+- **Tindak Lanjut**: Validasi ketat bahwa `actual_weight` wajib terisi dan bernilai lebih dari 0 kg sebelum transisi ke `awaiting_price_approval` dicatat sebagai utang teknis untuk diperbaiki pada tahap penguatan validasi transisi order.
+
 
