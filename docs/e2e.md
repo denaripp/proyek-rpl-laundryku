@@ -37,9 +37,9 @@ Demi keamanan dan isolasi, notifikasi WhatsApp dialihkan ke driver `log` agar ti
    ```
 3. **Stabilkan konfigurasi & restart antrean**:
    ```powershell
-   C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan config:cache
-   C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan queue:restart
+   composer dev:cache
    ```
+   *(Menjalankan `php artisan config:cache && php artisan queue:restart`. Wajib dijalankan setiap kali file `.env` diedit agar worker Apache thread-safe tidak mengalami race condition pembacaan file environment).*
 
 ---
 
@@ -82,10 +82,9 @@ Setelah pengujian selesai (seluruh skenario *passed*):
    Remove-Item .env.backup-e2e -Force
    ```
 
-3. **Bersihkan cache konfigurasi & restart antrean**:
+3. **Stabilkan konfigurasi & restart antrean kembali**:
    ```powershell
-   C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan config:clear
-   C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan queue:restart
+   composer dev:cache
    ```
 
 4. **Verifikasi driver WhatsApp**:
@@ -93,3 +92,13 @@ Setelah pengujian selesai (seluruh skenario *passed*):
    C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan tinker --execute="dump(config('services.whatsapp.driver'));"
    ```
    *Harus menghasilkan `"fonnte"`.*
+
+---
+
+## 5. Pengujian Unit & Fitur Backend
+
+Untuk menjalankan test suite Laravel, **selalu gunakan script composer**:
+```powershell
+composer test
+```
+*(Script ini secara otomatis membersihkan cache sebelum test, mengeksekusi PHPUnit menggunakan database uji `laundryku_test` dari `phpunit.xml`, lalu meng-cache kembali konfigurasi untuk Apache dev server).*
