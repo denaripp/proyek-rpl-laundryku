@@ -192,15 +192,16 @@ test.describe.serial('E2E Order Lifecycle & Courier Re-assignment', () => {
     await expect(mitraPage.getByText('Menunggu keputusan pelanggan')).toBeVisible({ timeout: 15000 });
 
     // Assert: panel toko menampilkan kartu Rincian keuangan dengan baris Biaya jasa dan total tagihan skenario
-    const financialCard = mitraPage.locator('div', { has: mitraPage.locator('h3', { hasText: 'Rincian keuangan' }) });
+    const financialCard = mitraPage.locator('div.rounded-2xl', { has: mitraPage.locator('h3', { hasText: 'Rincian keuangan' }) });
     await expect(financialCard).toBeVisible({ timeout: 10000 });
 
     const serviceFeeRow = financialCard.locator('div.flex.justify-between', { hasText: 'Biaya jasa' });
     await expect(serviceFeeRow).toBeVisible({ timeout: 10000 });
     await expect(serviceFeeRow.locator('text=Rp17.500')).toBeVisible({ timeout: 10000 });
 
-    await expect(financialCard.locator('text=Berat aktual:')).toBeVisible({ timeout: 10000 });
-    await expect(financialCard.locator('text=2.5 kg')).toBeVisible({ timeout: 10000 });
+    const actualWeightRow = financialCard.locator('div.flex.justify-between', { hasText: 'Berat aktual' });
+    await expect(actualWeightRow).toBeVisible({ timeout: 10000 });
+    await expect(actualWeightRow.getByText('2.5 kg', { exact: true })).toBeVisible({ timeout: 10000 });
 
     await expect(financialCard.locator('text=Total tagihan customer:')).toBeVisible({ timeout: 10000 });
     await expect(financialCard.locator('text=Rp18.500')).toBeVisible({ timeout: 10000 });
