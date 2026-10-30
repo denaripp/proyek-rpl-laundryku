@@ -20,6 +20,20 @@ abstract class TestCase extends BaseTestCase
         parent::setUpTheTestEnvironment();
     }
 
+    /**
+     * Strict allowlist of designated test databases.
+     * Sourced from phpunit.xml and .env.testing (DB_DATABASE=laundryku_test).
+     */
+    public static function isAllowedTestDatabase(string $dbName): bool
+    {
+        $allowed = [
+            'laundryku_test',
+            ':memory:',
+        ];
+
+        return in_array(strtolower(trim($dbName)), $allowed, true);
+    }
+
     protected function ensureSafeTestDatabase($app = null): void
     {
         $app = $app ?? $this->app;
@@ -30,11 +44,10 @@ abstract class TestCase extends BaseTestCase
         $connection = $app['config']->get('database.default', 'mysql');
         $dbName = (string) $app['config']->get("database.connections.{$connection}.database");
 
-        $blockedDatabases = ['laundryku', 'production'];
-        if (in_array(strtolower($dbName), $blockedDatabases, true) || (!str_contains(strtolower($dbName), 'test') && $dbName !== ':memory:')) {
+        if (! static::isAllowedTestDatabase($dbName)) {
             throw new RuntimeException(
-                "GUARD VIOLATION: Test suite attempted to run against unauthorized/main database '{$dbName}'. " .
-                "Tests must run on a designated test database (e.g. 'laundryku_test' or ':memory:'). " .
+                "GUARD VIOLATION: Test suite attempted to run against unauthorized database '{$dbName}'. " .
+                "Only allowlisted test databases ('laundryku_test', ':memory:') are permitted. " .
                 "Ensure config cache is cleared before running tests (e.g. run 'composer test')."
             );
         }
