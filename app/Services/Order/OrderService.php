@@ -200,6 +200,9 @@ class OrderService
 
         return DB::transaction(function () use ($order, $newStatus, $actor, $reason, $metadata, $oldStatus) {
             $order->status = $newStatus;
+            if ($newStatus === OrderStatus::COMPLETED->value && empty($order->completed_at)) {
+                $order->completed_at = now();
+            }
             $order->save();
 
             // Close corresponding courier tasks if transitioning to milestone completion
