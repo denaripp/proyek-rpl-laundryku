@@ -128,7 +128,7 @@ class OpenAiClient implements AiClientInterface
     {
         $apiKey = config('ai.api_key', config('ai.openai_api_key'));
 
-        if (empty($apiKey)) {
+        if (empty($apiKey) || str_contains($apiKey, 'dummy') || str_contains($apiKey, 'placeholder')) {
             if ((app()->isLocal() || app()->runningUnitTests()) && config('ai.mock_in_local', false)) {
                 return [
                     'success' => true,
