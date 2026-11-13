@@ -48,6 +48,8 @@ jobs:
 
       - name: Prepare Test Environment
         run: |
+          mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache/data storage/framework/testing storage/logs
+          chmod -R 775 storage bootstrap/cache
           cp .env.example .env.testing
           sed -i 's/DB_DATABASE=.*/DB_DATABASE=laundryku_test/g' .env.testing
           sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=root/g' .env.testing
