@@ -4,11 +4,13 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Truck, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { getSafeRedirectPath } from '@/lib/auth';
 
 function CourierLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = searchParams.get('redirect') || '/courier/tasks';
+  const safeRedirect = getSafeRedirectPath(searchParams.get('redirect'), '/courier/tasks');
+  const redirectTarget = safeRedirect && safeRedirect !== '/courier/login' ? safeRedirect : '/courier/tasks';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

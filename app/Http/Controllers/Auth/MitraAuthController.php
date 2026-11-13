@@ -68,6 +68,12 @@ class MitraAuthController extends Controller
         }
 
         $request->session()->regenerate();
+
+        if ($user->two_factor_enabled) {
+            $request->session()->put('pending_2fa', true);
+            return redirect()->route('2fa.verify');
+        }
+
         $user->update(['last_login_at' => now()]);
 
         AuditLog::create([

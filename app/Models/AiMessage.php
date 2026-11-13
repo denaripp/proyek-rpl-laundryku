@@ -10,6 +10,8 @@ class AiMessage extends Model
 {
     use HasFactory;
 
+    protected $touches = ['conversation'];
+
     protected $fillable = [
         'conversation_id',
         'content',

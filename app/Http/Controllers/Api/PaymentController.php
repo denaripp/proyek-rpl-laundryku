@@ -42,7 +42,7 @@ class PaymentController extends Controller
             });
 
             $storeIds = $user->ownedStores()->pluck('id')->merge(
-                $user->storeStaff()->pluck('store_id')
+                $user->storeStaff()->where('is_active', true)->pluck('store_id')
             )->unique();
 
             if ($storeIds->isNotEmpty()) {
@@ -360,9 +360,22 @@ class PaymentController extends Controller
      */
     public function simulateSuccess(Request $request, Order $order)
     {
+        // Disallow payment simulation in production unless explicitly allowed by config
+        if (app()->isProduction() && !config('services.payment.allow_simulation', false)) {
+            return response()->json([
+                'error' => 'Payment simulation is disabled in production.',
+            ], 403);
+        }
+
         $user = $request->user();
         if ($user->id !== $order->customer_id && !$user->hasPermissionTo('create_payment')) {
             return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($order->payment_status === 'paid' || $order->status === 'paid') {
+            return response()->json([
+                'error' => 'Order is already marked as paid.',
+            ], 400);
         }
 
         app(\App\Services\Payment\XenditService::class)->markOrderAsPaid($order, 'Simulated payment success');

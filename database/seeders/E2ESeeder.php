@@ -32,6 +32,11 @@ class E2ESeeder extends Seeder
 
     public function run(): void
     {
+        if (!app()->environment('local', 'testing')) {
+            $this->command?->warn('E2ESeeder hanya boleh dijalankan di environment local atau testing.');
+            return;
+        }
+
         // 0. Clean previous E2E orders & tasks to ensure pristine state
         self::cleanOrdersAndTasks();
 

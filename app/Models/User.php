@@ -29,12 +29,15 @@ class User extends Authenticatable
         'google_id',
         'profile_photo',
         'is_active',
+        'email_verified_at',
+        'phone_verified_at',
         'google2fa_secret',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        'google2fa_secret',
     ];
 
     protected $casts = [
@@ -82,7 +85,8 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
             ->using(UserRole::class)
-            ->withPivot('store_id', 'assigned_at', 'assigned_by')
+            ->withPivot('store_id', 'status', 'assigned_at', 'assigned_by')
+            ->wherePivot('status', 'active')
             ->withTimestamps();
     }
 
@@ -250,7 +254,7 @@ class User extends Authenticatable
     /**
      * Determine if the token has a given ability, with real-time role fallback for role abilities.
      */
-    public function tokenCan(string $ability): bool
+        public function tokenCan(string $ability): bool
     {
         $token = $this->currentAccessToken();
 
@@ -259,14 +263,7 @@ class User extends Authenticatable
                 return $token->can($ability);
             }
 
-            if ($token->can($ability)) {
-                return true;
-            }
-        }
-
-        if (str_starts_with($ability, 'role:')) {
-            $roleName = substr($ability, 5);
-            return $this->hasRole($roleName);
+            return $token->can($ability);
         }
 
         return false;

@@ -94,6 +94,7 @@ class SettlementTest extends TestCase
             'store_id' => $store->id,
             'customer_id' => $customer->id,
             'status' => 'completed',
+            'payment_status' => 'paid',
             'total_amount' => $amount,
             'total_price' => $amount,
             'completed_at' => $completedAt,

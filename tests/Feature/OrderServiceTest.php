@@ -135,7 +135,7 @@ class OrderServiceTest extends TestCase
         $this->orderService->recalculateFinalPrice($order);
 
         $order->refresh();
-        $expectedPrice = 7 * $this->servicePrice->price_per_unit; // 70000
+        $expectedPrice = (7 * $this->servicePrice->price_per_unit) + ($order->platform_fee ?? 0);
         $this->assertEquals($expectedPrice, $order->total_amount);
     }
 

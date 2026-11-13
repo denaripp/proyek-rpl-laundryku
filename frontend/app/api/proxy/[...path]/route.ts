@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   LARAVEL_API_BASE_URL,
   PORTAL_COOKIE_NAMES,
+  canonicalizePath,
   detectPortalFromRequest,
   isPathAllowedInProxy,
   validateCsrfOrigin,
@@ -19,14 +20,16 @@ async function handleProxy(request: NextRequest, { params }: { params: Promise<{
   const pathSegments = resolvedParams.path || [];
   const rawPath = pathSegments.join('/');
   const search = request.nextUrl.search || '';
-  const targetPath = `/${rawPath}`;
+  const canonical = canonicalizePath(rawPath);
 
-  if (!isPathAllowedInProxy(targetPath)) {
+  if (!canonical || !isPathAllowedInProxy(canonical)) {
     return NextResponse.json(
-      { success: false, error: { code: 'ENDPOINT_NOT_ALLOWED', message: `Akses proxy ke ${targetPath} tidak diizinkan.` } },
+      { success: false, error: { code: 'ENDPOINT_NOT_ALLOWED', message: `Akses proxy ke /${rawPath} tidak diizinkan.` } },
       { status: 403 }
     );
   }
+
+  const targetPath = canonical;
 
   const portal = detectPortalFromRequest(request, targetPath);
   const cookieName = PORTAL_COOKIE_NAMES[portal];
@@ -53,6 +56,11 @@ async function handleProxy(request: NextRequest, { params }: { params: Promise<{
     headers.set('Authorization', `Bearer ${token}`);
   } else if (incomingAuth) {
     headers.set('Authorization', incomingAuth);
+  }
+
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
+  if (clientIp) {
+    headers.set('X-Forwarded-For', clientIp);
   }
 
   let body: BodyInit | null = null;

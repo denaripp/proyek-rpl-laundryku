@@ -110,9 +110,17 @@ class OrderPolicy
             return true;
         }
 
-        // Customer: own order
+        // Customer: own order, only before processing / pickup completion
         if ($user->id === $order->customer_id) {
-            return true;
+            $cancellableStatuses = [
+                'created',
+                'waiting_pickup',
+                'pending_pickup',
+                'waiting_for_courier',
+                'awaiting_payment',
+                'awaiting_price_approval',
+            ];
+            return in_array(strtolower((string) $order->status), $cancellableStatuses, true);
         }
 
         // Store staff/owner: if they have access to the order's store

@@ -43,14 +43,14 @@ class XenditWebhookController extends Controller
 
             return response()->json(['success' => true]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // SECURITY (Tahap 19): log message only, no full trace
             // (trace may include request payload with sensitive data).
             Log::error('Xendit webhook error', [
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error' => 'Webhook processing failed'], 500);
         }
     }
 }

@@ -13,6 +13,7 @@ class Setting extends Model
         'type',
         'group',
         'description',
+        'updated_by',
     ];
 
     /**
@@ -21,7 +22,10 @@ class Setting extends Model
     public static function get(string $key, mixed $default = null): mixed
     {
         return Cache::remember("setting:{$key}", 3600, function () use ($key, $default) {
-            $setting = static::where('key', $key)->first();
+            $setting = static::where('key', $key)
+                ->orWhere('key', strtoupper($key))
+                ->orWhere('key', strtolower($key))
+                ->first();
             if (!$setting) {
                 return $default;
             }
@@ -33,9 +37,12 @@ class Setting extends Model
     /**
      * Set a setting value and update cache.
      */
-    public static function set(string $key, mixed $value, ?string $type = null, ?string $group = null, ?string $description = null): static
+    public static function set(string $key, mixed $value, ?string $type = null, ?string $group = null, ?string $description = null, ?int $updatedBy = null): static
     {
-        $setting = static::firstOrNew(['key' => $key]);
+        $setting = static::where('key', $key)
+            ->orWhere('key', strtoupper($key))
+            ->orWhere('key', strtolower($key))
+            ->first() ?? new static(['key' => $key]);
 
         if ($type !== null) {
             $setting->type = $type;
@@ -51,12 +58,27 @@ class Setting extends Model
             $setting->description = $description;
         }
 
+        if ($updatedBy !== null) {
+            $setting->updated_by = $updatedBy;
+        }
+
         $setting->value = static::serializeValue($value, $setting->type);
         $setting->save();
 
+        Cache::forget("setting:{$key}");
+        Cache::forget("setting:" . strtoupper($key));
+        Cache::forget("setting:" . strtolower($key));
         Cache::put("setting:{$key}", static::castValue($setting->value, $setting->type), 3600);
 
         return $setting;
+    }
+
+    /**
+     * Relation to user who updated the setting.
+     */
+    public function updatedByUser()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     /**
@@ -72,6 +94,8 @@ class Setting extends Model
      */
     public static function forget(string $key): bool
     {
+        Cache::forget("setting:" . strtoupper($key));
+        Cache::forget("setting:" . strtolower($key));
         return Cache::forget("setting:{$key}");
     }
 

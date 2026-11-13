@@ -1,4266 +1,540 @@
-# PRODUCT REQUIREMENTS DOCUMENT (PRD)
+# PRODUCT REQUIREMENTS DOCUMENT (PRD) & SOFTWARE REQUIREMENTS SPECIFICATION (SRS)
+# LaundryKu — Marketplace Laundry Multi-Tenant & Asisten AI Hibrida
 
-# LANDURYKU
-
-## Laundry Marketplace + AI Chat Assistant
-
-**Product Name:** LANDURYKU
-**Product Type:** Laundry Marketplace
-**Document Type:** Product Requirements Document
-**Status:** Draft for Business & Product Review
-**Date:** 29 August 2026
-**Primary Platform:** Responsive Web / Mobile-Friendly
-**Architecture:** MVC
-**Document Audience:** Product Owner, Business Stakeholder, UX/UI Designer, Developer, QA, Security Engineer, Payment/Finance Team, AI/Product Team
-
----
-
-# 1. Executive Summary
-
-**LANDURYKU** adalah platform marketplace laundry berbasis web yang mempertemukan:
-
-* **Customer** (Pengguna / Pelanggan laundry);
-* **Kurir** (Petugas penjemputan dan pengantaran laundry);
-* **Admin Toko** (Pemilik / Pengelola mitra toko laundry);
-* **Super Admin** (Administrator pengelola seluruh platform marketplace).
-
-Customer dapat menemukan laundry berdasarkan lokasi, melihat layanan dan harga, membuat order pickup/delivery, memilih pembayaran **Online Payment melalui Xendit** atau **COD**, memantau status laundry, serta melihat posisi kurir ketika proses pickup/delivery berlangsung.
-
-LANDURYKU juga dilengkapi **AI Chat Assistant** yang membantu customer mendapatkan informasi mengenai layanan, harga, order, pembayaran, dan pertanyaan umum.
-
-Mitra Laundry melalui Admin Toko dapat mendaftarkan bisnisnya, mengelola layanan dan harga, menerima dan memproses order, mengelola kurir, serta melihat laporan operasional dan pendapatan.
-
-Kurir dapat menerima tugas pickup/delivery, memperbarui status perjalanan, dan mengirimkan lokasi GPS selama task aktif.   
-
-Super Admin bertugas mengelola seluruh ekosistem marketplace, verifikasi toko baru, manajemen pengguna, pemantauan transaksi payment & refund, pengaturan komisi, konfigurasi sistem, audit log, dan keamanan.
-
-Produk dirancang sebagai marketplace **multi-store dan multi-tenant** dengan pendekatan security:
-
-> **Defense in Depth + Least Privilege + Zero Trust Resource Authorization**
-
----
-
-# 2. Product Vision
-
-## Vision
-
-> Menjadi platform digital yang membuat proses mencari, memesan, mengambil, mencuci, membayar, dan mengantarkan laundry menjadi mudah, transparan, aman, dan dapat dilacak dari awal hingga selesai.
-
-## Product Principles
-
-1. Customer First.
-2. Trust & Safety.
-3. Operational Transparency.
-4. Fair Marketplace.
-5. Least Privilege.
-6. Automation with Human Control.
-7. Scalable by Design.
-8. Secure by Default.
-9. Data Minimization.
-10. System of Record sebagai sumber kebenaran transaksi.
-
----
-
-# 3. Problem Statement
-
-## 3.1 Customer
-
-Masalah:
-
-* Sulit menemukan laundry terpercaya di sekitar lokasi.
-* Sulit membandingkan harga dan layanan antar laundry.
-* Customer harus menghubungi laundry secara manual.
-* Pickup dan delivery belum terorganisasi dan minim kepastian.
-* Customer tidak mengetahui posisi kurir penjemput/pengantar.
-* Customer tidak selalu mengetahui harga final sebelum laundry ditimbang.
-* Informasi pembayaran dapat membingungkan.
-* Customer harus menghubungi CS untuk pertanyaan sederhana.
-
-## 3.2 Laundry Store (Admin Toko)
-
-Masalah:
-
-* Sulit memperoleh customer digital dan memperluas jangkauan pasar.
-* Pengelolaan order dan pencatatan operasional masih manual.
-* Sulit mengelola dan memantau tugas kurir.
-* Tidak memiliki platform marketplace discovery mandiri.
-* Tidak memiliki sistem tracking status pengerjaan laundry yang terintegrasi.
-
-## 3.3 Kurir
-
-Masalah:
-
-* Tidak memiliki sistem assignment tugas yang terstruktur.
-* Informasi alamat dan instruksi pickup/delivery sering tidak konsisten.
-* Tidak memiliki sistem konfirmasi bukti serah terima (proof of delivery/pickup).
-* Tidak ada sistem navigasi dan live tracking tugas terorganisasi.
-
-## 3.4 Platform (Super Admin)
-
-Masalah:
-
-* Membutuhkan multi-tenant security dan isolasi data toko yang ketat.
-* Membutuhkan payment gateway terpusat dan refund management yang akurat.
-* Membutuhkan audit trail dan rekonsiliasi keuangan/komisi otomatis.
-* Membutuhkan sistem notifikasi real-time ke semua pihak.
-* Membutuhkan AI dengan security boundary yang ketat.
-
----
-
-# 4. Goals
-
-## 4.1 Primary Goals
-
-1. Menyediakan marketplace laundry multi-store dengan 4 role utama: Customer, Kurir, Admin Toko, dan Super Admin.
-2. Memungkinkan customer menemukan laundry berdasarkan lokasi.
-3. Menyediakan order pickup dan delivery end-to-end.
-4. Menyediakan transparansi estimated dan actual weight (penimbangan transparan).
-5. Mendukung pembayaran online melalui **Xendit** (QRIS, VA, E-Wallet).
-6. Mendukung pembayaran tunai **COD (Cash on Delivery)**.
-7. Menyediakan courier assignment dan task management.
-8. Menyediakan live GPS tracking untuk pickup dan delivery.
-9. Menyediakan AI Chat Assistant untuk bantuan informasi pelanggan.
-10. Menyediakan RBAC dan permission system berbasis 4 role.
-11. Menyediakan tenant isolation antar toko.
-12. Menyediakan audit trail dan activity log.
-13. Menyediakan sistem notification multi-channel.
-14. Menyediakan refund dan dispute management.
-15. Menyediakan marketplace yang responsive dan mobile-friendly.
-
-## 4.2 Business Goals
-
-* Meningkatkan jumlah customer aktif dan pesanan harian.
-* Meningkatkan jumlah mitra laundry partner terverifikasi.
-* Meningkatkan volume transaksi marketplace (GMV).
-* Meningkatkan customer retention dan loyalitas pengguna.
-* Menghasilkan revenue platform melalui potongan komisi per transaksi yang adil.
-* Mengurangi beban operasional support melalui AI Assistant.
-
----
-
-# 5. Non-Goals
-
-MVP tidak bertujuan untuk:
-
-* Membuat payment processor sendiri (menggunakan Xendit).
-* Menjadi bank atau e-wallet independen.
-* Melatih model AI dari nol (menggunakan API LLM terintegrasi).
-* Menggantikan seluruh CS manusia secara total.
-* Membuat full-scale ERP manufaktur laundry berskala pabrik.
-* Membuat sistem navigasi peta sendiri (menggunakan peta digital/Google Maps API).
-* Menyediakan native mobile application (fokus responsive web application).
-* Menyimpan raw payment credentials (keamanan diserahkan ke Xendit).
-* Menyediakan autonomous AI transaction execution tanpa konfirmasi user.
-
----
-
-# 6. Target Users
-
-| Role | Deskripsi & Tujuan |
-| --- | --- |
-| **Customer** | Pelanggan yang mencari toko laundry, membuat pesanan, memilih layanan & jadwal antar-jemput, melakukan pembayaran (Online/COD), melacak status cucian & GPS kurir, memberikan rating/ulasan, dan berkonsultasi via AI Assistant. |
-| **Kurir** | Petugas penjemputan dan pengantaran laundry yang bertugas menerima penugasan task, navigasi ke lokasi, membagikan posisi live GPS, mengunggah bukti serah terima (foto pickup/delivery), dan mengonfirmasi pembayaran tunai COD. |
-| **Admin Toko** | Pemilik dan pengelola mitra toko laundry yang bertugas mengelola profil toko, katalog layanan & tarif harga, jam operasional, radius layanan, pengaturan COD, pemrosesan order (input timbangan riil, update status cuci), penugasan kurir, dan memantau omset penjualan. |
-| **Super Admin** | Administrator tertinggi pengelola platform yang bertugas memverifikasi pendaftaran mitra laundry baru, memoderasi toko/user, memantau transaksi Xendit & keuangan, mengelola komisi platform, memproses refund, melihat audit log, dan mengelola konfigurasi global sistem. |
-
----
-
-# 7. User Roles & Permission Specification
-
-## 7.1 Super Admin
-
-Super Admin merupakan otoritas administrator tertinggi di platform LANDURYKU.
-
-### Wewenang & Tanggung Jawab:
-* Mengelola seluruh platform marketplace dan parameter global sistem.
-* Melakukan verifikasi, approval, permintaan revisi, atau penolakan pendaftaran mitra laundry baru.
-* Melakukan suspend / blacklist terhadap toko laundry atau akun pengguna yang melanggar ketentuan.
-* Mengelola dan memantau akun seluruh pengguna (Customer, Kurir, Admin Toko).
-* Mengatur skema dan persentase komisi platform.
-* Memantau transaksi pembayaran terintegrasi Xendit dan laporan keuangan platform.
-* Mengelola dan menyetujui proses refund / penyelesaian sengketa transaksi.
-* Mengakses Audit Trail global untuk pemantauan keamanan dan integritas data.
-
-### Aturan Keamanan:
-* Super Admin **tidak dapat didaftarkan melalui form registrasi publik**.
-* Akun Super Admin dibuat via provisioning internal / database seeding aman.
-* Wajib menggunakan Enhanced Authentication (Password kuat + Multi-Factor / 2FA).
-
----
-
-## 7.2 Admin Toko
-
-Admin Toko merupakan pemilik sekaligus pengelola operasional dari mitra toko laundry yang terdaftar.
-
-### Wewenang & Tanggung Jawab:
-* Melakukan registrasi toko dan pengajuan verifikasi mitra (*Store Onboarding*).
-* Mengelola profil toko: nama laundry, deskripsi, logo/foto, alamat lengkap, titik koordinat peta, dan jam operasional.
-* Mengelola katalog layanan (Kiloan, Satuan, Dry Clean, Express, dll.) beserta rincian tarif harga.
-* Mengatur parameter operasional toko: radius jangkauan jemput/antar, biaya pengiriman, minimum order, dan ketersediaan opsi COD.
-* Mengelola operasional pesanan:
-  * Menerima notifikasi dan mengonfirmasi pesanan baru.
-  * Menugaskan kurir untuk penjemputan (*Pickup Assignment*).
-  * Melakukan penimbangan aktual (*Weighing*) dan menginput berat riil serta foto bukti ke sistem.
-  * Memperbarui status pengerjaan laundry (*Washing*, *Drying*, *Ironing*, *Packed/Ready*).
-  * Menugaskan kurir untuk pengantaran (*Delivery Assignment*).
-  * Menyelesaikan pesanan.
-* Mengelola akun kurir internal toko (membuat akun kurir, memantau tugas kurir).
-* Melihat laporan keuangan toko: omset harian/bulanan, rekapitulasi pesanan, dan penarikan dana (*settlement*).
-
-### Aturan Keamanan & Isolasi:
-* Terisolasi secara penuh dalam ruang lingkup (*tenant scope*) tokonya sendiri.
-* Tidak memiliki akses ke data toko lain, konfigurasi global platform, atau audit log Super Admin.
-
----
-
-## 7.3 Kurir
-
-Kurir bertugas melakukan logistik penjemputan dan pengantaran cucian antara customer dan toko laundry.
-
-### Wewenang & Tanggung Jawab:
-* Mengatur status ketersediaan kerja (*Toggle Online/Offline*).
-* Menerima notifikasi penugasan tugas penjemputan (*Pickup Task*) dan pengantaran (*Delivery Task*).
-* Melihat detail tugas yang ditugaskan: nama pelanggan, nomor kontak, alamat lengkap penjemputan/pengantaran, dan catatan khusus.
-* Membagikan posisi koordinat GPS secara berkala saat tugas sedang berjalan (*Live GPS Tracking*).
-* Mengunggah bukti foto serah terima (*Proof of Pickup* dan *Proof of Delivery*).
-* Menerima uang pembayaran tunai dari customer jika metode pembayaran adalah COD dan mencatatnya ke sistem.
-* Melihat riwayat tugas penjemputan/pengantaran harian yang telah diselesaikan.
-
-### Aturan Keamanan:
-* Hanya dapat mengakses data pesanan dan alamat pelanggan yang secara aktif ditugaskan kepadanya.
-* Tidak memiliki akses ke pengelolaan harga, katalog layanan toko, maupun laporan keuangan toko.
-
----
-
-## 7.4 Customer
-
-Customer merupakan pengguna akhir yang memesan dan menikmati layanan laundry melalui marketplace.
-
-### Wewenang & Tanggung Jawab:
-* Mendaftar dan mengelola profil akun pelanggan serta buku alamat (termasuk titik koordinat penjemputan).
-* Mencari dan memfilter mitra toko laundry berdasarkan lokasi terdekat, rating, harga, dan layanan.
-* Membuat pesanan laundry dengan memilih layanan, estimasi berat/jumlah, jadwal pickup, dan catatan instruksi.
-* Memilih opsi pengiriman: Antar-Jemput oleh kurir (*Pickup & Delivery*) atau antar mandiri (*Drop-off/Self Pickup*).
-* Memilih metode pembayaran: Pembayaran Online via Xendit (QRIS, E-Wallet, Virtual Account) atau Tunai di tempat (COD).
-* Memantau status pesanan secara real-time dan melacak posisi kurir melalui peta GPS live.
-* Menerima notifikasi penyesuaian tagihan setelah penimbangan riil oleh Admin Toko.
-* Memberikan ulasan bintang dan ulasan tertulis kepada Toko Laundry dan Kurir setelah pesanan selesai.
-* Menggunakan fitur AI Chat Assistant untuk konsultasi seputar layanan, status order, dan panduan perawatan pakaian.
-* Melihat riwayat seluruh transaksi pesanan.
-
----
-
-# 8. User Journey & Alur Pengguna (Login s/d Logout)
-
-Berikut adalah alur lengkap perjalanan pengguna (*End-to-End User Flow*) untuk masing-masing dari 4 role, mulai dari proses Login hingga Logout:
-
-```mermaid
-flowchart TD
-    subgraph CustomerFlow["1. Customer Flow"]
-        C1[1. Akses Web & Login / Register] --> C2[2. Dashboard & Pencarian Toko Laundry]
-        C2 --> C3[3. Pilih Layanan & Buat Pesanan]
-        C3 --> C4[4. Checkout & Pilih Pembayaran: Xendit / COD]
-        C4 --> C5[5. Tracking Kurir Pickup & Penimbangan Toko]
-        C5 --> C6[6. Tracking Proses Cuci & Kurir Delivery]
-        C6 --> C7[7. Terima Laundry, Pelunasan COD, Beri Rating]
-        C7 --> C8[8. Riwayat Transaksi / Tanya AI]
-        C8 --> C9[9. Logout & Selesai]
-    end
-
-    subgraph KurirFlow["2. Kurir Flow"]
-        K1[1. Login Akun Kurir] --> K2[2. Dashboard & Aktifkan Status Siap Kerja]
-        K2 --> K3[3. Notifikasi Tugas Pickup / Delivery]
-        K3 --> K4[4. Navigasi ke Lokasi + Aktifkan Live GPS]
-        K4 --> K5[5. Serah Terima Pakaian & Upload Foto Bukti]
-        K5 --> K6[6. Update Status Task & Terima Uang COD jika ada]
-        K6 --> K7[7. Rekap Riwayat Tugas Harian]
-        K7 --> K8[8. Nonaktifkan Status Kerja & Logout]
-    end
-
-    subgraph AdminTokoFlow["3. Admin Toko Flow"]
-        A1[1. Login Akun Admin Toko] --> A2[2. Dashboard Toko & Pengaturan Layanan/Harga/COD]
-        A2 --> A3[3. Notifikasi & Konfirmasi Order Baru]
-        A3 --> A4[4. Penugasan Kurir Pickup Toko]
-        A4 --> A5[5. Timbang Berat Riil & Update Tagihan Final]
-        A5 --> A6[6. Update Status Cuci: Washing - Drying - Ironing - Ready]
-        A6 --> A7[7. Penugasan Kurir Delivery & Konfirmasi Selesai]
-        A7 --> A8[8. Cek Laporan Penjualan & Saldo Toko]
-        A8 --> A9[9. Logout Akun Toko]
-    end
-
-    subgraph SuperAdminFlow["4. Super Admin Flow"]
-        S1[1. Login Super Admin dengan Enhanced Auth/2FA] --> S2[2. Master Dashboard Platform: GMV, Toko & User Aktif]
-        S2 --> S3[3. Review & Verifikasi Pendaftaran Mitra Toko Baru]
-        S3 --> S4[4. Manajemen & Moderasi Pengguna Global]
-        S4 --> S5[5. Monitoring Transaksi Xendit, Komisi & Refund]
-        S5 --> S6[6. Audit Log, Sistem Keamanan & Konfigurasi Global]
-        S6 --> S7[7. Secure Logout & Invalidate Session]
-    end
-```
-
----
-
-## 8.1 Alur Pengguna: Customer
-
-```text
-[1. Akses & Autentikasi]
-   ├─ Buka web LANDURYKU di browser (Desktop / Mobile).
-   ├─ Melakukan Register (jika user baru) atau Login dengan Email & Password / OAuth.
-   └─ Masuk ke halaman utama Customer; melengkapi profil & menyimpan pin alamat penjemputan.
-
-[2. Eksplorasi & Pemilihan Toko]
-   ├─ Menggunakan fitur pencarian laundry terdekat berbasis lokasi GPS / filter manual.
-   ├─ Memfilter toko berdasarkan jarak, rating bintang, harga layanan, atau promo.
-   └─ Memilih toko laundry mitra dan melihat detail halaman toko (profil, ulasan, katalog layanan).
-
-[3. Pemesanan & Pemilihan Layanan]
-   ├─ Memilih item layanan (Kiloan, Satuan, Express, dll.).
-   ├─ Memasukkan perkiraan berat / jumlah baju serta catatan khusus (misal: "jangan campur pakaian putih").
-   ├─ Memilih metode logistik: Antar-Jemput (Pickup & Delivery) atau Antar Mandiri (Drop-off).
-   └─ Menentukan alamat dan estimasi waktu penjemputan (Pickup Time).
-
-[4. Checkout & Pembayaran]
-   ├─ Memeriksa ringkasan checkout: Rincian estimasi biaya layanan + ongkir + biaya platform.
-   ├─ Memilih metode pembayaran:
-   │    ├─ Online Payment (Xendit): QRIS, Virtual Account Bank, atau E-Wallet (bayar instan).
-   │    └─ COD (Cash on Delivery): Bayar tunai saat pakaian bersih selesai diantar.
-   └─ Konfirmasi pesanan -> Pesanan resmi dibuat (Status: PENDING_CONFIRMATION / ORDER_CONFIRMED).
-
-[5. Pelacakan Penjemputan & Penimbangan]
-   ├─ Menerima notifikasi penugasan kurir penjemputan.
-   ├─ Memantau posisi kurir penjemput di peta real-time via Live GPS Tracking.
-   ├─ Menyerahkan cucian kotor ke kurir saat kurir tiba di lokasi penjemputan.
-   └─ Menerima notifikasi penimbangan riil dari toko (berat riil & foto timbangan; penyesuaian nominal tagihan jika berbeda).
-
-[6. Pelacakan Proses Cuci & Pengantaran]
-   ├─ Memantau progress pengerjaan laundry (Dicuci -> Dikeringkan -> Disetrika -> Siap Diantar).
-   ├─ Menerima notifikasi saat pesanan mulai diantar oleh kurir.
-   └─ Memantau live GPS kurir pengantar hingga tiba di alamat tujuan.
-
-[7. Penerimaan, Pelunasan & Ulasan]
-   ├─ Menerima paket cucian bersih dari kurir.
-   ├─ Melakukan pembayaran tunai ke kurir jika memilih opsi COD.
-   └─ Memberikan penilaian (bintang 1-5) dan ulasan pengalaman layanan untuk Toko & Kurir.
-
-[8. Interaksi Tambahan & Logout]
-   ├─ Memeriksa ringkasan transaksi di menu Riwayat Pesanan.
-   ├─ (Opsional) Menggunakan fitur AI Chat Assistant untuk bantuan informasi.
-   └─ Membuka Menu Profil -> Klik tombol "Logout" -> Sesi berakhir secara aman.
-```
-
----
-
-## 8.2 Alur Pengguna: Kurir
-
-```text
-[1. Autentikasi & Masuk]
-   ├─ Buka web portal LANDURYKU.
-   ├─ Login menggunakan kredensial akun Kurir yang telah didaftarkan dan diverifikasi.
-   └─ Masuk ke halaman Kurir Workspace.
-
-[2. Dashboard & Status Kesiapan Kerja]
-   ├─ Melihat ringkasan dashboard tugas harian (tugas baru, sedang berjalan, selesai).
-   └─ Mengaktifkan tombol toggle status kerja: "Online / Siap Menerima Tugas".
-
-[3. Eksekusi Tugas Penjemputan (Pickup Task)]
-   ├─ Menerima notifikasi penugasan Pickup dari Admin Toko.
-   ├─ Membuka rincian tugas: Nama customer, nomor WhatsApp/telepon, alamat penjemputan & catatan.
-   ├─ Mengklik tombol "Mulai Penjemputan" -> Sistem otomatis mengaktifkan Live GPS Tracking.
-   ├─ Melakukan perjalanan ke titik penjemputan customer.
-   ├─ Tiba di lokasi -> Mengambil cucian kotor dari customer.
-   ├─ Mengambil foto bukti serah terima (Proof of Pickup) & upload ke sistem.
-   ├─ Mengubah status task menjadi "Pakaian Diambil (Picked Up)".
-   └─ Membawa cucian ke Toko Laundry -> Menyerahkan cucian ke Admin Toko -> Konfirmasi "Tiba di Toko".
-
-[4. Eksekusi Tugas Pengantaran (Delivery Task)]
-   ├─ Menerima notifikasi penugasan Delivery untuk cucian yang sudah selesai dicuci & dipacking.
-   ├─ Mengambil paket cucian bersih di Toko Laundry.
-   ├─ Mengklik tombol "Mulai Pengantaran" -> Sistem mengaktifkan Live GPS Tracking.
-   ├─ Melakukan navigasi perjalanan ke alamat customer.
-   ├─ Tiba di lokasi -> Menyerahkan paket cucian bersih kepada customer.
-   ├─ (Khusus Pembayaran COD) Menagih dan menerima uang tunai sesuai tagihan -> Konfirmasi pembayaran COD di sistem.
-   ├─ Mengambil foto bukti penerimaan (Proof of Delivery) & upload ke sistem.
-   └─ Mengubah status pesanan menjadi "Selesai Diantar (Delivered)".
-
-[5. Rekapitulasi & Selesai Bertugas]
-   ├─ Melihat rekapitulasi jumlah tugas pickup & delivery yang berhasil diselesaikan pada hari itu.
-   ├─ Menyerahkan setoran uang tunai COD kepada Admin Toko pada penutupan shift.
-   ├─ Mengubah status kerja menjadi "Offline / Selesai Bertugas" (Live GPS berhenti).
-   └─ Membuka menu Akun Kurir -> Klik tombol "Logout" -> Sesi kurir ditutup.
-```
-
----
-
-## 8.3 Alur Pengguna: Admin Toko
-
-```text
-[1. Autentikasi & Masuk]
-   ├─ Mengakses portal web LANDURYKU.
-   ├─ Login dengan Email & Password akun Admin Toko.
-   └─ Masuk ke Dashboard Operasional Toko Laundry.
-
-[2. Dashboard & Pengaturan Toko]
-   ├─ Melihat ringkasan metrik toko: Pesanan baru, pesanan sedang dicuci, pesanan siap kirim, omset harian.
-   ├─ Mengatur status operasional toko: Buka / Tutup.
-   ├─ Mengelola katalog layanan (menambah layanan, mengatur tarif harga per kg / satuan / express).
-   ├─ Mengatur parameter pengiriman: Radius jangkauan (km), tarif ongkir, minimum order, dan toggle COD.
-   └─ Mengelola akun kurir internal toko.
-
-[3. Siklus Pemrosesan Pesanan (Order Lifecycle)]
-   ├─ Menerima notifikasi pesanan masuk dari customer.
-   ├─ Memeriksa detail pesanan -> Klik "Terima Pesanan".
-   ├─ Menugaskan kurir toko untuk melakukan penjemputan pakaian ke alamat customer (Pickup Assignment).
-   ├─ Menerima pakaian kotor yang dibawa oleh kurir / diantar langsung oleh customer ke toko.
-   ├─ Menimbang pakaian dengan timbangan digital -> Menginput berat aktual (Actual Weight) dan upload foto timbangan.
-   ├─ Sistem menghitung ulang total tagihan secara otomatis dan mengirim notifikasi update ke customer.
-   ├─ Memulai pengerjaan laundry dan mengupdate status pengerjaan bertahap di sistem:
-   │    ├─ "Washing" (Pakaian sedang dicuci)
-   │    ├─ "Drying" (Pakaian sedang dikeringkan)
-   │    ├─ "Ironing" (Pakaian sedang disetrika)
-   │    └─ "Ready for Delivery/Pickup" (Pakaian selesai dipacking rapi).
-   ├─ Menugaskan kurir untuk mengantar cucian bersih ke customer (Delivery Assignment).
-   └─ Memantau konfirmasi pengantaran sukses dari kurir (Proof of Delivery).
-
-[4. Laporan, Keuangan & Logout]
-   ├─ Memeriksa laporan penjualan harian/bulanan dan ulasan/rating dari pelanggan.
-   ├─ Memeriksa saldo pendapatan bersih toko dan riwayat settlement pencairan dana.
-   └─ Membuka menu Pengaturan Toko -> Klik tombol "Logout" -> Sesi operasional toko ditutup.
-```
-
----
-
-## 8.4 Alur Pengguna: Super Admin
-
-```text
-[1. Autentikasi Super Admin & Keamanan]
-   ├─ Mengakses portal administratif khusus Super Admin.
-   ├─ Melakukan login menggunakan kredensial administrator + Enhanced Authentication / 2FA.
-   └─ Masuk ke Super Admin Master Control Panel.
-
-[2. Master Dashboard Platform]
-   ├─ Memantau metrik ekosistem platform secara makro:
-   │    ├─ Total GMV (Gross Merchandise Value) & Total Pendapatan Komisi Platform.
-   │    ├─ Jumlah pesanan aktif dan selesai di seluruh toko.
-   │    ├─ Jumlah mitra toko aktif vs toko pending verifikasi.
-   │    └─ Jumlah customer dan kurir aktif.
-   └─ Memantau system alert & antrean task administratif.
-
-[3. Verifikasi & Moderasi Mitra Toko]
-   ├─ Membuka modul "Verifikasi Mitra Laundry":
-   │    ├─ Meninjau permohonan pendaftaran toko baru (data pemilik, identitas, legalitas, lokasi toko, foto tempat).
-   │    └─ Mengambil tindakan: "Approve" (toko aktif di marketplace), "Request Revision" (minta perbaikan data), atau "Reject" (tolak).
-   └─ Melakukan pengawasan kualitas & tindakan penangguhan (Suspend/Freeze) bagi toko yang melanggar aturan.
-
-[4. Manajemen Pengguna Global (User Management)]
-   ├─ Memantau seluruh daftar pengguna platform (Customer, Kurir, Admin Toko).
-   └─ Melakukan tindakan administratif bila diperlukan (reset autentikasi, investigasi akun mencurigakan, suspend user).
-
-[5. Pemantauan Finansial, Xendit Gateway & Refund]
-   ├─ Memantau log transaksi gateway pembayaran Xendit (sukses, expired, refund).
-   ├─ Mengatur persentase/skema komisi platform per transaksi.
-   ├─ Memproses & menyetujui pengajuan Refund / penanganan komplain sengketa transaksi.
-   └─ Memantau jadwal rekonsiliasi dan settlement dana ke mitra toko.
-
-[6. Audit Log, Konfigurasi Sistem & Logout]
-   ├─ Memeriksa Audit Log keamanan sistem (mencatat semua aksi krusial platform).
-   ├─ Mengelola konfigurasi parameter global platform (kebijakan operasional, AI configuration).
-   └─ Mengklik menu profil Super Admin -> Memilih "Logout" -> Sistem melakukan secure token invalidation.
-```
-
----
-
-# 9. Marketplace
-
-Customer dapat menemukan laundry berdasarkan:
-
-* lokasi;
-* nama;
-* service;
-* rating;
-* harga;
-* jarak;
-* availability.
-
-## Filter
-
-* jarak;
-* harga;
-* rating;
-* service;
-* pickup availability;
-* delivery availability;
-* operating hours.
-
-## Store Ranking
-
-Ranking dapat mempertimbangkan:
-
-* jarak;
-* rating;
-* review;
-* availability;
-* service match;
-* operational performance.
-
-**[NEEDS BUSINESS DECISION]**
-
-Apakah ranking akan mendukung sponsored store placement.
-
----
-
-# 10. Store Registration
-
-Istilah UI:
-
-> **Daftarkan Laundry**
-
-Alternatif:
-
-> **Gabung sebagai Mitra Laundry**
-
-Public user tidak dapat mendaftar sebagai Super Admin.
-
----
-
-# 11. Store Onboarding Flow
-
-```text
-Daftarkan Laundry
-→ Login/Register
-→ Data Pemilik
-→ Data Laundry
-→ Lokasi
-→ Jam Operasional
-→ Layanan
-→ Harga
-→ Pickup & Delivery
-→ Courier
-→ Settlement
-→ Dokumen
-→ Review
-→ Submit
-→ Under Review
-→ Approved / Revision / Rejected
-→ Store Active
-```
-
----
-
-# 12. Owner Data
-
-Data pemilik:
-
-* nama;
-* email;
-* nomor telepon;
-* WhatsApp;
-* alamat;
-* identity information sesuai kebutuhan verifikasi.
-
-Placeholder:
-
-```text
-[OWNER_NAME]
-[OWNER_EMAIL]
-[OWNER_PHONE]
-[OWNER_WHATSAPP]
-[OWNER_ADDRESS]
-```
-
----
-
-# 13. Store Data
-
-Minimal:
-
-* nama laundry;
-* logo;
-* deskripsi;
-* phone;
-* WhatsApp;
-* alamat;
-* RT/RW;
-* kelurahan;
-* kecamatan;
-* kabupaten/kota;
-* provinsi;
-* kode pos;
-* latitude;
-* longitude;
-* operating hours.
-
-Placeholder:
-
-```text
-[STORE_NAME]
-[STORE_LOGO]
-[STORE_DESCRIPTION]
-[STORE_PHONE]
-[STORE_WHATSAPP]
-[STORE_ADDRESS]
-[STORE_RT_RW]
-[STORE_LATITUDE]
-[STORE_LONGITUDE]
-```
-
----
-
-# 14. Business Data
-
-Store dapat menentukan:
-
-* jenis laundry;
-* layanan;
-* harga;
-* minimum order;
-* pickup fee;
-* delivery fee;
-* service radius;
-* service area;
-* operating schedule;
-* COD availability.
-
-Settlement information hanya dapat diakses oleh authorized role.
-
----
-
-# 15. Store Application Status
-
-Status:
-
-```text
-DRAFT
-SUBMITTED
-UNDER_REVIEW
-REVISION_REQUIRED
-RESUBMITTED
-APPROVED
-REJECTED
-SUSPENDED
-```
-
-## Rules
-
-DRAFT:
-
-> Applicant dapat mengedit.
-
-SUBMITTED:
-
-> Applicant tidak dapat mengubah data tertentu sampai application dikembalikan/revision.
-
-UNDER_REVIEW:
-
-> Reviewer memeriksa application.
-
-REVISION_REQUIRED:
-
-> Applicant harus memperbaiki data.
-
-RESUBMITTED:
-
-> Application dikirim kembali.
-
-APPROVED:
-
-> Store dapat aktif.
-
-REJECTED:
-
-> Application ditolak.
-
-SUSPENDED:
-
-> Store tidak dapat menerima order baru.
-
----
-
-# 16. Approval
-
-Authorized reviewer dapat:
-
-* approve;
-* reject;
-* request revision;
-* suspend.
-
-Setiap action harus:
-
-* tercatat;
-* memiliki actor;
-* memiliki timestamp;
-* memiliki reason jika diperlukan;
-* menghasilkan notification.
-
----
-
-# 17. Marketplace Store Eligibility
-
-Store hanya dapat menerima order jika:
-
-```text
-APPROVED
-+
-ACTIVE
-+
-SERVICE AVAILABLE
-+
-WITHIN SERVICE AREA
-```
-
-Store `SUSPENDED` tidak boleh menerima order baru.
-
----
-
-# 18. Order Management
-
-Order memiliki:
-
-* order ID;
-* order reference;
-* customer;
-* store;
-* service;
-* estimated weight/quantity;
-* actual weight;
-* estimated price;
-* final price;
-* address;
-* pickup/delivery;
-* courier;
-* payment;
-* order status;
-* timestamps.
-
----
-
-# 19. Order Flow
-
-```text
-CREATED
-↓
-WAITING_PICKUP
-↓
-COURIER_ASSIGNED
-↓
-COURIER_TO_CUSTOMER
-↓
-PICKED_UP
-↓
-IN_TRANSIT_TO_STORE
-↓
-RECEIVED_BY_STORE
-↓
-WEIGHED
-↓
-PAYMENT_REQUIRED
-↓
-PAID
-↓
-PROCESSING
-↓
-READY_FOR_DELIVERY
-↓
-COURIER_ASSIGNED
-↓
-OUT_FOR_DELIVERY
-↓
-DELIVERED
-↓
-COMPLETED
-```
-
-Tidak semua order harus melewati state yang sama jika pickup/delivery tidak digunakan.
-
----
-
-# 20. Weight Management
-
-Sistem menyimpan:
-
-* estimated weight;
-* actual weight.
-
-Contoh:
-
-```text
-Estimated Weight = 5 KG
-Actual Weight    = 6.5 KG
-```
-
-Keduanya tidak boleh saling overwrite.
-
----
-
-# 21. Price Calculation
-
-Estimated:
-
-```text
-Estimated Weight × Service Price
-```
-
-Final:
-
-```text
-Actual Weight × Applicable Service Price
-+ Pickup Fee
-+ Delivery Fee
-+ Platform Fee
-- Discount
-```
-
-Formula final harus dihitung server-side.
-
-Browser tidak boleh menentukan final amount.
-
----
-
-# 22. Price Change
-
-Jika actual weight menyebabkan perubahan harga signifikan:
-
-* customer diberi notification;
-* final price diperbarui;
-* customer dapat diberikan confirmation sesuai policy.
-
-Threshold:
-
-```text
-[PRICE_CHANGE_CONFIRMATION_THRESHOLD]
-```
-
----
-
-# 23. Laundry Processing
-
-Status:
-
-```text
-RECEIVED
-→ WEIGHED
-→ WASHING
-→ DRYING
-→ IRONING
-→ PACKING
-→ READY
-```
-
-Store hanya dapat melakukan transition yang diperbolehkan.
-
----
-
-# 24. Courier Management
-
-Courier terbagi menjadi:
-
-## Marketplace Courier
-
-Dikelola platform.
-
-Dapat melayani beberapa store berdasarkan operational scope.
-
-## Store Courier
-
-Dikelola Store Owner.
-
-Hanya dapat menerima task dalam scope store.
-
----
-
-# 25. Courier Registration
-
-Minimal:
-
-* name;
-* phone;
-* profile;
-* operational area;
-* verification;
-* vehicle information bila diperlukan.
-
-Placeholder:
-
-```text
-[COURIER_REQUIREMENTS]
-[COURIER_DOCUMENT_REQUIREMENTS]
-```
-
----
-
-# 26. Courier Assignment
-
-Courier hanya dapat menerima task jika:
-
-* active;
-* verified;
-* available;
-* berada dalam service area;
-* tidak memiliki conflicting active task.
-
-Jika courier menolak:
-
-```text
-ASSIGNED
-→ REJECTED
-→ REASSIGNMENT
-```
-
-Repeated rejection dapat dimonitor.
-
----
-
-# 27. GPS Tracking
-
-GPS digunakan untuk:
-
-* pickup;
-* delivery.
-
-Flow:
-
-```text
-Courier GPS
-→ Realtime Service
-→ LANDURYKU
-→ Customer Map
-```
-
-GPS hanya aktif selama active task.
-
-Tracking berhenti ketika:
-
-* task completed;
-* task cancelled;
-* courier tidak lagi memiliki active task.
-
----
-
-# 28. GPS Privacy
-
-Rules:
-
-1. GPS tidak aktif tanpa active task.
-2. Customer hanya melihat courier terkait order.
-3. Store hanya melihat courier task dalam scope.
-4. GPS history memiliki retention terbatas.
-5. GPS tidak boleh dipakai untuk tujuan lain tanpa policy.
-6. Access GPS diaudit untuk role privileged.
-
----
-
-# 29. Payment
-
-LANDURYKU menggunakan:
-
-> **Xendit sebagai payment gateway resmi untuk online payment.**
-
-LANDURYKU menyediakan:
-
-1. Online Payment melalui Xendit.
-2. QRIS melalui Xendit.
-3. COD.
-
-**Midtrans tidak digunakan.**
-
----
-
-# 30. Online Payment — Xendit
-
-Online payment dilakukan melalui Xendit.
-
-Flow:
-
-```text
-Customer Checkout
-↓
-Select Online Payment
-↓
-LANDURYKU Create Payment
-↓
-Xendit
-↓
-Customer Payment
-↓
-Xendit Processing
-↓
-Xendit Webhook
-↓
-LANDURYKU Verification
-↓
-Payment = PAID
-↓
-Order Continue
-```
-
-LANDURYKU tidak menyimpan:
-
-* card number;
-* CVV;
-* payment password;
-* raw payment credential.
-
-Data tersebut ditangani oleh payment provider sesuai mekanisme Xendit.
-
----
-
-# 31. QRIS — Xendit
-
-Customer dapat memilih QRIS jika QRIS aktif pada konfigurasi Xendit LANDURYKU.
-
-Flow:
-
-```text
-Checkout
-↓
-Online Payment
-↓
-QRIS
-↓
-Xendit
-↓
-QRIS Display
-↓
-Customer Pays
-↓
-Xendit
-↓
-Webhook
-↓
-Verification
-↓
-PAID
-```
-
-QRIS tidak dibuat secara manual oleh LANDURYKU.
-
----
-
-# 32. Payment Expiration
-
-Online payment memiliki batas:
-
-> **1 jam sejak payment dibuat.**
-
-Flow:
-
-```text
-PENDING
-↓
-1 HOUR
-↓
-EXPIRED
-```
-
-Jika belum dibayar:
-
-* payment expired;
-* customer diberi notification;
-* order mengikuti expiration policy;
-* tidak ada refund karena belum ada successful payment.
-
-Jika customer ingin melakukan pembayaran kembali, sistem dapat membuat payment baru.
-
-Payment baru harus memiliki reference/idempotency baru.
-
----
-
-# 33. COD — Cash on Delivery
-
-LANDURYKU menyediakan COD.
-
-COD digunakan apabila order memenuhi:
-
-```text
-COD_ENABLED
-+
-STORE_ALLOWED
-+
-AREA_ALLOWED
-+
-CUSTOMER_ELIGIBLE
-+
-ORDER_VALUE_ALLOWED
-```
-
-Flow:
-
-```text
-Customer Checkout
-↓
-Select COD
-↓
-Order Created
-↓
-Courier Assignment
-↓
-Pickup / Delivery
-↓
-Customer Gives Cash
-↓
-COD Verification
-↓
-Payment = PAID
-```
-
----
-
-# 34. COD Verification
-
-Courier tidak boleh mengubah payment menjadi `PAID` hanya dengan tombol sederhana.
-
-Metode verifikasi:
-
-```text
-[COD_VERIFICATION_METHOD]
-```
-
-Pilihan dapat berupa:
-
-* OTP;
-* PIN;
-* customer confirmation;
-* QR confirmation;
-* metode lain yang ditentukan bisnis.
-
-Minimum evidence:
-
-* order ID;
-* payment ID;
-* amount;
-* customer ID;
-* courier ID;
-* timestamp;
-* verification method;
-* verification result.
-
----
-
-# 35. COD Configuration
-
-Configurable:
-
-```text
-COD_ENABLED = [TRUE/FALSE]
-
-COD_MAX_AMOUNT = [COD_MAX_AMOUNT]
-
-COD_ALLOWED_AREA = [COD_ALLOWED_AREA]
-
-COD_ALLOWED_STORE = [COD_ALLOWED_STORE]
-
-COD_VERIFICATION_METHOD = [COD_VERIFICATION_METHOD]
-```
-
----
-
-# 36. Payment Status
-
-Payment status terpisah dari order status.
-
-## Online
-
-```text
-PENDING
-PAID
-FAILED
-EXPIRED
-REFUND_REQUESTED
-REFUND_PROCESSING
-REFUNDED
-```
-
-## COD
-
-```text
-PENDING
-PAID
-CANCELLED
-```
-
----
-
-# 37. Xendit Webhook
-
-Webhook Xendit wajib diverifikasi.
-
-Sistem harus:
-
-1. memvalidasi authenticity;
-2. memvalidasi reference;
-3. memvalidasi order;
-4. memvalidasi nominal;
-5. memvalidasi state;
-6. menerapkan idempotency;
-7. mencegah duplicate processing;
-8. mencatat event;
-9. membuat notification setelah state valid.
-
----
-
-# 38. Duplicate Webhook
-
-Jika webhook yang sama diterima dua kali:
-
-```text
-Webhook #1
-↓
-Process
-↓
-PAID
-
-Webhook #2
-↓
-Duplicate Detection
-↓
-Ignore / Idempotent Handling
-```
-
-Tidak boleh terjadi:
-
-* duplicate payment;
-* duplicate refund;
-* duplicate order;
-* duplicate financial transaction.
-
----
-
-# 39. Late Payment Webhook
-
-Jika customer telah membayar tetapi webhook terlambat:
-
-Sistem harus melakukan reconciliation terhadap status Xendit.
-
-Jika transaksi valid:
-
-* payment dapat menjadi PAID;
-* tidak membuat transaction baru;
-* tidak membuat duplicate payment.
-
-Jika order sudah expired:
-
-* transaction masuk exception/reconciliation flow;
-* customer tidak boleh menerima status yang salah;
-* finance/admin diberi alert jika diperlukan.
-
----
-
-# 40. Refund
-
-Refund hanya berlaku jika payment telah berhasil.
-
-## Online Payment
-
-```text
-PAID
-↓
-REFUND_REQUESTED
-↓
-REFUND_PROCESSING
-↓
-XENDIT
-↓
-REFUNDED
-```
-
-Refund online diproses melalui mekanisme refund Xendit sesuai jenis transaksi dan capability yang tersedia.
-
-## COD
-
-COD tidak direfund melalui Xendit.
-
-Flow:
-
-```text
-COD PAID
-↓
-REFUND REQUESTED
-↓
-REFUND PROCESSING
-↓
-[COD_REFUND_METHOD]
-↓
-REFUNDED
-```
-
-Placeholder:
-
-```text
-[COD_REFUND_METHOD]
-```
-
-Contoh:
-
-* bank transfer;
-* e-wallet;
-* cash;
-* metode lain yang ditentukan bisnis.
-
----
-
-# 41. Refund Rules
-
-1. Refund tidak boleh melebihi paid amount.
-2. Refund memiliki unique reference.
-3. Refund harus idempotent.
-4. Refund wajib diaudit.
-5. Payment belum `PAID` tidak dapat direfund.
-6. Refund gagal tidak boleh dianggap `REFUNDED`.
-7. Refund processing harus dapat direkonsiliasi.
-8. Customer harus menerima status refund yang sebenarnya.
-
----
-
-# 42. Cash Payment vs COD
-
-Dalam LANDURYKU:
-
-> **COD adalah metode pembayaran tunai yang dilakukan kepada courier pada proses pickup/delivery sesuai konfigurasi order.**
-
-Cash payment tidak diperlakukan sebagai online payment.
-
-Xendit hanya digunakan untuk online payment.
-
----
-
-# 43. Notification
-
-MVP:
-
-* In-app notification;
-* Email.
-
-Placeholder:
-
-```text
-[CS_EMAIL]
-[CS_PHONE]
-[SUPPORT_WHATSAPP]
-[SUPPORT_URL]
-```
-
-Future:
-
-* WhatsApp;
-* Push Notification.
-
----
-
-# 44. Notification Events
-
-Notification untuk:
-
-* registration;
-* store submitted;
-* store approved;
-* revision required;
-* store rejected;
-* courier assigned;
-* courier arriving;
-* pickup completed;
-* laundry received;
-* laundry weighed;
-* final price updated;
-* payment required;
-* payment successful;
-* payment failed;
-* payment expired;
-* COD confirmation;
-* processing;
-* ready;
-* delivery;
-* completed;
-* refund requested;
-* refund completed;
-* dispute.
-
-Notification failure tidak boleh mengubah transaction state.
-
----
-
-# 45. AI Chat Assistant
-
-Nama:
-
-> **LANDURYKU AI Assistant**
-
-AI membantu customer untuk:
-
-* FAQ;
-* informasi layanan;
-* harga;
-* status order;
-* payment status;
-* informasi store;
-* troubleshooting;
-* panduan penggunaan;
-* escalation ke CS.
-
----
-
-# 46. AI Architecture
-
-AI tidak memiliki direct database access.
-
-Architecture:
-
-```text
-Customer
-↓
-LANDURYKU AI Assistant
-↓
-AI Service
-↓
-Authorized Tool
-↓
-Authorization
-↓
-Business Service
-↓
-System of Record
-↓
-Response
-↓
-AI
-↓
-Customer
-```
-
----
-
-# 47. AI Authorized Functions
-
-AI dapat menggunakan function seperti:
-
-```text
-get_customer_order_status()
-get_customer_payment_status()
-get_store_information()
-get_store_service()
-get_order_basic_information()
-```
-
-Setiap function wajib melakukan authorization.
-
-AI tidak boleh:
-
-* membaca database langsung;
-* membaca customer lain;
-* membaca password;
-* membaca secret;
-* membaca payment credentials;
-* membaca audit log internal tanpa permission.
-
----
-
-# 48. AI Hallucination Control
-
-AI tidak boleh mengarang:
-
-* harga;
-* payment status;
-* refund status;
-* order status;
-* ETA;
-* compensation policy.
-
-Jika data tidak tersedia:
-
-> AI harus menyatakan informasi tidak tersedia.
-
-Untuk transaksi:
-
-> System of Record menjadi sumber kebenaran.
-
----
-
-# 49. AI Prompt Injection Protection
-
-Input customer dianggap untrusted.
-
-AI harus:
-
-* memisahkan system policy dan user input;
-* tidak membocorkan system prompt;
-* tidak menjalankan unauthorized function;
-* tidak memberikan secret;
-* tidak mengubah business state hanya berdasarkan instruksi conversational;
-* memvalidasi authorization sebelum tool execution.
-
----
-
-# 50. AI Human Escalation
-
-AI harus memberikan opsi human support apabila:
-
-* customer meminta CS;
-* dispute;
-* refund exception;
-* payment anomaly;
-* laundry rusak/hilang;
-* AI tidak yakin;
-* complaint serius.
-
-Placeholder:
-
-```text
-[CS_NAME]
-[CS_EMAIL]
-[CS_PHONE]
-[CS_WHATSAPP]
-[CS_OPERATING_HOURS]
-[SUPPORT_TICKET_URL]
-```
-
----
-
-# 51. AI Rate Limit
-
-AI harus memiliki:
-
-* per-user rate limit;
-* abuse detection;
-* usage monitoring;
-* cost monitoring;
-* model usage control.
-
-Placeholder:
-
-```text
-[AI_DAILY_LIMIT]
-[AI_RATE_LIMIT]
-[AI_MODEL]
-[AI_ESCALATION_THRESHOLD]
-```
-
----
-
-# 52. Customer Registration
-
-Customer dapat mendaftar menggunakan:
-
-> **Google OAuth**
-
-Flow:
-
-```text
-Landing
-↓
-Login/Register
-↓
-Google Authentication
-↓
-Account Created
-↓
-Complete Profile
-↓
-Phone Verification
-↓
-Address
-↓
-Customer Dashboard
-```
-
----
-
-# 53. Customer Profile
-
-Data:
-
-* name;
-* email;
-* phone;
-* profile photo;
-* address;
-* RT/RW;
-* latitude;
-* longitude.
-
-Phone verification:
-
-```text
-[PHONE_VERIFICATION_METHOD]
-```
-
----
-
-# 54. Address Management
-
-Customer dapat menyimpan:
-
-* home;
-* office;
-* other.
-
-Data:
-
-* recipient name;
-* phone;
-* address;
-* RT/RW;
-* kelurahan;
-* kecamatan;
-* city;
-* province;
-* postal code;
-* latitude;
-* longitude;
-* address note.
-
----
-
-# 55. Google Maps
-
-Google Maps Platform digunakan untuk:
-
-* map;
-* location;
-* geocoding;
-* reverse geocoding;
-* distance;
-* courier tracking;
-* service area.
-
-Jika Google Maps mengalami error:
-
-* address text tetap tersedia;
-* order tidak boleh hilang;
-* sistem menggunakan fallback.
-
----
-
-# 56. Security Architecture
-
-Prinsip:
-
-> **Defense in Depth**
-
-Layer:
-
-```text
-User
-↓
-Authentication
-↓
-Session Security
-↓
-RBAC
-↓
-Permission
-↓
-Resource Authorization
-↓
-Tenant Isolation
-↓
-Input Validation
-↓
-Business Rules
-↓
-Database
-↓
-Audit
-↓
-Monitoring
-```
-
----
-
-# 57. Authentication Security
-
-Support:
-
-* Google OAuth;
-* Laravel authentication;
-* secure session;
-* privileged authentication;
-* 2FA.
-
-2FA wajib untuk:
-
-* Platform Owner;
-* privileged Platform Admin;
-* role lain yang ditentukan security policy.
-
----
-
-# 58. Authorization
-
-Authorization harus mengecek:
-
-1. Identity.
-2. Role.
-3. Permission.
-4. Resource ownership.
-5. Store scope.
-6. Business state.
-
-Contoh:
-
-```text
-Store Admin A
-↓
-Request Order
-↓
-Is Order Store A?
-↓
-Yes → Continue
-No → DENY
-```
-
-UI hiding saja tidak cukup.
-
-Authorization wajib dilakukan server-side.
-
----
-
-# 59. Multi-Tenant Isolation
-
-Store merupakan tenant boundary.
-
-Rules:
-
-* Store A tidak boleh membaca Store B.
-* Store Admin A tidak dapat mengakses Store B.
-* Store A tidak dapat mengubah order Store B.
-* Store A tidak dapat melihat private business data Store B.
-* Courier hanya dapat melihat task sesuai scope.
-* Customer hanya dapat melihat order miliknya.
-
----
-
-# 60. Password Security
-
-Jika password digunakan:
-
-* strong password policy;
-* secure hashing;
-* credential stuffing protection;
-* rate limiting;
-* account recovery;
-* suspicious login monitoring.
-
-Password tidak boleh disimpan dalam plaintext.
-
----
-
-# 61. Session Security
-
-Harus menggunakan:
-
-* HTTPS;
-* Secure Cookie;
-* HttpOnly;
-* SameSite;
-* session expiration;
-* logout invalidation;
-* session rotation;
-* session fixation protection.
-
----
-
-# 62. Web Security
-
-MVP harus memiliki perlindungan terhadap:
-
-* SQL Injection;
-* XSS;
-* CSRF;
-* SSRF;
-* session hijacking;
-* IDOR/BOLA;
-* broken access control;
-* malicious file upload;
-* brute force;
-* credential stuffing;
-* parameter tampering.
-
----
-
-# 63. Input Validation
-
-Semua input harus divalidasi server-side.
-
-Contoh:
-
-* phone;
-* email;
-* address;
-* weight;
-* price;
-* quantity;
-* coordinates;
-* uploaded files;
-* order ID;
-* payment reference.
-
----
-
-# 64. Price Security
-
-Customer tidak boleh mengirim:
-
-```text
-final_price = 1000
-```
-
-dan sistem mempercayainya.
-
-Server menghitung:
-
-```text
-Actual Weight
-×
-Authoritative Service Price
-+
-Fees
--
-Discount
-```
-
----
-
-# 65. Payment Security
-
-Payment harus:
-
-* menggunakan Xendit;
-* menggunakan HTTPS;
-* memvalidasi webhook;
-* memvalidasi nominal;
-* memvalidasi reference;
-* menggunakan idempotency;
-* mencegah duplicate payment;
-* memiliki audit;
-* memiliki reconciliation.
-
----
-
-# 66. File Upload Security
-
-Dokumen store harus:
-
-* private;
-* tidak dapat diakses public secara langsung;
-* memiliki MIME validation;
-* memiliki extension validation;
-* memiliki size limit;
-* memiliki randomized filename;
-* disimpan di private storage;
-* dapat dilakukan malware scanning sesuai infrastructure.
-
-Placeholder:
-
-```text
-[MAX_UPLOAD_SIZE]
-[ALLOWED_FILE_TYPES]
-[DOCUMENT_RETENTION]
-```
-
----
-
-# 67. Audit Log
-
-Aktivitas sensitif wajib dicatat.
-
-Minimum:
-
-* login;
-* failed login;
-* logout;
-* store submission;
-* store approval;
-* store rejection;
-* permission change;
-* order change;
-* payment;
-* refund;
-* suspension;
-* account changes;
-* security events.
-
----
-
-# 68. Audit Fields
-
-Audit minimal:
-
-```text
-actor_id
-actor_role
-action
-resource_type
-resource_id
-timestamp
-IP
-user_agent
-before_value
-after_value
-request_id
-```
-
-Audit log tidak boleh dihapus oleh ordinary admin.
-
----
-
-# 69. Privacy
-
-Sensitive data:
-
-* name;
-* email;
-* phone;
-* address;
-* RT/RW;
-* GPS;
-* payment-related data;
-* business documents;
-* identity documents.
-
-Principles:
-
-* Data Minimization.
-* Purpose Limitation.
-* Least Privilege.
-* Retention Limitation.
-* Secure Processing.
-
----
-
-# 70. Data Visibility
-
-| Data                | Customer      | Store         | Courier       | Platform           |
-| ------------------- | ------------- | ------------- | ------------- | ------------------ |
-| Customer Name       | Own           | Related order | Assigned task | Authorized         |
-| Phone               | Own           | Related order | Assigned task | Authorized         |
-| Address             | Own           | Required      | Assigned task | Authorized         |
-| Courier GPS         | Related order | Relevant task | Own           | Authorized         |
-| Payment Detail      | Own           | Limited       | No            | Finance Authorized |
-| Business Documents  | No            | Own           | No            | Authorized         |
-| Other Customer Data | No            | No            | No            | Authorized only    |
-
----
-
-# 71. GPS Retention
-
-Placeholder:
-
-```text
-[GPS_RETENTION_PERIOD]
-```
-
-Rekomendasi:
-
-GPS disimpan hanya selama diperlukan untuk:
-
-* operational;
-* dispute;
-* security;
-* legal requirement.
-
----
-
-# 72. Payment Data Retention
-
-Placeholder:
-
-```text
-[PAYMENT_RETENTION_PERIOD]
-```
-
-Payment record harus mengikuti kebutuhan:
-
-* finance;
-* reconciliation;
-* dispute;
-* legal requirement.
-
----
-
-# 73. Order Cancellation
-
-Cancellation mengikuti status order.
-
-Contoh:
-
-```text
-CREATED
-→ CANCELLED
-```
-
-dapat lebih mudah dibanding:
-
-```text
-PROCESSING
-→ CANCELLED
-```
-
-Setiap cancellation harus:
-
-* memiliki actor;
-* reason;
-* timestamp;
-* refund handling jika paid.
-
----
-
-# 74. Failed Pickup
-
-Jika customer tidak ada:
-
-```text
-PICKUP_FAILED
-```
-
-Sistem mencatat:
-
-* reason;
-* courier;
-* timestamp;
-* evidence bila diperlukan.
-
-Kemudian:
-
-```text
-REATTEMPT
-atau
-CANCELLED
-```
-
-Placeholder:
-
-```text
-[MAX_PICKUP_REATTEMPT]
-[PICKUP_FAILURE_FEE]
-```
-
----
-
-# 75. Failed Delivery
-
-Jika customer tidak tersedia:
-
-```text
-DELIVERY_FAILED
-```
-
-Sistem dapat:
-
-* reattempt;
-* reschedule;
-* return to store;
-* cancellation.
-
-Placeholder:
-
-```text
-[MAX_DELIVERY_REATTEMPT]
-[DELIVERY_FAILURE_FEE]
-```
-
----
-
-# 76. No Courier
-
-Jika courier tidak tersedia:
-
-```text
-WAITING_FOR_COURIER
-```
-
-Sistem melakukan:
-
-* retry assignment;
-* mencari courier berikutnya;
-* memberi notification.
-
-Jika timeout:
-
-```text
-[COURIER_ASSIGNMENT_TIMEOUT]
-```
-
-Order masuk exception flow atau customer diberikan pilihan sesuai policy.
-
----
-
-# 77. Store Suspension
-
-Jika store suspended:
-
-* new order diblokir;
-* store tidak tampil sebagai available;
-* active order tidak boleh hilang;
-* active order masuk controlled resolution.
-
-Placeholder:
-
-```text
-[STORE_SUSPENSION_ACTIVE_ORDER_POLICY]
-```
-
----
-
-# 78. Weight Dispute
-
-Jika actual weight berbeda signifikan:
-
-```text
-Estimated Weight
-vs
-Actual Weight
-```
-
-Customer diberi:
-
-* actual weight;
-* price calculation;
-* notification.
-
-Threshold:
-
-```text
-[WEIGHT_VARIANCE_THRESHOLD]
-```
-
----
-
-# 79. Damaged/Lost Laundry
-
-Customer dapat membuat dispute:
-
-```text
-Order
-→ Complaint
-→ Dispute Review
-→ Investigation
-→ Resolution
-```
-
-Placeholder:
-
-```text
-[DISPUTE_POLICY]
-[COMPENSATION_POLICY]
-[DISPUTE_SLA]
-```
-
-AI tidak boleh memutuskan compensation secara autonomous.
-
----
-
-# 80. Google Maps Failure
-
-Jika Maps API gagal:
-
-* address text tetap tampil;
-* customer tetap dapat melihat order;
-* tracking dapat menampilkan last known location;
-* transaction tidak boleh gagal hanya karena map error.
-
----
-
-# 81. AI Failure
-
-Jika AI provider gagal:
-
-```text
-AI Unavailable
-```
-
-Customer diberikan:
-
-```text
-[CS_NAME]
-[CS_EMAIL]
-[CS_PHONE]
-[SUPPORT_WHATSAPP]
-[SUPPORT_URL]
-```
-
-Core marketplace tetap berjalan.
-
----
-
-# 82. Notification Failure
-
-Jika email gagal:
-
-* notification retry;
-* error dicatat;
-* order tidak berubah menjadi failed.
-
-Notification merupakan side effect, bukan source of truth.
-
----
-
-# 83. Business Model
-
-LANDURYKU dapat memperoleh revenue dari:
-
-1. Commission.
-2. Platform fee.
-3. Pickup fee.
-4. Delivery fee.
-5. Service fee.
-
-Placeholder:
-
-```text
-[MARKETPLACE_COMMISSION]
-[PLATFORM_FEE]
-[PICKUP_FEE_POLICY]
-[DELIVERY_FEE_POLICY]
-```
-
----
-
-# 84. Settlement
-
-Settlement dilakukan kepada store berdasarkan policy.
-
-Rekomendasi:
-
-> Settlement dilakukan setelah order completed dan dispute window terpenuhi.
-
-Placeholder:
-
-```text
-[SETTLEMENT_PERIOD]
-[SETTLEMENT_DAY]
-[MINIMUM_SETTLEMENT_AMOUNT]
-```
-
----
-
-# 85. Store Reports
-
-Store dapat melihat:
-
-* total order;
-* completed order;
-* cancelled order;
-* revenue;
-* payment;
-* COD;
-* online payment;
-* refund;
-* rating;
-* operational metrics.
-
-Store tidak boleh melihat data keuangan store lain.
-
----
-
-# 86. Platform Dashboard
-
-Platform dashboard menampilkan berdasarkan permission:
-
-* customer;
-* stores;
-* orders;
-* courier;
-* payments;
-* COD;
-* refund;
-* commission;
-* disputes;
-* security;
-* audit;
-* AI usage.
-
----
-
-# 87. Platform Owner Dashboard
-
-Owner dapat melihat:
-
-* GMV;
-* total orders;
-* completed orders;
-* active stores;
-* customer;
-* courier;
-* payment;
-* refund;
-* commission;
-* disputes;
-* security events;
-* audit.
-
-Data sensitif membutuhkan authorization tambahan.
-
----
-
-# 88. UI/UX Design System
-
-## Brand
-
-**Marketplace Name:**
-
-> LANDURYKU
-
-## Primary
-
-`#1A3A5C`
-
-## Secondary
-
-`#4A90D9`
-
-## Tertiary
-
-`#2ECC71`
-
-## Neutral
-
-`#F5F7FA`
-
----
-
-# 89. Branding Placeholder
-
-```text
-[MARKETPLACE_NAME] = LANDURYKU
-
-[LOGO_URL]
-[FAVICON_URL]
-
-[COMPANY_NAME]
-[COMPANY_ADDRESS]
-[COMPANY_EMAIL]
-[COMPANY_PHONE]
-[SUPPORT_EMAIL]
-[SUPPORT_PHONE]
-[SUPPORT_WHATSAPP]
-[WEBSITE_URL]
-```
-
----
-
-# 90. Landing Page
-
-Menampilkan:
-
-* LANDURYKU branding;
-* search laundry;
-* nearby laundry;
-* how it works;
-* services;
-* CTA Cari Laundry;
-* CTA Daftarkan Laundry;
-* FAQ;
-* AI Assistant.
-
----
-
-# 91. Customer Dashboard
-
-Menampilkan:
-
-* active orders;
-* recent orders;
-* payment notification;
-* saved address;
-* nearby store;
-* notifications;
-* AI Assistant.
-
----
-
-# 92. Marketplace Page
-
-Menampilkan:
-
-* search;
-* filter;
-* sort;
-* location;
-* store card;
-* map/list;
-* availability.
-
----
-
-# 93. Store Detail
-
-Menampilkan:
-
-* store information;
-* logo;
-* rating;
-* review;
-* services;
-* prices;
-* operating hours;
-* location;
-* pickup;
-* delivery;
-* estimated processing time.
-
----
-
-# 94. Checkout
-
-Menampilkan:
-
-* store;
-* service;
-* estimated quantity/weight;
-* address;
-* pickup/delivery;
-* estimated subtotal;
-* fees;
-* discount;
-* estimated total;
-* payment method.
-
-Payment:
-
-```text
-ONLINE PAYMENT
-→ XENDIT
-→ QRIS / AVAILABLE PAYMENT METHODS
-
-COD
-→ CASH
-→ COURIER
-```
-
----
-
-# 95. Order Tracking
-
-Customer melihat:
-
-* order status;
-* timeline;
-* courier;
-* map;
-* estimated information;
-* actual weight;
-* final price;
-* payment status.
-
----
-
-# 96. Payment Page
-
-Menampilkan:
-
-### Online
-
-```text
-Payment Amount
-Payment Method
-Xendit Payment Instruction
-QRIS
-Expiration Timer
-Payment Status
-```
-
-### COD
-
-```text
-COD Amount
-COD Instructions
-Verification Method
-Payment Status
-```
-
----
-
-# 97. Store Dashboard
-
-Menu:
-
-```text
-Dashboard
-Orders
-Services
-Pricing
-Staff
-Courier
-Customers
-Reports
-Settings
-```
-
----
-
-# 98. Courier Dashboard
-
-Menu:
-
-```text
-Dashboard
-Available
-Active Task
-Task History
-Profile
-Earnings
-Settings
-```
-
----
-
-# 99. Platform Admin Dashboard
-
-Menu berdasarkan permission:
-
-```text
-Dashboard
-Stores
-Customers
-Orders
-Couriers
-Payments
-COD
-Refunds
-Disputes
-Notifications
-Audit
-Settings
-```
-
----
-
-# 100. Platform Owner Dashboard
-
-Menu:
-
-```text
-Dashboard
-Marketplace
-Users
-Stores
-Orders
-Couriers
-Payments
-COD
-Refunds
-Commission
-Disputes
-Security
-Audit
-AI
-Settings
-```
-
----
-
-# 101. Technical Stack
-
-## Frontend
-
-* HTML5;
-* CSS3;
-* Bootstrap 5;
-* Vanilla JavaScript;
-* Laravel Blade.
-
-## Backend
-
-* PHP 8.3+;
-* Laravel 12;
-* MVC architecture.
-
-## Database
-
-* MySQL 8.
-
-## Cache
-
-* Redis.
-
-## Queue
-
-* Laravel Queue + Redis.
-
-## Realtime
-
-* Laravel Reverb;
-* WebSocket.
-
-## Authentication
-
-* Laravel Authentication;
-* Google OAuth.
-
-## Maps
-
-* Google Maps Platform.
-
-## Payment
-
-* **Xendit**.
-
-## Online Payment
-
-* Xendit;
-* QRIS;
-* payment methods yang tersedia/diaktifkan pada Xendit.
-
-## Cash
-
-* COD.
-
-## AI
-
-* OpenAI API.
-
-## Web Server
-
-* Nginx.
-
-## Operating System
-
-* Ubuntu Linux.
-
-## Security
-
-* HTTPS;
-* secure cookies;
-* RBAC;
-* Policies/Gates;
-* rate limiting;
-* audit logging.
-
-## Version Control
-
-* Git;
-* GitHub/GitLab.
-
----
-
-# 102. Architecture
-
-```text
-                         LANDURYKU
-                              │
-                 ┌────────────┴────────────┐
-                 │                         │
-              Frontend                  Backend
-                 │                         │
-       HTML + Bootstrap + JS        Laravel 12 / PHP
-                 │                         │
-              Blade                MVC Architecture
-                                           │
-                 ┌─────────────────────────┼────────────────────────┐
-                 │                         │                        │
-               MySQL                    Redis                  Laravel Queue
-                 │                         │                        │
-                 │                     Cache/Session              │
-                 │                                             Background Jobs
-                 │
-                 └─────────────────────────┬────────────────────────┘
-                                           │
-                   ┌───────────────────────┼────────────────────────┐
-                   │                       │                        │
-              Google Maps                Xendit                  OpenAI
-                   │                       │                        │
-              GPS / Map                 Payment                  AI
-              Geocoding                 QRIS
-                   │
-                   │
-              Laravel Reverb
-                   │
-              WebSocket
-                   │
-             Realtime Tracking
-```
-
----
-
-# 103. MVC Structure
-
-## Model
-
-Bertanggung jawab terhadap:
-
-* database;
-* relationship;
-* data model;
-* persistence.
-
-Contoh domain:
-
-```text
-User
-Store
-StoreApplication
-Service
-Order
-OrderItem
-Courier
-CourierTask
-Address
-Payment
-Refund
-Notification
-Review
-AuditLog
-AIConversation
-```
-
-## View
-
-Laravel Blade + Bootstrap.
-
-## Controller
-
-Controller menangani:
-
-* HTTP request;
-* validation;
-* authorization;
-* memanggil service;
-* response.
-
-Business logic kompleks tidak diletakkan seluruhnya di Controller.
-
----
-
-# 104. Recommended Backend Structure
-
-Gunakan domain/service-oriented structure di dalam Laravel MVC.
-
-Contoh:
-
-```text
-app/
-├── Models/
-├── Http/
-│   ├── Controllers/
-│   ├── Requests/
-│   └── Middleware/
-├── Services/
-│   ├── Order/
-│   ├── Payment/
-│   ├── Refund/
-│   ├── Courier/
-│   ├── Store/
-│   ├── AI/
-│   └── Notification/
-├── Policies/
-├── Jobs/
-├── Events/
-├── Listeners/
-└── Notifications/
-```
-
-Tujuannya menjaga MVC tetap sederhana tetapi business logic tidak menumpuk di Controller.
-
----
-
-# 105. Database Domain
-
-Minimum domain:
-
-```text
-users
-roles
-permissions
-role_permissions
-user_roles
-
-stores
-store_applications
-store_staff
-store_services
-store_operating_hours
-
-addresses
-
-orders
-order_items
-order_status_histories
-
-couriers
-courier_tasks
-courier_locations
-
-payments
-payment_events
-refunds
-
-notifications
-
-reviews
-
-disputes
-
-audit_logs
-
-ai_conversations
-ai_messages
-```
-
----
-
-# 106. Important Database Principles
-
-* Foreign key.
-* Unique constraint.
-* Indexing.
-* Soft delete jika sesuai.
-* Transaction untuk financial operation.
-* Database transaction untuk critical state transition.
-* Tidak menyimpan raw payment credentials.
-* Sensitive data encryption sesuai kebutuhan.
-
----
-
-# 107. Queue
-
-Queue digunakan untuk:
-
-* email;
-* notification;
-* payment reconciliation;
-* refund processing;
-* GPS processing;
-* AI processing tertentu;
-* report generation;
-* cleanup.
-
----
-
-# 108. Realtime
-
-Laravel Reverb/WebSocket digunakan untuk:
-
-* courier location;
-* order status;
-* notification;
-* operational dashboard.
-
-Jika realtime gagal:
-
-> Sistem harus tetap memiliki fallback polling atau refresh mechanism sesuai kebutuhan.
-
----
-
-# 109. Performance
-
-Target:
-
-* responsive UI;
-* efficient database query;
-* pagination;
-* caching;
-* queue background task;
-* lazy loading jika diperlukan;
-* index database;
-* rate limiting.
-
-Placeholder:
-
-```text
-[TARGET_RESPONSE_TIME]
-[TARGET_CONCURRENT_USERS]
-[TARGET_DAILY_ORDERS]
-```
-
----
-
-# 110. Scalability
-
-Sistem harus dapat berkembang dalam:
-
-* customer;
-* store;
-* courier;
-* order;
-* payment;
-* realtime connection;
-* AI usage.
-
-Strategi:
-
-* Redis;
-* queue;
-* caching;
-* database indexing;
-* pagination;
-* horizontal scaling jika diperlukan.
-
----
-
-# 111. Availability
-
-Target MVP:
-
-> **99.5%**
-
-Nilai final:
-
-```text
-[AVAILABILITY_TARGET]
-```
-
----
-
-# 112. Backup
-
-Harus tersedia:
-
-* database backup;
-* backup monitoring;
-* restore testing;
-* disaster recovery.
-
-Placeholder:
-
-```text
-[BACKUP_FREQUENCY]
-[BACKUP_RETENTION]
-```
-
----
-
-# 113. Recovery
-
-Baseline:
-
-```text
-RPO ≤ 1 Hour
-RTO ≤ 4 Hours
-```
-
-Nilai final:
-
-```text
-[RPO_TARGET]
-[RTO_TARGET]
-```
-
----
-
-# 114. Monitoring
-
-Monitor:
-
-* application;
-* database;
-* Redis;
-* queue;
-* WebSocket;
-* payment;
-* webhook;
-* refund;
-* authentication;
-* security;
-* AI;
-* GPS;
-* notification.
-
----
-
-# 115. Logging
-
-Application log tidak boleh menyimpan:
-
-* password;
-* API secret;
-* payment credential;
-* full sensitive payment data.
-
-Log harus memiliki:
-
-```text
-request_id
-timestamp
-severity
-service
-actor
-action
-result
-```
-
----
-
-# 116. Business Rules
-
-1. Customer hanya dapat melihat order miliknya.
-2. Store hanya dapat mengelola order milik store.
-3. Store Admin hanya dapat mengakses store yang diberikan.
-4. Courier hanya dapat melihat task miliknya.
-5. Store harus APPROVED sebelum menerima marketplace order.
-6. Store SUSPENDED tidak menerima order baru.
-7. Payment online dilakukan melalui Xendit.
-8. QRIS online payment menggunakan Xendit.
-9. COD dilakukan secara tunai.
-10. Online payment expired setelah 1 jam.
-11. Payment yang belum PAID tidak direfund.
-12. Refund hanya dilakukan terhadap successful payment.
-13. COD refund tidak melalui Xendit.
-14. Final price dihitung server-side.
-15. Estimated dan actual weight disimpan terpisah.
-16. Payment state dan order state dipisahkan.
-17. Webhook Xendit harus diverifikasi.
-18. Webhook harus idempotent.
-19. AI tidak memiliki direct database access.
-20. AI tidak dapat membaca data customer lain.
-21. AI tidak dapat melakukan privileged action tanpa authorization.
-22. GPS hanya aktif selama active task.
-23. Store A tidak dapat mengakses Store B.
-24. Admin hanya memiliki permission yang diberikan.
-25. Platform Owner tidak dapat public registration.
-26. Platform Admin dibuat oleh Platform Owner/authorized provisioning.
-27. Store Admin dibuat oleh Store Owner.
-28. Store Courier berada dalam store scope.
-29. Marketplace Courier dikelola platform.
-30. Business documents bersifat private.
-31. Audit log tidak boleh dihapus ordinary admin.
-32. Notification failure tidak mengubah transaction state.
-33. Google Maps failure tidak boleh menghilangkan order.
-34. AI failure tidak boleh mengganggu core transaction.
-35. Customer harus mengetahui estimated/final pricing.
-36. Cancellation mengikuti policy berdasarkan state.
-37. Refund harus idempotent.
-38. Payment amount harus diverifikasi.
-39. COD payment harus diverifikasi.
-40. Security event yang mencurigakan harus dapat dimonitor.
-
----
-
-# 117. Functional Requirements
-
-## FR-001 Authentication
-
-User dapat melakukan login berdasarkan authentication method yang diperbolehkan.
-
-## FR-002 Google Authentication
-
-Customer dapat login/register menggunakan Google OAuth.
-
-## FR-003 Customer Profile
-
-Customer dapat mengelola profile dan address.
-
-## FR-004 Store Application
-
-User dapat mengajukan pendaftaran laundry.
-
-## FR-005 Store Approval
-
-Authorized admin dapat approve/reject/request revision.
-
-## FR-006 Marketplace Search
-
-Customer dapat mencari laundry.
-
-## FR-007 Store Detail
-
-Customer dapat melihat layanan dan harga.
-
-## FR-008 Order Creation
-
-Customer dapat membuat order.
-
-## FR-009 Weight
-
-Store dapat memasukkan actual weight.
-
-## FR-010 Pricing
-
-Sistem menghitung final price.
-
-## FR-011 Courier
-
-Sistem mendukung courier assignment.
-
-## FR-012 Tracking
-
-Customer dapat tracking courier.
-
-## FR-013 Online Payment
-
-Customer dapat membayar melalui Xendit.
-
-## FR-014 QRIS
-
-Customer dapat membayar menggunakan QRIS melalui Xendit.
-
-## FR-015 COD
-
-Customer dapat memilih COD jika eligible.
-
-## FR-016 Payment Expiration
-
-Online payment expired setelah 1 jam.
-
-## FR-017 Refund
-
-Sistem mendukung refund.
-
-## FR-018 Notification
-
-Sistem mengirim notification.
-
-## FR-019 AI
-
-AI Assistant membantu customer.
-
-## FR-020 RBAC
-
-Sistem memiliki role dan permission.
-
-## FR-021 Audit
-
-Aktivitas sensitif tercatat.
-
-## FR-022 Review
-
-Customer dapat review setelah completed.
-
-## FR-023 Dispute
-
-Customer dapat membuat complaint/dispute.
-
----
-
-# 118. Non-Functional Requirements
-
-## Security
-
-* HTTPS.
-* RBAC.
-* Tenant isolation.
-* Rate limiting.
-* Audit.
-* Secure session.
-* Webhook verification.
-* Input validation.
-* File security.
-
-## Performance
-
-* pagination;
-* caching;
-* indexing;
-* queue.
-
-## Reliability
-
-* backup;
-* monitoring;
-* retry;
-* reconciliation.
-
-## Maintainability
-
-* modular services;
-* documented business rules;
-* automated tests;
-* clean MVC.
-
----
-
-# 119. MVP Scope
-
-## MUST HAVE
-
-### Identity
-
-* Google Login;
-* profile;
-* address;
-* RBAC;
-* permission;
-* 2FA privileged role.
-
-### Store
-
-* Daftarkan Laundry;
-* store application;
-* approval;
-* service;
-* pricing;
-* operating hours.
-
-### Marketplace
-
-* search;
-* location;
-* store listing;
-* store detail.
-
-### Order
-
-* create order;
-* pickup;
-* delivery;
-* order status;
-* weight;
-* pricing;
-* cancellation.
-
-### Courier
-
-* courier;
-* assignment;
-* pickup;
-* delivery;
-* task status.
-
-### GPS
-
-* active tracking;
-* map.
-
-### Payment
-
-* **Xendit**;
-* **QRIS**;
-* **COD**;
-* payment timeout;
-* webhook;
-* refund;
-* reconciliation.
-
-### Notification
-
-* in-app;
-* email.
-
-### AI
-
-* FAQ;
-* store information;
-* order status;
-* payment status;
-* human escalation.
-
-### Security
-
-* authentication;
-* authorization;
-* tenant isolation;
-* audit;
-* rate limit;
-* validation;
-* payment security;
-* file security.
-
----
-
-# 120. SHOULD HAVE
-
-* advanced analytics;
-* courier optimization;
-* scheduled pickup;
-* advanced reviews;
-* dispute dashboard;
-* operational SLA.
-
----
-
-# 121. NICE TO HAVE
-
-* loyalty;
-* coupon;
-* referral;
-* subscription;
-* dynamic pricing;
-* AI personalization.
-
----
-
-# 122. FUTURE
-
-* native mobile application;
-* WhatsApp;
-* push notification;
-* route optimization;
-* fraud scoring;
-* AI proactive assistance;
-* corporate laundry;
-* recurring laundry;
-* multi-country;
-* multi-currency.
-
----
-
-# 123. Edge Cases
-
-## Payment Expired
-
-```text
-PENDING
-→ 1 HOUR
-→ EXPIRED
-```
-
-Tidak ada refund.
-
-## Duplicate Webhook
-
-Idempotent processing.
-
-## Late Webhook
-
-Reconciliation dengan Xendit.
-
-## Refund Failed
-
-Status tetap processing/exception.
-
-## COD Verification Failed
-
-Payment tidak menjadi PAID.
-
-## Courier Reject
-
-Reassignment.
-
-## No Courier
-
-Waiting/exception.
-
-## GPS Lost
-
-Last known location.
-
-## Maps Error
-
-Fallback address.
-
-## AI Error
-
-Human support fallback.
-
-## Customer Not Home
-
-Failed pickup/delivery.
-
-## Weight Difference
-
-Customer diberi informasi.
-
-## Store Suspended
-
-New order blocked, active order controlled resolution.
-
-## Laundry Lost/Damaged
-
-Dispute flow.
-
-## Unauthorized Access
-
-Request denied.
-
-## Cross-Tenant Access
-
-Request denied.
-
----
-
-# 124. Acceptance Criteria
-
-## Authentication
-
-Customer dapat login melalui Google OAuth.
-
-Privileged account tidak memperoleh access sebelum 2FA selesai apabila 2FA diwajibkan.
-
----
-
-## Store Registration
-
-User dapat memilih:
-
-> Daftarkan Laundry
-
-Application dapat disimpan sebagai draft.
-
-Application tidak dapat submit jika required data belum lengkap.
-
----
-
-## Store Approval
-
-Authorized reviewer dapat:
-
-* approve;
-* reject;
-* request revision.
-
-Setiap action dicatat di audit.
-
----
-
-## Marketplace
-
-Customer hanya melihat store yang eligible.
-
-Store suspended tidak tersedia untuk order baru.
-
----
-
-## Order
-
-Customer dapat membuat order.
-
-Order memiliki unique reference.
-
-Customer tidak dapat membaca order customer lain.
-
----
-
-## Weight
-
-Estimated dan actual weight tersimpan terpisah.
-
-Final price menggunakan actual weight.
-
----
-
-## Courier
-
-Courier hanya dapat melihat task miliknya.
-
-Courier dapat menerima/reject task sesuai policy.
-
----
-
-## GPS
-
-Customer dapat melihat courier hanya saat active tracking.
-
-Tracking berhenti setelah task selesai.
-
----
-
-## Xendit Payment
-
-Payment online dibuat melalui Xendit.
-
-Payment memiliki unique reference.
-
-Webhook harus diverifikasi.
-
-Nominal harus cocok.
-
-Duplicate webhook tidak menghasilkan duplicate transaction.
-
----
-
-## QRIS
-
-Customer dapat memperoleh QRIS/payment instruction melalui Xendit.
-
-Payment menjadi PAID hanya setelah confirmation yang valid.
-
----
-
-## Payment Expiration
-
-Payment online tidak dibayar selama 1 jam:
-
-```text
-PENDING
-→ EXPIRED
-```
-
-Tidak ada refund.
-
----
-
-## COD
-
-Customer dapat memilih COD jika eligible.
-
-Courier tidak dapat mengkonfirmasi COD tanpa verification mechanism.
-
-COD payment memiliki evidence dan audit.
-
----
-
-## Refund
-
-Refund hanya dapat dilakukan terhadap successful payment.
-
-Refund online diproses melalui Xendit jika transaction mendukung refund.
-
-COD refund menggunakan:
-
-```text
-[COD_REFUND_METHOD]
-```
-
----
-
-## AI
-
-AI dapat menjawab status order menggunakan authorized function.
-
-AI tidak dapat mengakses order customer lain.
-
-AI tidak dapat mengakses database secara langsung.
-
-AI tidak boleh mengarang payment/order/refund status.
-
----
-
-## Authorization
-
-User yang tidak memiliki permission mendapat:
-
-```text
-403 FORBIDDEN
-```
-
-atau equivalent secure denial.
-
----
-
-## Audit
-
-Payment, refund, approval, permission, suspension, dan security event tercatat.
-
----
-
-# 125. Product Metrics
-
-## Registered Customers
-
-Jumlah customer terdaftar.
-
-## Active Customers
-
-Customer yang melakukan meaningful activity.
-
-## Registered Stores
-
-Jumlah store yang mendaftar.
-
-## Approved Stores
-
-Jumlah store approved.
-
-## Active Stores
-
-Store yang aktif menerima order.
-
-## Orders / Day
-
-Jumlah order per hari.
-
-## Completed Orders
-
-Order berhasil diselesaikan.
-
-## Cancellation Rate
-
-```text
-Cancelled Orders / Total Orders
-```
-
-## Payment Success Rate
-
-```text
-Successful Online Payments / Initiated Online Payments
-```
-
-## COD Success Rate
-
-```text
-Successful COD / COD Orders
-```
-
-## Refund Rate
-
-```text
-Refunded Transactions / Paid Transactions
-```
-
-## Average Order Value
-
-```text
-GMV / Completed Orders
-```
-
-## Pickup Time
-
-Waktu order sampai pickup.
-
-## Delivery Time
-
-Waktu ready sampai delivered.
-
-## Customer Retention
-
-Customer yang kembali melakukan order.
-
-## Store Retention
-
-Store yang tetap aktif.
-
-## AI Resolution Rate
-
-Conversation selesai tanpa human escalation.
-
-AI resolution rate harus dilengkapi:
-
-* hallucination/error rate;
-* customer satisfaction;
-* escalation rate.
-
----
-
-# 126. Risks
-
-## R1 Payment Failure
-
-Mitigation:
-
-* Xendit;
-* webhook;
-* idempotency;
-* reconciliation.
-
-## R2 Fraud
-
-Mitigation:
-
-* RBAC;
-* audit;
-* COD verification;
-* payment verification.
-
-## R3 Data Leakage
-
-Mitigation:
-
-* tenant isolation;
-* resource authorization;
-* least privilege.
-
-## R4 GPS Privacy
-
-Mitigation:
-
-* active-task only;
-* limited retention;
-* access control.
-
-## R5 AI Hallucination
-
-Mitigation:
-
-* system of record;
-* authorized tools;
-* human escalation.
-
-## R6 Prompt Injection
-
-Mitigation:
-
-* strict tool authorization;
-* trust boundaries;
-* no direct DB.
-
-## R7 Store Quality
-
-Mitigation:
-
-* approval;
-* rating;
-* suspension;
-* monitoring.
-
-## R8 Courier Availability
-
-Mitigation:
-
-* reassignment;
-* availability monitoring.
-
-## R9 Pricing Dispute
-
-Mitigation:
-
-* estimated/actual separation;
-* weighing evidence;
-* notification.
-
-## R10 Vendor Dependency
-
-Vendor:
-
-* Xendit;
-* Google Maps;
-* OpenAI.
-
-Mitigation:
-
-* monitoring;
-* retry;
-* graceful degradation;
-* fallback process.
-
----
-
-# 127. Assumptions
-
-1. LANDURYKU beroperasi pada satu negara untuk MVP.
-2. Currency utama adalah IDR.
-3. Google OAuth tersedia.
-4. Xendit digunakan sebagai payment gateway resmi.
-5. QRIS tersedia melalui Xendit sesuai konfigurasi account.
-6. COD tersedia berdasarkan eligibility.
-7. Payment credential tidak disimpan LANDURYKU.
-8. Store harus approved.
-9. Customer membutuhkan address sebelum order.
-10. Actual weight menjadi basis final price untuk layanan berbasis berat.
-11. Online payment timeout adalah 1 jam.
-12. COD tidak menggunakan payment timeout 1 jam.
-13. COD membutuhkan verification.
-14. GPS hanya active task.
-15. AI tidak memiliki direct database access.
-16. Platform menggunakan multi-tenant authorization.
-17. Privileged account menggunakan enhanced authentication.
-18. Email digunakan untuk notification MVP.
-19. Refund COD menggunakan metode yang ditentukan bisnis.
-20. Legal/privacy policy disesuaikan dengan jurisdiction.
-
----
-
-# 128. Configurable Placeholders
-
-Seluruh informasi yang belum final dibuat configurable.
-
-## Marketplace
-
-```text
-[MARKETPLACE_NAME] = LANDURYKU
-[MARKETPLACE_TAGLINE]
-[MARKETPLACE_DESCRIPTION]
-[LOGO_URL]
-[FAVICON_URL]
-[WEBSITE_URL]
-```
-
-## Company
-
-```text
-[COMPANY_NAME]
-[COMPANY_ADDRESS]
-[COMPANY_PHONE]
-[COMPANY_EMAIL]
-```
-
-## Customer Support
-
-```text
-[CS_NAME]
-[CS_EMAIL]
-[CS_PHONE]
-[CS_WHATSAPP]
-[CS_OPERATING_HOURS]
-[SUPPORT_URL]
-[SUPPORT_TICKET_URL]
-```
-
-## Payment
-
-```text
-[XENDIT_ACCOUNT]
-[XENDIT_ENVIRONMENT]
-[PAYMENT_EXPIRATION] = 1 HOUR
-[COD_ENABLED]
-[COD_MAX_AMOUNT]
-[COD_VERIFICATION_METHOD]
-[COD_REFUND_METHOD]
-```
-
-## Courier
-
-```text
-[COURIER_REQUIREMENTS]
-[COURIER_DOCUMENT_REQUIREMENTS]
-[COURIER_ASSIGNMENT_TIMEOUT]
-[MAX_PICKUP_REATTEMPT]
-[MAX_DELIVERY_REATTEMPT]
-```
-
-## GPS
-
-```text
-[GPS_UPDATE_INTERVAL]
-[GPS_RETENTION_PERIOD]
-```
-
-## AI
-
-```text
-[AI_MODEL]
-[AI_RATE_LIMIT]
-[AI_DAILY_LIMIT]
-[AI_ESCALATION_THRESHOLD]
-```
-
-## Business
-
-```text
-[MARKETPLACE_COMMISSION]
-[PLATFORM_FEE]
-[PICKUP_FEE_POLICY]
-[DELIVERY_FEE_POLICY]
-[SETTLEMENT_PERIOD]
-[DISPUTE_SLA]
-[COMPENSATION_POLICY]
-```
-
-## Infrastructure
-
-```text
-[AVAILABILITY_TARGET]
-[RPO_TARGET]
-[RTO_TARGET]
-[BACKUP_FREQUENCY]
-[BACKUP_RETENTION]
-```
-
----
-
-# 129. Open Questions / Business Decisions
-
-## 129.1 Commission
-
-Berapa commission LANDURYKU?
-
-```text
-[MARKETPLACE_COMMISSION]
-```
-
----
-
-## 129.2 Settlement
-
-Kapan store menerima settlement?
-
-```text
-[SETTLEMENT_PERIOD]
-```
-
-Rekomendasi:
-
-> Setelah order completed + dispute window.
-
----
-
-## 129.3 COD
-
-Apakah semua store boleh mengaktifkan COD?
-
-```text
-[COD_ALLOWED_STORE]
-```
-
----
-
-## 129.4 COD Maximum
-
-Berapa maksimal nominal COD?
-
-```text
-[COD_MAX_AMOUNT]
-```
-
----
-
-## 129.5 COD Verification
-
-Metode final:
-
-```text
-[COD_VERIFICATION_METHOD]
-```
-
-Rekomendasi:
-
-> OTP/PIN/customer confirmation.
-
----
-
-## 129.6 COD Refund
-
-Metode refund:
-
-```text
-[COD_REFUND_METHOD]
-```
-
----
-
-## 129.7 Payment Expiration
-
-Final:
-
-> **1 jam**
-
-Status:
-
-```text
-PENDING → EXPIRED
-```
-
----
-
-## 129.8 Weight Variance
-
-Threshold:
-
-```text
-[WEIGHT_VARIANCE_THRESHOLD]
-```
-
----
-
-## 129.9 Price Confirmation
-
-Threshold:
-
-```text
-[PRICE_CHANGE_CONFIRMATION_THRESHOLD]
-```
-
----
-
-## 129.10 Courier Reassignment
-
-Timeout:
-
-```text
-[COURIER_ASSIGNMENT_TIMEOUT]
-```
-
----
-
-## 129.11 Failed Pickup
-
-Maximum retry:
-
-```text
-[MAX_PICKUP_REATTEMPT]
-```
-
 ---
-
-## 129.12 Failed Delivery
-
-Maximum retry:
-
-```text
-[MAX_DELIVERY_REATTEMPT]
-```
 
----
+## Kontrol Dokumen & Identitas Akademik
 
-## 129.13 Store Suspension
+| Atribut | Keterangan |
+| :--- | :--- |
+| **Nama Produk / Sistem** | **LaundryKu** (Marketplace Layanan Laundry On-Demand Multi-Tenant + LANDY AI Assistant) |
+| **Versi Dokumen** | **3.0** (Sinkronisasi Penuh dengan Implementasi Aktual & Standar IEEE 830 / ISO 29148) |
+| **Tanggal Pembaruan** | 12 November 2026 |
+| **Mata Kuliah** | Rekayasa Perangkat Lunak (`TIKB2503021` — Semester 3, 4 SKS) |
+| **Dosen Pengampu** | Yudhistira Arie Wijaya, M.Kom., CDS. |
+| **Institusi** | STMIK IKMI Cirebon |
+| **Kelompok** | **Laundry AI** |
+| **Tema Kelompok** | **Laundryku** |
+| **Kontak Dukungan Resmi (CS)** | `cs@laundryku.test` |
+| **Standar Acuan** | IEEE Std 830-1998 & ISO/IEC/IEEE 29148:2018 |
 
-Policy active orders:
+### Riwayat Perubahan Dokumen
 
-```text
-[STORE_SUSPENSION_ACTIVE_ORDER_POLICY]
-```
+| Versi | Tanggal | Ringkasan Perubahan |
+| :---: | :--- | :--- |
+| `1.0` | 29 Agustus 2026 | Draf spesifikasi produk awal (masih memakai arsitektur monolith server-rendered, OAuth eksternal, dan placeholder bisnis terbuka). |
+| `2.0` | 3 September 2026 | Eksperimen draf ringkas (`prd-v2.md`) dengan usulan database alternatif; tidak pernah dijadikan standar implementasi utama. |
+| **`3.0`** | **12 November 2026** | **Perombakan penuh berstandar IEEE 830 / ISO 29148 yang disinkronkan 100% dengan implementasi nyata aplikasi (Next.js BFF + Laravel 12 Sanctum API + MySQL 8, registrasi OTP WhatsApp/Email, Leaflet + Nominatim OSM, 19 status order, Xendit + COD, LANDY AI 3-Layer + Model Switcher, User Stories + Acceptance Criteria, NFR terukur, dan Traceability Matrix).** |
 
 ---
-
-## 129.14 Dispute
 
-Compensation:
+## Daftar Isi
 
-```text
-[COMPENSATION_POLICY]
-```
+1. [Bab 1 — Pendahuluan](#bab-1--pendahuluan)
+2. [Bab 2 — Deskripsi Umum Sistem](#bab-2--deskripsi-umum-sistem)
+3. [Bab 3 — Kebutuhan Fungsional, User Stories & Acceptance Criteria](#bab-3--kebutuhan-fungsional-user-stories--acceptance-criteria)
+4. [Bab 4 — Spesifikasi Fitur AI Utama: LANDY Hybrid Assistant](#bab-4--spesifikasi-fitur-ai-utama-landy-hybrid-assistant)
+5. [Bab 5 — Kebutuhan Non-Fungsional (Terukur)](#bab-5--kebutuhan-non-fungsional-terukur)
+6. [Bab 6 — Sistem Desain UI/UX, Peta Route & Model Data Sistem](#bab-6--sistem-desain-uiux-peta-route--model-data-sistem)
+7. [Bab 7 — Matriks Keterlacakan & Daftar Utang Teknis Terkendali](#bab-7--matriks-keterlacakan--daftar-utang-teknis-terkendali)
 
 ---
-
-## 129.15 GPS
-
-Retention:
+
+## Bab 1 — Pendahuluan
+
+### 1.1 Tujuan Dokumen
+
+Dokumen Product Requirements Document (PRD) dan Software Requirements Specification (SRS) ini mendefinisikan secara lengkap dan terukur kebutuhan fungsional, kebutuhan non-fungsional, arsitektur integrasi, serta spesifikasi kecerdasan buatan (AI) sistem **LaundryKu**. Dokumen ini berfungsi sebagai:
+1. **Sumber Kebenaran Tunggal (*Single Source of Truth*)** bagi tim pengembang **Laundry AI** dalam menjaga kesesuaian kode backend, frontend, pengujian otomatis, dan antarmuka pengguna.
+2. **Dokumen Spesifikasi Tahap 1** proyek akhir mata kuliah Rekayasa Perangkat Lunak (`TIKB2503021`) sebagai dasar perancangan sistem, pengujian (*verification & validation*), serta presentasi Video Progres 1.
+
+### 1.2 Latar Belakang Masalah
+
+Industri jasa binatu (*laundry*) UMKM merupakan kebutuhan harian masyarakat urban, mahasiswa, dan keluarga pekerja, tetapi operasionalnya masih menghadapi lima masalah utama:
+1. **Ketidakpastian Berat & Harga Awal:** Pelanggan umumnya tidak mengetahui berat pasti cucian saat memesan jemput, sehingga estimasi awal dan tagihan final setelah ditimbang di toko sering memicu perselisihan bila tidak dicatat terpisah dan disetujui transparan.
+2. **Minimnya Pelacakan Status Terperinci:** Pelanggan tidak mendapat visibilitas tahap pengerjaan cucian (penjemputan kurir, timbang, cuci, kering, setrika, pengantaran) secara terstruktur.
+3. **Pengelolaan Mitra & Kurir Terfragmentasi:** Banyak gerai laundry lokal tidak memiliki sistem pembukuan komisi platform, manajemen kurir toko, pengaturan aturan diskon berat/promo, maupun mekanisme onboarding terverifikasi.
+4. **Risiko Keamanan Akun Lintas Peran:** Pada platform multi-peran (*Customer, Mitra Toko, Kurir, Super Admin*), sesi login yang longgar atau fitur ganti peran dalam satu sesi membuka celah eskalasi hak akses (*privilege escalation*) dan kebocoran data antar-toko (*tenant leak*).
+5. **Beban Layanan Pelanggan Berulang & Biaya Token LLM:** Pertanyaan rutin pengguna (*"cara pesan"*, *"cek status cucian ke berapa"*, *"total pengeluaran bulan ini"*, *"aturan batas COD"*) membebani admin secara manual, sementara penggunaan model bahasa besar (*LLM*) untuk setiap pesan tanpa penyaringan menyebabkan latensi tinggi dan pemborosan kuota token API.
+
+### 1.3 Relevansi dengan Tema Kelompok (`Laundryku`)
 
-```text
-[GPS_RETENTION_PERIOD]
-```
-
----
+Tema kelompok **"Laundryku"** berfokus pada transformasi digital ekosistem layanan binatu lokal menjadi **marketplace multi-tenant terpadu yang aman, transparan, dan dibantu asisten AI cerdas**. Keterkaitan spesifik fitur sistem dengan tema **Laundryku** meliputi:
+- **Marketplace Multi-Tenant Terisolasi:** Menghubungkan pelanggan dengan banyak mitra toko terverifikasi melalui pencarian geografis berbasis koordinat & pemeringkatan kualitas layanan.
+- **Transparansi Transaksi Berat & Pembayaran:** Menyimpan berat estimasi vs berat aktual secara terpisah, mendukung pembayaran digital otomatis (Xendit QRIS/Invoice) maupun tunai terverifikasi (COD dengan batas risiko), serta pembukuan komisi dan periode settlement yang diaudit.
+- **Integrasi AI Berdampak Nyata (LANDY):** Menyediakan asisten AI **read-only** lintas empat peran dengan **arsitektur routing 3 lapisan** (*3-Layer Intent Routing*) yang menyelesaikan panduan operasional serta kueri data terstruktur pada **0 token LLM di Layer 1**, menjaga privasi melalui penyamaran data pribadi (*PII masking*), dan menekan biaya operasional melalui pemilihan model dinamis (*Free Tier* vs *Commercial Tier*) oleh Super Admin.
+
+### 1.4 Ruang Lingkup Produk
+
+#### 1.4.1 Cakupan Sistem Aktif
+
+| Domain | Cakupan Fungsional |
+| :--- | :--- |
+| **Portal Pelanggan (`Customer`)** | Landing page, registrasi & verifikasi OTP (WhatsApp/Email) + login password, profil & manajemen alamat berbasis GPS/Nominatim, pencarian toko & peta interaktif Leaflet, pembuatan pesanan multi-layanan, pelacakan status 19-tahap, pembayaran Xendit/COD, obrolan langsung dengan toko (*Human Chat*), notifikasi multi-kanal, ulasan/rating, pengajuan komplain, serta pendaftaran mitra toko/kurir. |
+| **Portal Mitra Toko (`Store Admin`)** | Login terisolasi (+ 2FA opsional), dashboard metrik toko, pengelolaan pesanan masuk & penimbangan berat aktual, manajemen layanan & harga dasar, pengaturan aturan diskon/promo (`/store/pricing`), manajemen kurir gerai, buku kas/ledger & rekening pencairan dana, laporan analitik periode & ekspor CSV (`/store/reports`), penanganan komplain pelanggan, balas Human Chat, serta pengaturan profil & jam buka gerai. |
+| **Portal Kurir (`Courier`)** | Login terisolasi kurir terverifikasi, ringkasan tugas & penghasilan, klaim tugas jemput/antar tersedia, pembaruan status perjalanan 7-tahap, pencatatan koordinat lokasi saat tugas aktif, serta konfirmasi penagihan tunai COD. |
+| **Portal Super Admin (`Platform`)** | Login terisolasi dengan **wajib 2FA TOTP**, 9 modul tata kelola: Dashboard metrik lintas platform, monitoring pesanan, monitoring transaksi pembayaran, persetujuan/penolakan pendaftaran toko, manajemen status pengguna, CRUD kategori layanan, konfigurasi komisi platform, manajemen model AI dinamis (`/admin/settings/ai`), serta audit log aktivitas sensitif. |
+| **LANDY AI Assistant** | Layanan chat AI read-only untuk tamu (FAQ) dan 4 peran terotentikasi menggunakan arsitektur 3-layer (`AiIntentRouter`), 21 topik basis pengetahuan prosedural, 33 definisi tool terotorisasi, dan guardrail anti-halusinasi/mutasi. |
+
+#### 1.4.2 Batasan di Luar Cakupan (*Out of Scope*) Rilis Saat Ini
+
+1. Aplikasi mobile native terpisah (Android/iOS APK/IPA); antarmuka saat ini berbasis web responsif *mobile-first*.
+2. Transfer dana otomatis ke rekening mitra toko (*auto-payout* bank real-time); pencairan dana dicatat sebagai periode settlement teraudit untuk verifikasi keuangan manual.
+3. Pengembalian dana (*refund*) otomatis ke kartu/e-wallet pelanggan dari portal mitra; penyelesaian komplain diproses melalui verifikasi manusia dengan `resolution_note` dan pencatatan refund terkontrol.
+4. Kalkulasi jarak rute jalan raya berbayar berbasis lalu lintas langsung; pencarian jarak toko menggunakan formula matematis **Haversine**.
+5. Streaming lokasi GPS sub-detik lewat server WebSocket aktif; pembaruan posisi dan status antarmuka menggunakan mekanisme *HTTP polling* periodik (`15 detik`).
+
+### 1.5 Definisi, Akronim, & Istilah Teknis
+
+| Istilah / Akronim | Definisi dalam Sistem LaundryKu |
+| :--- | :--- |
+| **BFF (*Backend-for-Frontend*)** | Lapisan proxy server Next.js (`/api/proxy/[...path]`, `/api/auth/[portal]/[action]`) yang meneruskan permintaan API ke Laravel dan menyimpan token Sanctum dalam cookie `httpOnly` terisolasi per portal. |
+| **Sanctum** | Paket autentikasi API Laravel (`laravel/sanctum`) berbasis token akses personal (`personal_access_tokens`) dengan pengecekan hak akses (*ability*) secara *real-time*. |
+| **OTP (*One-Time Password*)** | Kode verifikasi numerik 6 digit sekali pakai yang dikirim lewat WhatsApp (gateway Fonnte) atau Email (SMTP) dengan masa berlaku 5 menit dan tersimpan dalam bentuk hash SHA-256. |
+| **TOTP 2FA** | *Time-based One-Time Password* (`pragmarx/google2fa-laravel`) menggunakan aplikasi autentikator (mis. Google Authenticator), diwajibkan pada login Super Admin. |
+| **RBAC (*Role-Based Access Control*)** | Pengendalian akses berbasis peran dan izin yang ditegakkan melalui middleware, Sanctum token abilities, dan Laravel Policies (*Least Privilege*). |
+| **Strict Role Isolation** | Kebijakan keamanan yang memisahkan 4 pintu masuk login dan cookie token antar-peran serta menonaktifkan fitur perpindahan peran dalam satu sesi (`/switch-role` menghasilkan HTTP 404). |
+| **QRIS & Invoice Xendit** | Kanal pembayaran digital melalui gateway Xendit berupa kode QR dinamis (`qr_codes`, masa berlaku 2 menit) maupun tautan invoice multifungsi (`v2/invoices`, kedaluwarsa 60 menit). |
+| **COD (*Cash on Delivery*)** | Pembayaran tunai di tempat saat penjemputan/pengantaran dengan batas nominal default `Rp500.000` yang dilacak di tabel `cod_collections`. |
+| **Nominatim OSM** | Layanan *geocoding* dan *reverse geocoding* berbasis peta terbuka OpenStreetMap dengan pembatasan 1 request/detik dan caching koordinat. |
+| **PII Masking** | Penyensoran data pribadi (email dan nomor telepon) sebelum dicatat ke log AI maupun saat dikembalikan ke keluaran alat analitik AI. |
+| **Hold-Out Dataset** | Kumpulan 165 kalimat uji independen (`storage/holdout_dataset.php`) yang tidak pernah dimasukkan ke aturan latih, dipakai mengukur akurasi objektif engine AI LANDY. |
 
-## 129.16 AI
+### 1.6 Dokumen Referensi
 
-AI conversation retention:
+1. IEEE Std 830-1998 — *IEEE Recommended Practice for Software Requirements Specifications*.
+2. ISO/IEC/IEEE 29148:2018 — *Systems and software engineering — Life cycle processes — Requirements engineering*.
+3. Modul Panduan Proyek Akhir Mata Kuliah Rekayasa Perangkat Lunak (`TIKB2503021`), STMIK IKMI Cirebon.
+4. Dokumen internal repositori LaundryKu: [AGENTS.md](file:///c:/laragon/www/laundryku/AGENTS.md), [DESIGN-RULES.md](file:///c:/laragon/www/laundryku/DESIGN-RULES.md), [DESIGN.md](file:///c:/laragon/www/laundryku/DESIGN.md), [OPEN-ISSUES.md](file:///c:/laragon/www/laundryku/OPEN-ISSUES.md), dan [docs/technical-notes.md](file:///c:/laragon/www/laundryku/docs/technical-notes.md).
 
-```text
-[AI_DATA_RETENTION]
+---
+
+## Bab 2 — Deskripsi Umum Sistem
+
+### 2.1 Perspektif Produk & Arsitektur Sistem Nyata
+
+LaundryKu beroperasi menggunakan arsitektur terpisah (*decoupled hybrid architecture*) antara lapisan presentasi antarmuka modern **Next.js (`16.3.5`) + React (`19.2.8`) + Tailwind CSS v4** dengan lapisan layanan bisnis dan REST API **Laravel 12 (PHP `8.3.30`)** serta basis data **MySQL 8.0**. Komunikasi dari browser pengguna ke backend API tidak mengekspos bearer token ke JavaScript klien secara langsung, melainkan melewati **Next.js BFF Proxy** yang menyuntikkan header `Authorization: Bearer` dari cookie `httpOnly` khusus per portal.
+
+```text
++------------------------------------------------------------------------------+
+|                        BROWSER PENGGUNA (Mobile / Desktop)                   |
+|   Next.js 16.3.5 App Router + React 19.2.8 + Tailwind v4 + Leaflet 1.9.4    |
++--------------------------------------+---------------------------------------+
+                                       | HTTP + Cookie httpOnly per Portal
+                                       v
++------------------------------------------------------------------------------+
+|                      NEXT.JS BFF LAYER (frontend/app/api)                    |
+|  - /api/auth/[portal]/[action] (login, verify-2fa, register, logout, me)     |
+|  - /api/proxy/[...path]        (CSRF Origin check + token injection)         |
+|  - /api/chat                   (forward guest & authenticated AI messages)   |
++--------------------------------------+---------------------------------------+
+                                       | Server-to-Server REST (Bearer Sanctum)
+                                       v
++------------------------------------------------------------------------------+
+|                   LARAVEL 12 REST API BACKEND (PHP 8.3.30)                   |
+|  Auth Guards (web, mitra, kurir, admin) + Laravel Sanctum v4 + Policies      |
+|  Controllers (/api/v1/*) -> Business Services -> Models -> MySQL 8 (58 Tabel)|
+|                                       |                                      |
+|                     Background Queue (QUEUE_CONNECTION=database)             |
++----+-------------------+--------------------+-------------------+------------+
+     |                   |                    |                   |
+     v                   v                    v                   v
++---------+       +--------------+      +-----------+      +---------------+
+| Fonnte  |       | SMTP Mailer  |      |  Xendit   |      |  OpenRouter   |
+|  (WA)   |       |  (OTP/Notif) |      | (QRIS/VA) |      |  (LLM API)    |
++---------+       +--------------+      +-----------+      +---------------+
+                                                                  ^
+                                                                  |
+                                                       +----------+----------+
+                                                       | Nominatim OSM API   |
+                                                       | (Forward/Reverse Geo)|
+                                                       +---------------------+
 ```
-
----
-
-## 129.17 AI Actions
 
-Rekomendasi MVP:
+*(Catatan teknis repo: beberapa view Blade server-rendered peninggalan fase awal di `resources/views/` tetap tersedia untuk utilitas internal seperti widget `/api/ai/chat`, namun antarmuka operasional utama seluruh 4 portal berjalan di Next.js App Router pada direktori `frontend/app/`).*
 
-> AI hanya read-oriented.
+### 2.2 Aktor, Isolasi Guard & Matriks Peran (RBAC)
 
-AI tidak boleh melakukan:
+Sistem memisahkan pintu masuk, guard autentikasi (`config/auth.php`), model provider Eloquent, serta cookie BFF (`frontend/lib/bff.ts`) secara ketat agar satu sesi login hanya berlaku untuk satu peran:
+
+| Aktor / Peran | Portal URL Masuk | Auth Guard & Provider | Nama Cookie Token BFF (`httpOnly`) | Kemampuan & Ruang Lingkup Utama |
+| :--- | :--- | :--- | :--- | :--- |
+| **Customer** (`customer`) | `/auth` | `web` (`CustomerUser`) | `laundryku_customer_token` | Daftar/login OTP & password, kelola alamat GPS, cari toko, buat order, bayar Xendit/COD, tracking, Human Chat, review, komplain, ajukan upgrade mitra/kurir, chat LANDY. |
+| **Mitra / Store Admin** (`store_admin`) | `/mitra/login`, `/mitra/register` | `mitra` (`MitraUser`) | `laundryku_mitra_token` (+ `laundryku_mitra_temp_token` jika 2FA) | Kelola pesanan toko sendiri (*tenant-isolated*), input berat riil, kelola layanan & aturan harga/diskon, rekrut/kelola kurir toko, ledger, rekening payout, laporan CSV, komplain, balas Human Chat, chat LANDY toko. |
+| **Courier / Kurir** (`courier`) | `/courier/login` | `kurir` (`CourierUser`) | `laundryku_courier_token` | Wajib terverifikasi admin/mitra (`is_verified`), lihat & klaim tugas pickup/delivery, update 7-status tugas, konfirmasi penerimaan COD tunai, chat LANDY kurir. |
+| **Super Admin** (`super_admin`) | `/admin/login` | `admin` (`AdminUser`) | `laundryku_admin_token` + `laundryku_admin_temp_token` (wajib 2FA) | Login email+password + **wajib 2FA TOTP**, pantau metrik platform, kelola pesanan & pembayaran global, approve/reject toko, aktif/nonaktif pengguna, CRUD kategori layanan, atur komisi platform, kelola model AI (`/admin/settings/ai`), audit log, chat LANDY platform. |
+
+**Aturan Isolasi Keras & Catatan Dual-Role (Utang Teknis `T011`):**
+1. Fitur pindah peran dalam satu sesi dinonaktifkan penuh; rute `/switch-role` selalu mengembalikan HTTP 404.
+2. Pada lapisan database saat ini, otorisasi membaca kolom datar `users.role` (`customer`, `store_admin`, `courier`, `super_admin`) dan tabel relasional RBAC (`roles`, `permissions`, `user_roles`, `role_permissions`) yang mendukung 6 peran rinci (`customer`, `courier`, `store_owner`, `store_staff`, `platform_admin`, `platform_owner`). Metode `User::tokenCan()` melakukan pengecekan peran *real-time* terhadap database setiap request Sanctum agar perubahan status peran langsung efektif.
 
-* cancellation;
-* refund;
-* payment;
-* price modification;
-* account modification.
+### 2.3 Alur Bisnis End-to-End
 
-Action capability dapat dipertimbangkan pada future phase dengan authorization tambahan.
+1. **Pendaftaran & Alamat:** Customer mendaftar di `/auth` memakai nama, nomor WhatsApp atau email, serta kata sandi minimal 8 karakter -> menerima OTP 6 digit -> akun aktif setelah verifikasi -> melengkapi alamat penjemputan via deteksi GPS browser (`Nominatim`) atau input manual.
+2. **Pencarian & Pemesanan:** Customer membuka `/stores`, menyaring toko berdasarkan jarak/layanan/harga/rating, memilih layanan di `/stores/{id}`, mengisi estimasi berat dan catatan di `/stores/{id}/order`, lalu sistem menghitung estimasi tagihan di server dan membuat order berstatus `created`.
+3. **Penjemputan & Penimbangan:** Kurir menerima/mengklaim tugas (`assigned -> accepted -> arrived -> picked_up`) hingga cucian tiba di toko (`received_by_store`). Mitra toko menimbang cucian riil (`actual_weight`); jika selisih harga melampaui ambang batas (`Rp50.000`), pesanan melewati persetujuan harga pelanggan (`awaiting_price_approval`) sebelum masuk tahap penagihan (`payment_required`).
+4. **Pembayaran (Xendit / COD):** Customer memilih pembayaran digital Xendit (Invoice 60 menit / Dynamic QRIS 2 menit) yang terverifikasi otomatis oleh webhook idempoten, atau memilih COD tunai jika nominal `<= Rp500.000`.
+5. **Pencucian, Pengantaran & Penutupan:** Toko memproses cucian (`processing -> ready_for_delivery`), kurir melakukan pengantaran (`courier_assigned_for_delivery -> out_for_delivery -> delivered`), dan setelah pelanggan konfirmasi atau proses tuntas status menjadi `completed`. Pelanggan dapat memberi ulasan (`1–5` bintang) atau mengajukan komplain bila terjadi kendala.
+6. **Komisi & Settlement:** Sistem memotong komisi platform (default `10%`, dapat dikonfigurasi Super Admin) dan membentuk periode settlement untuk order `completed` yang sudah melewati jendela sengketa (`7 hari`).
+
+### 2.4 Lingkungan Operasi, Batasan Teknis & Ketergantungan Eksternal
+
+| Komponen | Spesifikasi Teknis Wajib / Nyata | Batasan & Keterangan Operasional |
+| :--- | :--- | :--- |
+| **Runtime Backend** | PHP `8.3.30` + Laravel `^12.0` | Dikunci pada PHP 8.3 sesuai keputusan kompatibilitas environment Laragon (tidak dinaikkan ke 8.4). |
+| **Database** | MySQL `8.0` (`58` tabel terverifikasi dari `74` migrasi) | Guard pengaman di `TestCase.php` & `composer test` mencegah test merusak database produksi `laundryku`. |
+| **Antrian (*Queue*)** | Driver `database` (`jobs`, `job_batches`, `failed_jobs`) | Penggunaan Redis tidak diaktifkan (`QUEUE_CONNECTION=database` untuk pekerja latar notifikasi). |
+| **Pengiriman OTP & WA** | Fonnte WhatsApp API (`FONNTE_API_TOKEN`) + SMTP (`MAIL_MAILER=smtp`) | Di produksi, kegagalan gateway menggagalkan transaksi registrasi secara atomis (*atomic rollback*); tidak ada fallback simulasi OTP di produksi. |
+| **Payment Gateway** | Xendit REST API (`v2/invoices` & `/qr_codes`) | Verifikasi keaslian webhook via header `x-callback-token` dan deduplikasi `PaymentEvent`. |
+| **Peta & Geocoding** | Frontend Leaflet `^1.9.4` + Backend OpenStreetMap Nominatim | Nominatim dibatasi maksimal 1 request/detik secara global dengan cache koordinat 4 desimal (~11 meter) selama 24 jam. |
+| **Penyedia LLM AI** | OpenRouter API (`https://openrouter.ai/api/v1`) | Model default `liquid/lfm-2.5-2.6b:free`; dapat diganti langsung oleh Super Admin melalui UI tanpa edit `.env`. |
+| **Unggah Berkas Privat** | `SecureFileUpload` (`storage/app/private`) | Validasi ekstensi (`pdf, jpg, jpeg, png, webp`) + deteksi MIME via `finfo`; batas 5 MB (dokumen toko/komplain) dan 2 MB (avatar). |
+
+---
+
+## Bab 3 — Kebutuhan Fungsional, User Stories & Acceptance Criteria
+
+Setiap kebutuhan fungsional (`FR`) berikut diturunkan langsung dari fitur aktif pada codebase dan dilengkapi **User Story (`US`)** serta **Acceptance Criteria (*Given–When–Then*)** terukur.
+
+---
+
+### FR-01: Autentikasi OTP, Login Password, & Isolasi Guard 4 Portal
+
+- **Prioritas:** MUST HAVE
+- **User Story (`US-01`):** Sebagai **Customer, Mitra Toko, Kurir, atau Super Admin**, saya ingin mendaftar/masuk hanya melalui portal peran masing-masing menggunakan verifikasi keamanan yang sesuai (OTP WhatsApp/Email untuk Customer, kredensial + 2FA TOTP untuk Super Admin), agar akses akun terlindungi dan terisolasi antarsesi.
+- **Aturan Bisnis:**
+  1. Pendaftaran Customer dilakukan via kanal **WhatsApp (Fonnte)** atau **Email (SMTP)** dengan kata sandi minimal **8 karakter**, tanpa login pihak ketiga eksternal.
+  2. OTP terdiri dari **6 digit angka**, berlaku **5 menit**, maksimal **5 kali percobaan salah**, dan jeda kirim ulang (*resend cooldown*) **60 detik**.
+  3. Seluruh pembuatan baris `users` dan pengiriman OTP dijalankan dalam **1 transaksi database atomik (`DB::transaction`)**; jika gateway WhatsApp/SMTP gagal, akun batal dibuat agar tidak ada akun menggantung.
+  4. Customer yang mendaftar via nomor WhatsApp tanpa email diberikan email internal placeholder berpola `wa_<nomor>@laundryku.test` yang disembunyikan dari UI/notifikasi email melalui accessor `display_email` dan `has_real_email`.
+  5. Nilai `debug_otp` hanya boleh muncul apabila `OTP_DEBUG_RESPONSE=true` DAN `APP_ENV` bernilai `local`/`testing`; pada mode bawaan bernilai `null`.
+  6. Super Admin wajib melewati dua tahap di `/admin/login`: kredensial valid menerbitkan token sementara berdurasi **5 menit** (`ability: 2fa-pending`) sebelum verifikasi TOTP Google Authenticator menerbitkan token penuh di cookie `laundryku_admin_token`.
+- **Acceptance Criteria (`AC-01`):**
+  - *Given* tamu mengisi form daftar Customer di `/auth` dengan nomor WhatsApp valid `0812xxx` dan password >= 8 karakter, *When* sistem memanggil `POST /api/v1/auth/register` dan Fonnte mengembalikan sukses, *Then* `OtpChallenge` tersimpan dalam bentuk hash SHA-256 dengan masa berlaku 5 menit, `debug_otp` bernilai `null`, dan tab beralih ke input OTP 6 digit.
+  - *Given* gateway WhatsApp atau SMTP mengembalikan error/timeout saat registrasi, *When* `OtpService::generateOtp()` melempar exception, *Then* transaksi DB di-rollback 100% sehingga tidak ada baris baru pada tabel `users`.
+  - *Given* pengguna login di portal Customer mencoba mengakses endpoint `/api/v1/admin/*`, *When* permintaan melewati middleware `ability:role:super_admin` atau cookie `laundryku_admin_token` kosong, *Then* sistem menolak dengan status HTTP `401`/`403`.
+  - *Given* Super Admin berhasil memasukkan email dan password benar pada `/admin/login`, *When* kode 2FA TOTP belum diverifikasi, *Then* pengguna hanya memperoleh cookie `laundryku_admin_temp_token` berizin `2fa-pending` dan tidak dapat memanggil endpoint `/api/v1/admin/dashboard/metrics`.
+
+---
+
+### FR-02: Manajemen Profil, Alamat Terstruktur, & Reverse/Forward Geocoding GPS
 
----
-
-# 130. Out of Scope MVP
-
-1. Payment processor sendiri.
-2. Native mobile app.
-3. WhatsApp integration.
-4. Push notification.
-5. Full accounting system.
-6. Full ERP.
-7. Advanced loyalty.
-8. Dynamic pricing.
-9. Autonomous AI transactions.
-10. Direct AI database access.
-11. Cross-country marketplace.
-12. Multi-currency.
-13. Custom map engine.
-14. Long-term GPS analytics.
-15. Advanced fraud scoring.
-16. Automated compensation decision.
+- **Prioritas:** MUST HAVE
+- **User Story (`US-02`):** Sebagai **Customer**, saya ingin mengelola profil (termasuk menambah email riil jika mendaftar via WhatsApp), foto profil, serta menyimpan beberapa alamat lengkap memakai deteksi GPS browser ataupun input manual, agar kurir dapat menjemput dan mengantar cucian ke titik akurat.
+- **Aturan Bisnis:**
+  1. Pelanggan ber-email placeholder `wa_*@laundryku.test` ditampilkan nomor WhatsApp terformat (`+628...`) dan dapat mengisi email asli melalui pembaruan profil (`PUT /api/v1/profile`).
+  2. Foto profil/avatar diverifikasi menggunakan `SecureFileUpload` maksimal **2 MB** (`jpg, jpeg, png, webp`).
+  3. Deteksi GPS pada `/profile` mengisi kolom alamat terstruktur (`address`, `kelurahan`, `kecamatan`, `city`, `province`, `postal_code`, `latitude`, `longitude`) melalui endpoint `POST /api/v1/geocode/reverse` tanpa menyimpan otomatis sebelum pengguna menekan simpan.
+  4. Alamat yang disimpan atau dijadikan default tanpa koordinat otomatis diproses *forward geocoding* oleh `NominatimGeocodingService` agar titik lokasi header di `/stores` tersinkronisasi melalui event `address-changed`.
+- **Acceptance Criteria (`AC-02`):**
+  - *Given* Customer terotentikasi menekan tombol "Gunakan Lokasi Saya Sekarang (GPS)" dan mengizinkan izin lokasi browser, *When* koordinat dikirim ke `POST /api/v1/geocode/reverse`, *Then* `NominatimGeocodingService` mengembalikan pemetaan alamat terstruktur Indonesia dan form alamat terisi otomatis untuk ditinjau pengguna.
+  - *Given* Customer tidak mengizinkan GPS atau Nominatim gagal merespons dalam 5 detik, *When* form alamat tetap diisi manual dan disimpan, *Then* alamat tetap tersimpan ke tabel `customer_addresses` tanpa memblokir pengguna.
+  - *Given* Customer A mengirim permintaan ubah/hapus alamat milik Customer B, *When* controller memeriksa kepemilikan `user_id`, *Then* akses ditolak dan isolasi data antar-pengguna terjaga.
+
+---
+
+### FR-03: Marketplace Discovery, Katalog Layanan, Peta Leaflet, & Estimasi Harga
 
+- **Prioritas:** MUST HAVE
+- **User Story (`US-03`):** Sebagai **Tamu atau Customer**, saya ingin mencari toko laundry terdekat pada daftar maupun peta interaktif, menyaring berdasarkan layanan/harga/rating/jarak, melihat rincian layanan toko, dan menghitung estimasi harga, agar saya dapat memilih laundry yang paling sesuai sebelum memesan.
+- **Aturan Bisnis:**
+  1. Hanya toko dengan status disetujui (`approved` / aktif) yang muncul pada pencarian publik (`GET /api/v1/stores`).
+  2. Peta di `/stores` dirender menggunakan library **Leaflet (`^1.9.4`)** tanpa ketergantungan API peta berbayar.
+  3. Pemeringkatan toko oleh `StoreSearchService` menghitung skor berbobot: jarak Haversine (**0.30**), rating rata-rata (**0.25**), ketersediaan (**0.15**), jumlah ulasan (**0.10**), kecocokan layanan (**0.10**), dan performa operasional (**0.10**), dengan paginasi default **15 toko per halaman**.
+  4. Estimasi harga dihitung di server melalui `POST /api/v1/pricing/estimate` dan dikunci ulang di server saat order dibuat.
+- **Acceptance Criteria (`AC-03`):**
+  - *Given* terdapat toko berstatus `pending` atau `suspended` di database, *When* Customer membuka `/stores` atau memanggil `GET /api/v1/stores`, *Then* toko tersebut tidak dikembalikan dalam hasil pencarian.
+  - *Given* Customer memiliki alamat utama di kota tertentu (mis. Cirebon), *When* halaman `/stores` dimuat, *Then* lokasi header peta otomatis mengacu ke label alamat utama dan menyortir toko berdasarkan bobot jarak dan skor terhitung.
+
 ---
-
-# 131. Core Transaction Loop
-
-MVP LANDURYKU harus berhasil menyelesaikan:
+
+### FR-04: Onboarding Mitra Toko, Upgrade Peran, & Persetujuan Admin
 
-```text
-DISCOVER
-   ↓
-SELECT STORE
-   ↓
-SELECT SERVICE
-   ↓
-CREATE ORDER
-   ↓
-COURIER ASSIGNED
-   ↓
-PICKUP
-   ↓
-STORE RECEIVES
-   ↓
-WEIGH
-   ↓
-FINAL PRICE
-   ↓
-PAY
-   ↓
-PROCESS
-   ↓
-READY
-   ↓
-DELIVERY
-   ↓
-COMPLETED
-   ↓
-REVIEW
-```
+- **Prioritas:** MUST HAVE
+- **User Story (`US-04`):** Sebagai **Calon Mitra Toko atau Customer yang ingin menjadi Kurir/Mitra**, saya ingin mengajukan pendaftaran toko atau lamaran kurir lengkap dengan dokumen pendukung dan titik koordinat gerai, agar pengajuan saya dapat ditinjau dan disetujui oleh Super Admin atau Mitra Toko.
+- **Aturan Bisnis:**
+  1. Tersedia dua jalur pendaftaran gerai: registrasi mitra baru (`/mitra/register` -> `POST /api/v1/auth/mitra/register`, wajib email/telepon unik berbeda dari akun customer) dan pengajuan upgrade akun customer (`/upgrade` -> `/api/v1/upgrades/store` dan `/api/v1/upgrades/courier`).
+  2. Dokumen legal usaha (`NIB`, `KTP`, dll.) dan foto kurir diunggah melalui `SecureFileUpload` maksimal **5 MB** (`pdf, jpg, jpeg, png, webp`) ke disk privat (`storage/app/private`) dan hanya dapat diunduh melalui controller terotorisasi.
+  3. Form `/upgrade` menyimpan draf sementara di `localStorage` browser (`laundryku_courier_draft`, `laundryku_store_draft`) guna mencegah kehilangan isian pengguna.
+  4. Super Admin memproses pengajuan toko (`approve` / `reject` dengan alasan), dan setiap keputusan tercatat pada `audit_logs` serta memicu notifikasi ke pemohon.
+- **Acceptance Criteria (`AC-04`):**
+  - *Given* Customer mengisi pengajuan toko di `/upgrade` dan mengunggah berkas PDF `<= 5 MB`, *When* formulir dikirim ke `POST /api/v1/upgrades/store`, *Then* berkas tersimpan dengan nama acak di disk privat, status aplikasi menjadi `pending`, dan berkas tidak dapat diakses lewat URL publik langsung.
+  - *Given* pengguna mencoba mengunggah berkas `.exe` atau `.php` yang diubah ekstensinya menjadi `.jpg`, *When* `SecureFileUpload` memeriksa MIME asli via `finfo`, *Then* unggahan ditolak sebelum disimpan ke disk.
+  - *Given* Super Admin menyetujui toko pada `/admin/stores`, *When* `POST /api/v1/admin/stores/{id}/approve` dipanggil, *Then* status toko berubah menjadi aktif/disetujui, toko muncul di marketplace `/stores`, dan jejak perubahan dicatat di `audit_logs`.
 
-Dengan:
-
-* secure authentication;
-* authorization;
-* tenant isolation;
-* verified Xendit payment;
-* QRIS;
-* COD;
-* refund management;
-* courier tracking;
-* notification;
-* AI Assistant;
-* audit logging;
-* privacy protection.
-
 ---
-
-# 132. Final Product Definition
-
-**LANDURYKU** adalah marketplace laundry multi-store berbasis web yang memungkinkan customer menemukan laundry, membuat order pickup/delivery, memantau courier, mengetahui berat dan harga final, melakukan pembayaran menggunakan **Xendit/QRIS atau COD**, menerima notification, dan memperoleh bantuan melalui **LANDURYKU AI Assistant**.
-
-Store dapat mendaftarkan bisnis melalui:
-
-> **Daftarkan Laundry**
-
-kemudian melewati proses:
-
-```text
-DRAFT
-→ SUBMITTED
-→ UNDER REVIEW
-→ APPROVED
-→ ACTIVE
-```
-
-atau:
-
-```text
-REVISION REQUIRED
-→ RESUBMITTED
-```
-
-Platform menggunakan:
-
-```text
-Laravel 12
-PHP 8.3+
-MySQL 8
-Redis
-Laravel Reverb
-Blade
-Bootstrap 5
-Vanilla JavaScript
-Google Maps Platform
-Xendit
-OpenAI API
-Nginx
-Ubuntu
-Git
-```
-
-Sistem pembayaran resmi:
 
-```text
-ONLINE
-→ XENDIT
-→ QRIS / AVAILABLE PAYMENT METHODS
-
-COD
-→ CASH
-→ COURIER
-→ VERIFICATION
-```
-
-Online payment:
-
-```text
-MAXIMUM PAYMENT WINDOW
-= 1 HOUR
-```
-
-Payment belum berhasil:
-
-```text
-PENDING → EXPIRED
-```
-
-Payment berhasil:
-
-```text
-PAID
-```
-
-Refund online:
-
-```text
-PAID
-→ REFUND REQUESTED
-→ REFUND PROCESSING
-→ XENDIT
-→ REFUNDED
-```
-
-COD refund:
-
-```text
-COD PAID
-→ REFUND REQUESTED
-→ REFUND PROCESSING
-→ [COD_REFUND_METHOD]
-→ REFUNDED
-```
-
-Security architecture:
-
-> **Defense in Depth + Least Privilege + Multi-Tenant Isolation + Resource-Level Authorization + Auditability**
+### FR-05: Siklus Pesanan End-to-End (19 Status) & Penimbangan Berat Aktual
 
-AI architecture:
+- **Prioritas:** MUST HAVE
+- **User Story (`US-05`):** Sebagai **Customer dan Mitra Toko**, saya ingin membuat pesanan dengan estimasi awal, memisahkan pencatatan berat estimasi dengan berat hasil timbang aktual di toko, serta memantau setiap transisi status cucian secara akurat, agar harga akhir adil dan riwayat pesanan selalu dapat diaudit.
+- **Aturan Bisnis:**
+  1. Pembuatan order (`POST /api/v1/orders`) wajib memiliki minimal 1 item layanan aktif dari toko eligible dan menghitung total estimasi di server: `sum(max(qty * price_per_unit, minimum_charge)) + platform_fee (default Rp1.000) + delivery_fee + pickup_fee`.
+  2. Status pesanan mengikuti **19 enum status** (`OrderStatus`): `created`, `waiting_pickup`, `courier_assigned`, `courier_to_customer`, `picked_up`, `in_transit_to_store`, `received_by_store`, `weighed`, `payment_required`, `paid`, `processing`, `ready_for_delivery`, `courier_assigned_for_delivery`, `out_for_delivery`, `delivered`, `completed`, `cancelled`, `pickup_failed`, `delivery_failed` — ditambah transisi `awaiting_price_approval` saat perubahan harga setelah ditimbang melewati ambang batas (`priceChangeThreshold = Rp50.000`).
+  3. Nilai `estimated_weight` dan `actual_weight` disimpan pada kolom terpisah dan tidak pernah saling menimpa.
+  4. Setiap perubahan status harus divalidasi oleh `OrderPolicy` & peta transisi di `OrderService`, lalu dicatat ke tabel `order_status_history` sebagai sumber kebenaran linimasa (*timeline*) pesanan.
+- **Acceptance Criteria (`AC-05`):**
+  - *Given* Customer memilih layanan aktif di toko berstatus disetujui dan menekan buat pesanan di `/stores/{id}/order`, *When* `OrderService::createOrder()` dieksekusi, *Then* nomor pesanan unik dibuat, harga dihitung dari `service_prices` server-side (mengabaikan manipulasi harga dari browser), dan `order_status_history` mencatat status awal `created`.
+  - *Given* pesanan berada pada status `received_by_store` dan Mitra menimbang `actual_weight`, *When* selisih harga baru terhadap estimasi awal melebihi `Rp50.000`, *Then* sistem menandai status persetujuan harga dan mengirim notifikasi ke Customer sebelum berlanjut ke penagihan `payment_required`.
+  - *Given* Mitra Toko A mencoba memanggil endpoint status pada pesanan milik Toko B, *When* `Gate::authorize('update', $order)` dieksekusi, *Then* Laravel menolak permintaan dengan HTTP `403`.
 
-> **AI tidak memiliki direct database access dan hanya dapat mengakses data melalui authorized business functions.**
-
----
-
-# 133. Success Criteria
-
-LANDURYKU MVP dinyatakan siap secara product apabila:
-
-1. Customer dapat mendaftar.
-2. Customer dapat menambahkan alamat.
-3. Customer dapat menemukan laundry.
-4. Customer dapat melihat service dan price.
-5. Customer dapat membuat order.
-6. Store dapat menerima dan memproses order.
-7. Courier dapat menerima task.
-8. Customer dapat melihat tracking.
-9. Store dapat melakukan weighing.
-10. Sistem dapat menghitung final price.
-11. Customer dapat membayar menggunakan Xendit.
-12. Customer dapat membayar melalui QRIS.
-13. Customer dapat memilih COD jika eligible.
-14. COD memiliki verification.
-15. Payment online expired setelah 1 jam.
-16. Refund dapat diproses secara terkontrol.
-17. Xendit webhook aman dan idempotent.
-18. Notification berjalan.
-19. AI dapat menjawab pertanyaan dasar.
-20. AI tidak membocorkan data.
-21. Store isolation bekerja.
-22. RBAC bekerja.
-23. Audit tersedia.
-24. Security testing selesai.
-25. Backup dan recovery telah diuji.
-26. Core transaction loop dapat diselesaikan dari order hingga completed.
-
 ---
-
-# 134. Brand & Contact Placeholder
-
-Informasi berikut sengaja menggunakan placeholder agar mudah diganti ketika LANDURYKU sudah memiliki data resmi:
-
-```text
-==================================================
-                    LANDURYKU
-==================================================
-
-Marketplace Name : LANDURYKU
-
-Company Name     : [COMPANY_NAME]
-Address          : [COMPANY_ADDRESS]
-Phone            : [COMPANY_PHONE]
-Email            : [COMPANY_EMAIL]
-
-Customer Service
-Name             : [CS_NAME]
-Email            : [CS_EMAIL]
-Phone            : [CS_PHONE]
-WhatsApp         : [CS_WHATSAPP]
-Operating Hours  : [CS_OPERATING_HOURS]
-
-Website          : [WEBSITE_URL]
-Support          : [SUPPORT_URL]
-
-Logo             : [LOGO_URL]
-Favicon          : [FAVICON_URL]
-==================================================
-```
 
-Placeholder tersebut harus diperlakukan sebagai **configuration/business content**, bukan hard-coded value, sehingga informasi bisnis LANDURYKU dapat diubah tanpa harus mengubah business logic aplikasi.
+### FR-06: Pembayaran Digital Xendit, COD Tunai, Komisi & Settlement
 
-# END OF PRODUCT REQUIREMENTS DOCUMENT
+- **Prioritas:** MUST HAVE
+- **User Story (`US-06`):** Sebagai **Customer, Mitra Toko, dan Super Admin**, saya ingin membayar pesanan lewat QRIS/Invoice Xendit atau COD tunai sesuai ketentuan batas aman, serta mengelola persentase komisi dan laporan settlement toko secara transparan, agar alur keuangan bebas dari transaksi ganda dan selisih hitungan.
+- **Aturan Bisnis:**
+  1. Nilai tagihan yang dikirim ke Xendit selalu diambil dari `total_amount` / `final_price` di server, tidak pernah dari input klien.
+  2. `XenditService` mendukung Invoice multifungsi (`v2/invoices`, batas waktu **60 menit**) dan Dynamic QRIS (`/qr_codes`, batas waktu **2 menit**) dengan kunci idempotensi per percobaan pembayaran.
+  3. Webhook `POST /api/webhooks/xendit` dilindungi rate limiter (`60 req/menit`), wajib memvalidasi `x-callback-token` dari konfigurasi `xendit.webhook_secret`, dan memfilter duplikasi event melalui tabel `payment_events` (`xendit_event_id`).
+  4. Pembayaran tunai **COD** dibatasi maksimal **Rp500.000** (`COD_MAX_AMOUNT` pada `settings`), dan penagihan oleh kurir/toko dicatat ke tabel `cod_collections` lewat `/api/v1/courier/tasks/{orderId}/confirm-cod` atau `/api/v1/store/orders/{order}/confirm-cod`.
+  5. Persentase komisi platform (`platform_commission_rate`, default **10%**) dikelola secara dinamis oleh Super Admin melalui `/admin/settings` (`PATCH /api/v1/admin/platform-settings/commission`), dengan setiap perubahan dicatat ke `audit_logs` aksi `ADMIN_COMMISSION_UPDATE`.
+  6. `SettlementService` membentuk laporan periode settlement toko (`generated -> verified`) **hanya untuk order `completed`** yang sudah melewati masa tunggu sengketa (`dispute_window_days = 7 hari`), bebas dari komplain terbuka, dan mencegah tumpang-tindih rentang tanggal antar-periode.
+- **Acceptance Criteria (`AC-06`):**
+  - *Given* Customer memilih metode bayar digital pada order yang siap bayar, *When* sistem membuat invoice ke Xendit `v2/invoices`, *Then* record `payments` tersimpan berstatus `pending` dengan `expires_at` 60 menit ke depan dan tautan pembayaran tampil di `/orders/{id}`.
+  - *Given* Xendit mengirimkan webhook `PAID` sebanyak dua kali dengan `xendit_event_id` yang sama dan `x-callback-token` valid, *When* webhook pertama sudah diproses, *Then* webhook kedua dideteksi oleh `PaymentEvent` sehingga status order tidak terproses ulang dan tidak ada duplikasi catatan transaksi.
+  - *Given* nilai pesanan melebihi `Rp500.000`, *When* pengguna bertanya/memilih COD pada aturan sistem atau mencoba pembayaran COD, *Then* sistem menegakkan batas maksimum COD `Rp500.000` dan mengarahkan ke metode pembayaran digital Xendit.
+
+---
+
+### FR-07: Manajemen Tugas Kurir & Pelacakan Status Perjalanan
+
+- **Prioritas:** MUST HAVE
+- **User Story (`US-07`):** Sebagai **Kurir dan Customer**, saya ingin kurir dapat mengambil dan memperbarui status tugas penjemputan/pengantaran serta merekam posisi koordinat saat bertugas aktif, agar pelanggan dapat memantau perkembangan jemput-antar cucian di dashboard pesanan.
+- **Aturan Bisnis:**
+  1. Hanya user ber-role `courier` yang sudah terverifikasi (`is_verified = true`) yang dapat mengakses profil dan daftar tugas kurir; akun belum terverifikasi ditolak HTTP `403`.
+  2. Siklus tugas kurir mengikuti **7 status (`CourierTaskStatus`)**: `assigned`, `accepted`, `arrived`, `picked_up`, `delivered`, `failed`, `cancelled`.
+  3. Saat penugasan oleh `CourierAssignmentService`, kolom `orders.courier_id` disinkronkan dengan `user_id` kurir agar statistik tugas aktif dan riwayat di `/courier` serta `/courier/tasks` konsisten.
+  4. Perekaman koordinat GPS oleh `GpsTrackingService::storeLocation()` **hanya diterima apabila kurir memiliki tugas aktif**; apabila tidak ada tugas aktif, pembaruan GPS ditolak dan dicatat sebagai peringatan log.
+  5. Antarmuka `/courier` dan `/courier/tasks` menyinkronkan profil serta daftar tugas via *silent background polling* (`usePolling` setiap **15 detik**) yang otomatis jeda saat tab tidak aktif.
+- **Acceptance Criteria (`AC-07`):**
+  - *Given* seorang Customer mendaftar upgrade menjadi kurir namun belum berstatus terverifikasi, *When* ia mencoba membuka tab tugas di `/courier`, *Then* backend `CourierPortalController::taskList()` menolak akses dengan HTTP `403`.
+  - *Given* kurir terverifikasi berada di tab `active` pada `/courier/tasks`, *When* polling 15 detik memuat ulang profil dan tugas, *Then* lencana jumlah pada tab *Tugas aktif saya*, *Tugas tersedia*, dan *Riwayat selesai* tampil konsisten berdasarkan agregat `stats`.
+  - *Given* seluruh tugas kurir sudah selesai (`delivered`/`cancelled`), *When* pengiriman titik GPS masuk ke endpoint lokasi kurir, *Then* `GpsTrackingService` menolak penyimpanan titik baru dan mengembalikan `null`.
+
+---
+
+### FR-08: Human Chat Toko–Pelanggan, Notifikasi Multi-Kanal, Rating & Komplain
+
+- **Prioritas:** MUST HAVE
+- **User Story (`US-08`):** Sebagai **Customer dan Mitra Toko**, saya ingin berkomunikasi langsung mengenai detail cucian lewat obrolan toko, menerima notifikasi otomatis status pesanan, memberi rating setelah selesai, dan mengajukan/menyelesaikan komplain secara adil, agar kendala layanan tertangani tuntas.
+- **Aturan Bisnis:**
+  1. Fitur **Human Chat** (`/chat` untuk Customer, `/store/chat` untuk Mitra) menggunakan grup endpoint `/api/v1/conversations` dengan isolasi kepemilikan percakapan dan streaming lampiran aman (`GET /conversations/{id}/attachments/{messageId}`).
+  2. `NotificationService` mengirimkan notifikasi sebagai *side-effect* asinkron lewat queued job `SendUserNotificationJob` melalui 3 kanal (`in_app`, `email`, `whatsapp`), menghormati preferensi pengguna, dan otomatis melewati kanal email jika pengguna hanya memiliki placeholder `wa_*@laundryku.test`.
+  3. Ulasan dan rating (`1–5`) hanya dapat dikirim oleh pemilik pesanan setelah pesanan berstatus **`completed`** (`1 ulasan per pesanan`), yang otomatis menghitung ulang agregat `average_rating` toko.
+  4. Komplain/sengketa (`DisputeService`) mendukung 7 alasan (`damaged_item`, `lost_item`, `late_delivery`, `poor_quality`, `wrong_item`, `overcharge`, `other`), SLA penyelesaian **7 hari**, dibatasi rate limit **3 pengajuan per hari per pengguna**, serta penyelesaian oleh Mitra/Admin dengan catatan `resolution_note` wajib.
+- **Acceptance Criteria (`AC-08`):**
+  - *Given* Customer menekan tombol "Chat Toko" pada detail toko `/stores/{id}`, *When* permintaan dikirim ke `POST /api/v1/conversations`, *Then* sesi percakapan dibuat/dimuat untuk pasangan customer–toko tersebut dan notifikasi jumlah pesan belum dibaca muncul di header.
+  - *Given* pesanan masih berstatus `processing`, *When* Customer mencoba mengirim POST ke `/api/v1/orders/{order}/rating`, *Then* `ReviewService` menolak dengan pesan bahwa ulasan hanya untuk pesanan berstatus `completed`.
+  - *Given* salah satu kanal notifikasi (mis. SMTP) mengalami gangguan jaringan, *When* job `SendUserNotificationJob` mengeksekusi `NotificationService::notify()`, *Then* kanal `in_app` tetap tersimpan, kegagalan tercatat di kolom `email_error`, dan transisi status order tidak terganggu.
+
+---
+
+### FR-09: Manajemen Operasional & Keuangan Portal Mitra Toko (`/store/*`)
+
+- **Prioritas:** MUST HAVE
+- **User Story (`US-09`):** Sebagai **Mitra Toko / Store Owner**, saya ingin mengelola daftar layanan, aturan promo/diskon harga, jadwal operasional, perekrutan kurir toko, rekening pencairan dana, buku kas ledger, dan laporan omset terunduh CSV dalam satu portal toko, agar operasional gerai berjalan mandiri dan terukur.
+- **Aturan Bisnis:**
+  1. Seluruh query data pada `/api/v1/store/*`, `/api/v1/mitra/*`, dan `/api/v1/store-admin/*` wajib terikat pada `store_id` milik mitra yang terotentikasi (*tenant isolation*).
+  2. Mitra mengelola katalog layanan gerai (`/store/services`) beserta status aktif/nonaktif massal (`bulk-status`), serta mengatur aturan harga & promo pada `/store/pricing` (`min_weight_discount_kg`, `min_weight_discount_percent`, `minimum_order_amount`, dll.) yang disimpan di `store_settings` (`key = 'pricing_rules'`).
+  3. Mitra mengelola rekening tujuan pencairan pada `/store/payment` (`store_payout_accounts`) dan memantau arus kas pada `/store/ledger`.
+  4. Halaman `/store/reports` menyajikan ringkasan omset, pemisahan digital vs COD, volume pesanan, rating/komplain pada rentang waktu pilihan (`7D`, `30D`, `Bulan Ini`, `Kustom`), serta tombol ekspor file **CSV** di sisi klien.
+- **Acceptance Criteria (`AC-09`):**
+  - *Given* Mitra menyimpan aturan diskon berat minimum di `/store/pricing`, *When* `PUT /api/v1/store/pricing-rules` tervalidasi, *Then* konfigurasi tersimpan di `store_settings` untuk toko terkait dan jejak perubahan dicatat.
+  - *Given* Mitra memilih rentang 30 hari terakhir di `/store/reports`, *When* tombol Ekspor CSV ditekan, *Then* browser mengunduh rekap transaksi toko terfilter dalam format `.csv` dengan format numerik bersih.
+
+---
+
+### FR-10: Tata Kelola Platform Portal Super Admin (`/admin/*`)
+
+- **Prioritas:** MUST HAVE
+- **User Story (`US-10`):** Sebagai **Super Admin Platform**, saya ingin memantau kesehatan operasional lintas toko secara menyeluruh, menyetujui/menolak pendaftaran toko baru, menonaktifkan akun bermasalah, mengelola kategori layanan global, mengatur komisi platform & model AI, serta menginspeksi log audit sensitif, agar ekosistem marketplace tetap aman dan terstandar.
+- **Aturan Bisnis:**
+  1. Portal `/admin/*` menyediakan 9 menu sidebar tetap: Dashboard (`/admin`), Pesanan (`/admin/orders`), Transaksi & Bayar (`/admin/payments`), Persetujuan Toko (`/admin/stores`), Manajemen Pengguna (`/admin/users`), Kategori Layanan (`/admin/categories`), Konfigurasi AI (`/admin/settings/ai`), Komisi Platform (`/admin/settings`), dan Audit Log (`/admin/audit-logs`).
+  2. Endpoint `GET /api/v1/admin/dashboard/metrics` menyajikan total pengguna per peran, pesanan aktif per status (normalisasi uppercase & lowercase), ringkasan pembayaran per status, toko pending, GMV, 10 pesanan terbaru, dan 10 log audit terbaru.
+  3. Seluruh aksi sensitif (login/gagal login, persetujuan/penolakan toko, ubah status pengguna, ubah komisi platform, ubah model AI) wajib menulis baris ke `audit_logs` lengkap dengan `actor_id`, `actor_role`, `action`, `before_value`, `after_value`, `ip_address`, dan `user_agent`.
+- **Acceptance Criteria (`AC-10`):**
+  - *Given* Super Admin terotentikasi 2FA membuka `/admin`, *When* `AdminPortalController::metrics` dipanggil, *Then* dashboard menampilkan metrik agregat real-time dari MySQL tanpa nilai dummy statis.
+  - *Given* Super Admin mengubah persentase komisi platform dari `10%` menjadi `12%` di `/admin/settings`, *When* `PATCH /api/v1/admin/platform-settings/commission` berhasil, *Then* `settings.platform_commission_rate` diperbarui dan `audit_logs` mencatat aksi `ADMIN_COMMISSION_UPDATE` dengan `before_value: 10` dan `after_value: 12`.
+
+---
+
+## Bab 4 — Spesifikasi Fitur AI Utama: LANDY Hybrid Assistant
+
+### 4.1 Peran Strategis Fitur AI terhadap Tema `Laundryku`
+
+Dalam ekosistem **Laundryku**, fitur kecerdasan buatan **LANDY AI Assistant** dirancang bukan sekadar pemanggil API chatbot konvensional, melainkan **Hybrid Intent-Routing Operational Assistant** yang memecahkan tiga tantangan nyata sekaligus:
+1. **Efisiensi Biaya Operasional UMKM (0-Token Layer 1):** Pertanyaan panduan penggunaan, salam, serta kueri data terstruktur umum diselesaikan secara lokal dalam **15–30 ms tanpa menghabiskan token LLM eksternal**.
+2. **Aksesibilitas Data Real-Time Lintas 4 Peran (*Strict Tenant & Read-Only*):** Customer, Mitra Toko, Kurir, dan Super Admin masing-masing memperoleh jawaban kontekstual berbasis data riil database mereka sendiri tanpa kebocoran data lintas pengguna/toko.
+3. **Pengendalian Biaya & Kualitas Model Dinamis:** Super Admin dapat mengganti model OpenRouter antara **Free Tier (`Rp 0`)** dan **Commercial Tier** langsung dari antarmuka web sekaligus melakukan uji latensi real-time.
+
+### 4.2 Arsitektur Hybrid 3-Layer Intent Routing
+
+Seluruh logika inti dikelola oleh 12 kelas layanan di `app/Services/Ai/` (`AiAssistantService`, `AiIntentRouter`, `AiKnowledgeBaseService`, `AiDataQueryService`, `AiOrderStatsService`, `AiTextNormalizer`, `AiToolRegistry`, `AiTopicGuardrail`, `OpenAiClient`, serta antarmuka/eksepsi terkait).
+
+```text
++------------------------------------------------------------------------------+
+|  Pesan Masuk Pengguna (/api/chat -> /api/v1/chatbot/* atau /api/ai/chat)      |
++--------------------------------------+---------------------------------------+
+                                       |
+                                       v
++------------------------------------------------------------------------------+
+|  LAYER 0: Guardrail Keamanan, Rate Limit (30 req/jam), & Normalizer Slang     |
+|  - Cek out-of-scope topik (coding/politik/dll) -> tolak sopan + arahkan      |
+|  - Cek permintaan mutasi lewat chat (cancel/hapus/refund) -> tolak + panduan |
+|  - Normalisasi singkatan/bahasa gaul/typo via AiTextNormalizer               |
++--------------------------------------+---------------------------------------+
+                                       |
+                                       v
++------------------------------------------------------------------------------+
+|  LAYER 1: Deterministik Rule, Levenshtein, & Procedural KB (0 TOKEN LLM)     |
+|  - Sapaan / terima kasih / pamit -> respons instan                           |
+|  - Pencocokan 21 topik KB (resources/ai/knowledge/*_guides.php) sesuai role  |
+|  - Kueri data terstruktur langsung ke AiDataQueryService / AiOrderStats      |
+|  - Compound Multi-Intent (pertanyaan ganda dipisah dengan '---')             |
++------------------+-----------------------------------+-----------------------+
+                   | Cocok                             | Tidak Cocok
+                   v                                   v
+      [Kirim Jawaban 0-Token]       +------------------------------------------+
+                                    |  LAYER 2: OpenRouter LLM + Tool Calling  |
+                                    |  - Sliding window max_history = 6 pesan  |
+                                    |  - Cuplikan konteks KB relevan (non-PII) |
+                                    |  - Eksekusi max_tool_rounds = 5 putaran  |
+                                    |  - Akses baca terotorisasi via 33 Tools  |
+                                    +------------------+-----------------------+
+                                                       | Gagal / Timeout (30s)
+                                                       v
+                                    +------------------------------------------+
+                                    |  LAYER 3: Klarifikasi Role & Eskalasi CS |
+                                    |  - Menu topik bantuan sesuai role        |
+                                    |  - Arahkan ke CS resmi: cs@laundryku.test|
+                                    +------------------------------------------+
+```
+
+### 4.3 Matriks Kemampuan & 33 Registered AI Tools Read-Only (`AiToolRegistry`)
+
+Seluruh tool pada [AiToolRegistry.php](file:///c:/laragon/www/laundryku/app/Services/Ai/AiToolRegistry.php) bersifat **strictly read-only** dan hanya dieksekusi jika role terotentikasi pengguna sesuai dengan cakupan tool:
+
+| Cakupan Akses | Jumlah & Daftar Nama Tool Terdaftar | Basis Pengetahuan Prosedural (0-Token KB) |
+| :--- | :--- | :--- |
+| **Umum / Publik & Profil (`Shared`)** | **3 Tools:** `get_user_profile`, `get_store_information`, `get_services_and_prices` | FAQ publik `/api/v1/chatbot/faq` |
+| **Customer** | **6 Tools:** `customer_list_orders`, `customer_get_order_detail`, `customer_get_order_stats`, `customer_get_payment_status`, `customer_get_reviews`, `customer_get_complaints` | **8 topik** (`customer_guides.php`: order, bayar, lacak, batal, komplain, ulasan, alamat GPS, gabung mitra) |
+| **Mitra / Store Admin** | **7 Tools:** `store_get_summary`, `store_list_orders`, `store_get_order_detail`, `store_get_services`, `store_get_couriers`, `store_get_reviews`, `store_get_complaints` | **7 topik** (`store_guides.php`: pesanan masuk, timbangan berat riil, layanan & harga, jam buka, komplain, rekrut kurir, pengaturan gerai) |
+| **Kurir** | **4 Tools:** `courier_get_profile`, `courier_get_tasks`, `courier_get_task_stats`, `courier_get_cod_rules` | **3 topik** (`courier_guides.php`: tugas jemput/antar, tagih & setor COD, status online/offline) |
+| **Super Admin Platform** | **9 Tools:** `platform_get_overview`, `platform_get_user_stats`, `platform_get_approvals`, `platform_get_complaints`, `platform_search_users`, `platform_get_orders`, `platform_get_courier_activity`, `platform_get_settlements`, `platform_explain_admin_menu` | **3 topik** (`admin_guides.php`: verifikasi mitra/kurir, monitoring overview platform, manajemen user & toko) |
+| **Kompatibilitas Legacy** | **4 Tools Alias:** `get_customer_order_status`, `get_customer_payment_status`, `get_store_service`, `get_order_basic_information` | Diarahkan ke handler terotorisasi yang sama |
+
+### 4.4 Guardrail Keamanan, Anti-Halusinasi, & Sanitasi PII
+
+1. **Zero Write / Zero SQL Execution via Chat:** Permintaan pengguna untuk membatalkan order, mengubah alamat, refund, menghapus user, atau menjalankan mutasi data melalui prompt chat ditolak otomatis oleh Layer 0/1 dengan penjelasan sopan disertai **langkah bernomor** cara melakukannya lewat menu UI resmi.
+2. **Isolasi Identitas Server-Side:** Identitas pengguna (`user_id`), `role`, dan `store_id` dibaca dari token/guard backend yang terotentikasi—**tidak pernah** mempercayai parameter peran atau ID akun dari payload klien. Non-Super Admin yang mencoba memicu tool `platform_*` langsung ditolak.
+3. **Anti-Halusinasi Transaksi:** Harga, status order, status bayar, dan berat cucian wajib diambil dari System of Record (`AiDataQueryService` / tools). Pada fallback LLM, prompt sistem melarang mengarang fakta di luar konteks KB.
+4. **Sanitasi PII (`maskEmail` & `maskPhone`):** Seluruh hasil pencarian user untuk AI maupun catatan log token (`ai_usage_logs`) menyamarkan email, nomor HP, serta tidak pernah memuat `password`, token sesi, atau `google2fa_secret`.
+
+### 4.5 Dynamic AI Model Switcher & Runtime Tuning (`/admin/settings/ai`)
+
+Melalui halaman Konfigurasi AI pada portal Super Admin ([admin/settings/ai/page.tsx](file:///c:/laragon/www/laundryku/frontend/app/admin/settings/ai/page.tsx) & `AdminPortalController`), administrator dapat mengubah model OpenRouter dan parameter inferensi tanpa menyentuh file `.env`:
+- **8 Model Preset Terkurasi (`GET /api/v1/admin/ai-settings`):**
+  - **Kategori Gratis (`Free Tier`, `$0`):** `liquid/lfm-2.5-2.6b:free` (default), `google/gemini-2.0-flash-exp:free`, `meta-llama/llama-3.3-70b-instruct:free`, `deepseek/deepseek-r1:free`.
+  - **Kategori Komersial (`Paid Tier`):** `google/gemini-2.5-flash`, `openai/gpt-4o-mini`, `deepseek/deepseek-chat`, `anthropic/claude-3.5-haiku`.
+  - Mendukung pengisian **custom model identifier OpenRouter**.
+- **Parameter Tuning & Live Diagnostic:** Pengaturan slider `temperature` (dengan preset cepat `0.0`, `0.2`, `0.5`) serta `max_tool_rounds`, ditambah fitur **Uji Koneksi Live (`POST /api/v1/admin/ai-settings/test`)** yang mem-ping endpoint OpenRouter untuk menampilkan latensi (`ms`), status HTTP, dan pratinjau respons secara seketika.
+- **Penyimpanan Cache & Audit:** Disimpan pada tabel `settings` dengan invalidasi cache otomatis dan pencatatan `UPDATE_AI_MODEL` ke tabel `audit_logs` beserta pembanding `before_value` dan `after_value`.
+
+### 4.6 Hasil Evaluasi Terukur (`AiHoldOutEvaluationTest`)
+
+Pengujian akurasi intent routing terhadap **165 kalimat hold-out independen** (`storage/holdout_dataset.php`: 35 panduan, 45 kueri data lintas 4 peran, 30 *out-of-scope*, 30 bahasa gaul/typo, 25 pertanyaan ganda) menunjukkan peningkatan objektif sebagai berikut:
+
+| Kategori Uji Hold-Out | Jumlah Kasus | Akurasi Baseline Awal | Akurasi Final Setelah 3-Layer + KB |
+| :--- | :---: | :---: | :---: |
+| Pertanyaan Panduan Prosedural | 35 | 0 / 35 (0,00%) | **35 / 35 (100,0%)** |
+| Kueri Data Operasional Lintas 4 Role | 45 | 39 / 45 (86,67%) | **45 / 45 (100,0%)** |
+| Pertanyaan di Luar Topik (*Out-of-Scope*) | 30 | 27 / 30 (90,00%) | **30 / 30 (100,0%)** |
+| Bahasa Gaul, Singkatan, & Typo | 30 | 13 / 30 (43,33%) | **30 / 30 (100,0%)** |
+| Pertanyaan Ganda (*Compound Multi-Intent*) | 25 | 1 / 25 (4,00%) | **25 / 25 (100,0%)** |
+| **Total Akurasi Keseluruhan** | **165** | **80 / 165 (48,48%)** | **165 / 165 (100,0%)** |
+
+---
+
+## Bab 5 — Kebutuhan Non-Fungsional (Terukur)
+
+| ID | Kategori | Pernyataan Kebutuhan Terukur | Metode Verifikasi |
+| :--- | :--- | :--- | :--- |
+| **`NFR-PERF-01`** | Performa API | TTFB endpoint API ringan dengan OPcache aktif maksimal **100 ms** (terukur aktual **37,3 ms** pada `/api/v1/chatbot/faq` di Apache Laragon OPcache, membaik ~78,5% dari 173,5 ms). | Uji benchmark HTTP lokal dengan OPcache aktif. |
+| **`NFR-PERF-02`** | Efisiensi AI | Mayoritas kueri panduan prosedural (21 topik KB) & kueri data Layer 1 diselesaikan pada **0 token LLM** dengan latensi router lokal <= **50 ms** dan timeout API OpenRouter maks **30 detik**. | `AiHoldOutEvaluationTest` & `OpenAiClient` timeout config. |
+| **`NFR-PERF-03`** | Pembaruan Dashboard | Sinkronisasi dashboard kurir/tugas melalui *silent background polling* berjalan setiap **15 detik** saat tab aktif dan otomatis jeda di latar belakang. | Inspeksi hook `usePolling` & Playwright / dev tools. |
+| **`NFR-PERF-04`** | Rate Limit Geocoding | Panggilan API OpenStreetMap Nominatim dibatasi global **<= 1 request/detik** dengan cache koordinat 4 desimal (~11 m) berlaku **86.400 detik (24 jam)**. | `AddressGeocodingTest` & cache key inspection. |
+| **`NFR-SEC-01`** | Isolasi Sesi & BFF | Token Sanctum disimpan hanya pada cookie **`httpOnly`** (`SameSite=Lax`, `Secure` di produksi) terpisah per 4 portal (`customer`, `mitra`, `courier`, `admin`); BFF proxy memvalidasi `Origin`/`Referer` pada seluruh mutasi HTTP. | `bff.ts`, `Phase1FoundationAuthTest`, & `CourierPortalAuthorizationTest`. |
+| **`NFR-SEC-02`** | Proteksi OTP & Brute Force | Kode OTP 6 digit di-hash SHA-256, berlaku **5 menit**, maks **5** salah input, cooldown kirim ulang **60 detik**, batas **15 req/jam/IP** dan **5 req/jam/kontak**. Login dibatasi **5 kali/menit** per email+IP; ubah password **3 kali/jam**; pengajuan dispute **3 kali/hari**; pengajuan refund **5 kali/jam**; webhook Xendit **60 kali/menit/IP**. | `AppServiceProvider::configureRateLimiters()`, `OtpService`, & `OtpRegistrationFlowTest`. |
+| **`NFR-SEC-03`** | Wajib 2FA Privileged | Akun `super_admin` tidak dapat memperoleh token operasional sebelum lulus verifikasi TOTP; token sementara `2fa-pending` kedaluwarsa dalam **5 menit**. | `AdminApiAuthController` & feature test admin auth. |
+| **`NFR-SEC-04`** | Keamanan Upload Privat | Seluruh dokumen usaha dan bukti komplain maks **5 MB** (avatar **2 MB**), divalidasi ekstensi + `finfo` MIME server-side, dan disimpan di disk privat (`storage/app/private`). | `SecureFileUpload.php` & upload security tests. |
+| **`NFR-REL-01`** | Integritas Transaksi | Registrasi OTP wajib membungkus pembuatan user & dispatch OTP dalam **1 transaksi DB atomik**; webhook Xendit wajib idempoten per `xendit_event_id`. | `OtpRegistrationFlowTest` & `XenditService` idempotency tests. |
+| **`NFR-REL-02`** | Degradasi Anggun | Kegagalan penyedia AI (HTTP 429/timeout), gangguan Nominatim, atau kegagalan 1 kanal notifikasi tidak boleh membatalkan pesanan maupun menampilkan stack trace mentah; fallback otomatis ke kontak `cs@laundryku.test` atau form manual. | `AiAssistantTest`, `NotificationService`, & `AddressGeocodingTest`. |
+| **`NFR-UX-01`** | Responsivitas & Aksesibilitas | UI web mengadopsi pendekatan *mobile-first* dengan ukuran sentuh interaktif minimal **44×44 px**, rasio kontras teks WCAG AA **>= 4,5:1**, teks body >= **16 px** di mobile, serta state baku *Skeleton Loading*, *EmptyState*, dan *ErrorState* di seluruh halaman data. | Pedoman [DESIGN-RULES.md](file:///c:/laragon/www/laundryku/DESIGN-RULES.md) & inspeksi UI. |
+| **`NFR-MAINT-01`** | Pemeliharaan & Guard Test | Logika bisnis dipisahkan di lapisan Service (`app/Services/*`), otorisasi terpusat di 9 Policy (`app/Policies/*`), seluruh kode dilindungi **76 file PHPUnit tests** dengan `Database Guard` yang membatalkan eksekusi otomatis jika mengarah ke database produksi (`composer test`). | `composer test` (`bin/test-runner.php`) & `playwright test`. |
+
+---
+
+## Bab 6 — Sistem Desain UI/UX, Peta Route & Model Data Sistem
+
+### 6.1 Sistem Desain Aktual Frontend (`DESIGN-RULES.md` + `globals.css`)
+
+Antarmuka utama LaundryKu dibangun di atas **Next.js `16.3.5` + Tailwind CSS v4** dengan standar [DESIGN-RULES.md](file:///c:/laragon/www/laundryku/DESIGN-RULES.md) dan token tema pada [frontend/app/globals.css](file:///c:/laragon/www/laundryku/frontend/app/globals.css):
+
+| Elemen Desain | Standar Implementasi Aktual | Pengecualian / Catatan Koeksistensi |
+| :--- | :--- | :--- |
+| **Palet Warna Utama** | Komposisi 60-30-10 berbasis **Navy** (`navy-950: #071324`, `navy-900: #0B192C`, `navy-800: #1E40AF`, `navy-700: #1D4ED8`), **Teal** (`teal-600: #0D9488`, `teal-500: #14B8A6`, `teal-400: #2DD4BF`), **Amber** (`amber-500: #F59E0B`, `amber-400: #FBBF24` terbatas 1–2 sorotan), **Sky/Slate** (`#F0F7FF`, `#F8FAFC`, `#FFFFFF`), teks utama `#0F172A`, dan warna semantik Success `#16A34A`, Warning `#F59E0B`, Danger `#DC2626`, Info `#2563EB`. | Halaman **`/admin/settings/ai`** memakai palet **Cyan `#0E7490` / `#155E75`** sesuai file token [DESIGN.md](file:///c:/laragon/www/laundryku/DESIGN.md). Sidebar Admin ([admin/layout.tsx](file:///c:/laragon/www/laundryku/frontend/app/admin/layout.tsx)) memakai latar `#0F172A`. Sejumlah view Blade legacy tetap mempertahankan warna lama untuk kompatibilitas backward. |
+| **Tipografi** | Heading (`h1`–`h6`, `.font-heading`): **`Plus Jakarta Sans`** (`500–800`); Body, form, & tabel (`.font-sans`): **`Inter`** (`400–700`); Angka rupiah & jam wajib `.tabular-nums` + helper `formatRupiah()`. | Didefinisikan di [frontend/app/layout.tsx](file:///c:/laragon/www/laundryku/frontend/app/layout.tsx) via `next/font/google`. |
+| **Komponen & Layout** | **31 file komponen UI reusable** di `frontend/components/ui/` (`Button`, `Input`, `OTPInput`, `ConfirmDialog`, `Modal`, `Table`, `StatusBadge`, `Timeline`, `Skeleton`, `EmptyState`, `ErrorState`, dll.) serta `PublicLayout`, `AuthLayout`, `DashboardLayout`, dan `AdminLayout`. | Halaman `/design-system` disediakan untuk dokumentasi visual komponen antarmuka. |
+| **Ikonografi & Anti-Slop** | Menggunakan **Lucide React (`^1.47.0`)** dengan stroke konsisten dan melarang ornamen dekoratif berlebihan atau badge warna-warni tanpa fungsi semantik. | Diperkuat pada perancangan ulang Admin UI (termasuk `/admin/settings/ai`, `/admin/settings`, `/admin/audit-logs`). |
+
+### 6.2 Peta Antarmuka Web (`frontend/app/`) & Grup Endpoint API (`/api/v1/*`)
+
+| Portal | Rute Halaman Web Next.js | Grup Endpoint REST Laravel (`routes/api.php`) |
+| :--- | :--- | :--- |
+| **Publik & Customer** | `/`, `/auth`, `/stores`, `/stores/[id]`, `/stores/[id]/order`, `/orders`, `/orders/[id]`, `/chat`, `/chat/[id]`, `/notifications`, `/profile`, `/upgrade`, `/onboard`, `/design-system` | `/api/v1/auth/*` (`register`, `login`, `otp/verify`, `otp/send`, `logout`, `me`), `/api/v1/stores*`, `/api/v1/pricing/estimate`, `/api/v1/geocode/*`, `/api/v1/profile*`, `/api/v1/addresses*`, `/api/v1/orders*`, `/api/v1/conversations*`, `/api/v1/notifications*`, `/api/v1/upgrades/*`, `/api/v1/chatbot/*` |
+| **Mitra / Store Admin** | `/mitra/login`, `/mitra/register`, `/mitra/status`, `/store`, `/store/orders`, `/store/orders/[id]`, `/store/services`, `/store/pricing`, `/store/payment`, `/store/couriers`, `/store/reports`, `/store/ledger`, `/store/complaints`, `/store/ratings`, `/store/chat`, `/store/profile`, `/store/settings` | `/api/v1/auth/mitra/*`, `/api/v1/mitra/*`, `/api/v1/store/*` (`dashboard`, `services`, `pricing-rules`, `ledger`, `reports`, `payout-account`, `confirm-cod`), `/api/v1/store-admin/*` (`couriers`, `ratings`, `complaints`) |
+| **Kurir** | `/courier/login`, `/courier`, `/courier/tasks`, `/courier/orders` | `/api/v1/auth/kurir/*`, `/api/v1/courier/*` (`profile`, `tasks`, `claim`, `transition`, `confirm-cod`) |
+| **Super Admin** | `/admin/login`, `/admin`, `/admin/orders`, `/admin/payments`, `/admin/stores`, `/admin/users`, `/admin/categories`, `/admin/settings/ai`, `/admin/settings`, `/admin/audit-logs` | `/api/v1/auth/admin/*`, `/api/v1/admin/*` (`overview`, `dashboard/metrics`, `orders`, `payments`, `stores`, `users`, `categories`, `platform-settings/commission`, `audit-logs`, `ai-settings`), serta `/api/ai/chat` untuk widget admin |
+| **Webhook & Proxy** | `/api/auth/[portal]/[action]`, `/api/proxy/[...path]`, `/api/chat` | `POST /api/webhooks/xendit` (`throttle:webhook`) |
+
+### 6.3 Model Data Inti MySQL 8 (58 Tabel Terverifikasi)
+
+Basis data MySQL 8 dikelola melalui **74 file migrasi** yang membentuk **58 tabel** pada 6 kelompok domain (menggantikan catatan skema awal 8 tabel di `database/schema.sql`):
+1. **Identitas, Autentikasi & RBAC (11 tabel):** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, `personal_access_tokens`, `otp_challenges`, `failed_login_attempts`, `password_reset_tokens`, `password_resets`, `sessions`.
+2. **Pelanggan, Mitra Toko, Katalog & Kurir (13 tabel):** `customers`, `customer_addresses`, `stores`, `store_applications`, `store_documents`, `store_staff`, `store_settings`, `store_payout_accounts`, `services`, `service_prices`, `laundry_packages`, `couriers`, `courier_gps`.
+3. **Pesanan & Penugasan Logistik (4 tabel):** `orders`, `order_items`, `order_status_history`, `courier_tasks`.
+4. **Pembayaran, COD, Settlement, Ulasan & Sengketa (11 tabel):** `payments`, `payment_events`, `xendit_webhooks`, `cod_collections`, `refunds`, `commission_settings`, `settlement_periods`, `settlement_items`, `disputes`, `dispute_events`, `reviews`.
+5. **Komunikasi, Notifikasi & Asisten AI (10 tabel):** `conversations`, `chat_messages`, `notifications`, `notification_preferences`, `whatsapp_logs`, `ai_conversations`, `ai_messages`, `ai_chat_sessions`, `ai_chat_messages`, `ai_usage_logs`.
+6. **Tata Kelola Sistem, Cache & Antrian (9 tabel):** `settings`, `system_configurations`, `audit_logs`, `dashboard_metric_caches`, `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`. *(Total keseluruhan = 58 tabel unik)*.
+
+---
+
+## Bab 7 — Matriks Keterlacakan & Daftar Utang Teknis Terkendali
+
+### 7.1 Traceability Matrix (`User Story -> FR -> Implementasi -> Verifikasi`)
+
+| User Story | ID FR | Service / Controller / Endpoint Utama | Halaman Frontend | Bukti Pengujian Otomatis |
+| :--- | :--- | :--- | :--- | :--- |
+| `US-01` | `FR-01` | `OtpRegistrationApiController`, `OtpService`, `AdminApiAuthController`, `bff.ts` | `/auth`, `/mitra/login`, `/courier/login`, `/admin/login` | `OtpRegistrationFlowTest`, `Phase1FoundationAuthTest`, `SanctumFoundationTest`, `DashboardTwoFactorTest`, `RolePortalIsolationTest` |
+| `US-02` | `FR-02` | `CustomerController`, `NominatimGeocodingService`, `User` (`display_email`) | `/profile`, `/stores` | `AddressGeocodingTest`, `AddressLocationTest`, `UserProfilePlaceholderEmailTest` |
+| `US-03` | `FR-03` | `StoreController`, `StoreSearchService`, `StoreMap.tsx` | `/`, `/stores`, `/stores/[id]` | `StoreSearchTest`, `StoreLocationCoordinatesAndRadiusTest`, E2E `index.spec.js` |
+| `US-04` | `FR-04` | `MitraApiAuthController`, `CustomerController::apply*`, `SecureFileUpload` | `/mitra/register`, `/upgrade`, `/admin/stores` | `MitraRegisterDirectTest`, `StoreOnboardingTest`, `MitraOnboardingE2ETest`, `CourierApplicationFlowTest` |
+| `US-05` | `FR-05` | `OrderController`, `OrderService`, `OrderStatus` (`19` enum), `OrderPolicy` | `/stores/[id]/order`, `/orders/[id]`, `/store/orders/[id]` | `OrderServiceTest`, `OrderStatusHistoryRecordTest`, `OrderFinancialBreakdownTest`, `OrderLifecycleAndCourierReassignmentSimulationTest`, E2E `order-lifecycle.spec.ts` |
+| `US-06` | `FR-06` | `PaymentController`, `XenditService`, `XenditWebhookController`, `SettlementService` | `/orders/[id]`, `/store/payment`, `/store/ledger`, `/admin/settings` | `PaymentTest`, `PaymentAuthorizationTest`, `SettlementTest`, `SettlementExclusionTest`, `RefundTest` |
+| `US-07` | `FR-07` | `CourierPortalController`, `CourierAssignmentService`, `GpsTrackingService` | `/courier`, `/courier/tasks`, `/courier/orders` | `CourierPortalAuthorizationTest`, `CourierPortalTransitionTaskTest`, `CourierAssignmentTest`, `CourierDashboardTest` |
+| `US-08` | `FR-08` | `ChatController`, `NotificationService`, `ReviewService`, `DisputeService` | `/chat`, `/store/chat`, `/notifications`, `/store/complaints`, `/store/ratings` | `CustomerStoreConversationTest`, `NotificationTest`, `WhatsAppNotificationTest`, `ReviewDisputeTest`, `DisputeRefundTest` |
+| `US-09` | `FR-09` | `MitraPortalController` (`services`, `pricing-rules`, `reports`, `couriers`, `ledger`) | `/store/*` (13 rute halaman toko) | `StorePricingAndReportsTest`, `StorePaymentMethodsTest`, `StoreDashboardMetricsTest`, `DashboardTenantIsolationTest` |
+| `US-10` | `FR-10` | `AdminPortalController` (`metrics`, `stores`, `users`, `categories`, `commission`, `auditLogs`, `aiSettings`) | `/admin/*` (9 menu utama Admin) | `AdminDashboardMetricsTest`, `AdminPortalApiTest`, `AdminSettingsTest`, `AdminAiSettingsTest`, `DashboardResponseRegressionTest` |
+| `US-AI` | Bab 4 | `AiIntentRouter`, `AiAssistantService`, `AiKnowledgeBaseService`, `AiToolRegistry` (`33` tools), `OpenAiClient` | Widget `AiChatWidget` di seluruh portal + `/admin/settings/ai` | `AiHoldOutEvaluationTest` (`165/165`), `AiAssistantTest`, `SuperAdminAiAssistantTest`, `AiDataQueryTest`, `AiRoleFunctionCallingTest`, `AiParaphraseTest` |
+
+### 7.2 Daftar Utang Teknis & Keterbatasan Terbuka (`docs/technical-notes.md` & `OPEN-ISSUES.md`)
+
+PRD ini secara transparan mencatat item teknis yang belum selesai dan dijadwalkan untuk iterasi berikutnya:
+1. **`T011` Penyatuan Dua Otoritas Role (*Split-Brain*):** Kolom `users.role` masih hidup berdampingan dengan tabel relasional RBAC (`roles`, `user_roles`); rencana deprekasi kolom datar `users.role` menuju Policy + tabel RBAC sebagai satu-satunya SSOT telah terdokumentasi.
+2. **`T009` Duplikasi Penutupan Tugas Kurir:** Logika transisi selesai `delivered` pada tugas kurir masih tersebar di `CourierPortalController::transitionTask` dan `OrderService::transition`.
+3. **`T010` Penundaan Model `$casts` Enum:** Cast Eloquent langsung untuk `OrderStatus` dan `CourierTaskStatus` masih ditunda demi menjaga kompatibilitas test dan query builder string yang ada.
+4. **`T012` Refaktor Halaman `/stores`:** Berkas `frontend/app/stores/page.tsx` masih sepanjang ±700 baris dan belum memiliki cakupan unit test UI terisolasi.
+5. **Validasi Berat Transisi `awaiting_price_approval` & Field `Bug E`:** Perhitungan `order_items.quantity_actual` multi-item serta kewajiban pengisian `actual_weight > 0` sebelum perpindahan ke `awaiting_price_approval` dijadwalkan untuk penguatan lanjutan.
+6. **Sinkronisasi Artefak Repo Pendukung:** Berkas [database/schema.sql](file:///c:/laragon/www/laundryku/database/schema.sql) (masih berisi 8 tabel awal vs 58 tabel aktual di migrasi), [README.md](file:///c:/laragon/www/laundryku/README.md), dan [AGENTS.md](file:///c:/laragon/www/laundryku/AGENTS.md) perlu diselaraskan pada tugas terpisah agar tidak merujuk ke stack fase awal.

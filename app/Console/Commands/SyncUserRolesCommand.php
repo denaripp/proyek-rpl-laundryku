@@ -99,9 +99,9 @@ class SyncUserRolesCommand extends Command
             $role = User::ROLE_CUSTOMER;
             if (($u['active_mode'] ?? '') === 'courier') {
                 $role = User::ROLE_COURIER;
-            } elseif (($u['active_mode'] ?? '') === 'store' || str_contains($email, 'barokah') || str_contains($email, 'freshclean')) {
+            } elseif (($u['active_mode'] ?? '') === 'store') {
                 $role = User::ROLE_STORE_ADMIN;
-            } elseif (str_contains($email, 'admin')) {
+            } elseif (in_array(strtolower($email), ['admin@laundryku.com', 'admin@laundryku.test', 'superadmin@laundryku.test'], true)) {
                 $role = User::ROLE_SUPER_ADMIN;
             }
 

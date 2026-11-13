@@ -92,7 +92,7 @@ export default function StoreAdminOrdersPage() {
     },
     {
       id: 'processing',
-      label: 'Sedang dicuci',
+      label: 'Sedang diproses',
       count: orders.filter((o) => o.status === 'PAID' || o.status === 'PROCESSING').length,
     },
     {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button, Skeleton } from '@/components/ui';
@@ -26,10 +26,16 @@ export default function StoreDashboardOverviewPage() {
   const [dashboardData, setDashboardData] = useState<StoreMetricsData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const isFetchingRef = useRef(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadData = useCallback(async (isBackground: boolean | unknown = false) => {
+    const isBg = typeof isBackground === 'boolean' && isBackground;
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (!isBg) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       let user = getStoredUser('mitra');
       if (!user) {
@@ -52,10 +58,18 @@ export default function StoreDashboardOverviewPage() {
       const activeStoreId = getActiveStoreId(user);
       const data = await getStoreMetrics(activeStoreId || undefined);
       setDashboardData(data);
+      if (isBg) {
+        setError(null);
+      }
     } catch (err: unknown) {
-      setError(formatFriendlyErrorMessage(err, 'Gagal memuat ringkasan dashboard toko.'));
+      if (!isBg) {
+        setError(formatFriendlyErrorMessage(err, 'Gagal memuat ringkasan dashboard toko.'));
+      }
     } finally {
-      setLoading(false);
+      if (!isBg) {
+        setLoading(false);
+      }
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -66,9 +80,24 @@ export default function StoreDashboardOverviewPage() {
       loadData();
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+
+    const handleFocus = () => {
+      loadData(true);
+    };
+
     window.addEventListener('laundryku_active_store_change', handleStoreChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       window.removeEventListener('laundryku_active_store_change', handleStoreChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [loadData]);
 
@@ -150,15 +179,28 @@ export default function StoreDashboardOverviewPage() {
             </div>
             <h3 className="text-sm font-bold text-slate-900 mb-1">Gagal memuat ringkasan</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">{error}</p>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={loadData}
-              className="inline-flex items-center gap-1.5 text-xs cursor-pointer rounded-xl"
-            >
-              <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
-              <span>Coba lagi</span>
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={loadData}
+                className="inline-flex items-center gap-1.5 text-xs cursor-pointer rounded-xl"
+              >
+                <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <span>Coba lagi</span>
+              </Button>
+              {error.toLowerCase().includes('unauthenticated') && (
+                <Link href="/mitra/login">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="inline-flex items-center gap-1.5 text-xs cursor-pointer rounded-xl bg-navy-900 hover:bg-navy-800 text-white"
+                  >
+                    <span>Login Akun Mitra</span>
+                  </Button>
+                </Link>
+              )}
+            </div>
           </div>
         )}
 

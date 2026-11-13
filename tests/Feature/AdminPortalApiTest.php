@@ -32,7 +32,7 @@ class AdminPortalApiTest extends TestCase
             'is_active' => true,
         ]);
 
-        $adminRole = Role::whereIn('name', ['platform_admin', 'platform_owner'])->first();
+        $adminRole = Role::where('name', 'platform_owner')->first() ?? Role::where('name', 'platform_admin')->first();
         if ($adminRole) {
             $this->admin->roles()->attach($adminRole->id);
         }

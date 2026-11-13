@@ -65,74 +65,74 @@ class NotificationTrigger
 
     public static function courierArriving(User $customer, $order): void
     {
-        self::toUser($customer, 'courier_arriving', 'Courier is arriving', "Your courier is on the way for order #{$order->order_number}.", ['order_id' => $order->id]);
+        self::toUser($customer, 'courier_arriving', 'Kurir Menuju Lokasi', "Kurir sedang dalam perjalanan menuju lokasi Anda untuk pesanan #{$order->order_number}.", ['order_id' => $order->id]);
     }
 
     // ===== Order/laundry milestones =====
     public static function pickupCompleted(User $customer, $order): void
     {
-        self::toUser($customer, 'pickup_completed', 'Laundry picked up', "Your laundry for order #{$order->order_number} has been picked up and is heading to the store.", ['order_id' => $order->id]);
+        self::toUser($customer, 'pickup_completed', 'Cucian Telah Dijemput', "Cucian untuk pesanan #{$order->order_number} telah berhasil dijemput kurir dan sedang menuju ke gerai.", ['order_id' => $order->id]);
     }
 
     public static function laundryReceived(User $customer, $order): void
     {
-        self::toUser($customer, 'laundry_received', 'Laundry received by store', "The store has received your laundry for order #{$order->order_number}.", ['order_id' => $order->id]);
+        self::toUser($customer, 'laundry_received', 'Cucian Tiba di Gerai', "Cucian untuk pesanan #{$order->order_number} telah tiba dan diterima oleh pihak gerai.", ['order_id' => $order->id]);
     }
 
     public static function laundryWeighed(User $customer, $order, $weight = null): void
     {
-        self::toUser($customer, 'laundry_weighed', 'Laundry weighed', "Your laundry for order #{$order->order_number} has been weighed" . ($weight ? " ({$weight} kg)." : '.') . ' Final price will be updated shortly.', ['order_id' => $order->id, 'weight' => $weight]);
+        self::toUser($customer, 'laundry_weighed', 'Cucian Selesai Ditimbang', "Cucian untuk pesanan #{$order->order_number} telah ditimbang" . ($weight ? " seberat {$weight} kg." : '.') . ' Rincian biaya akan segera diperbarui.', ['order_id' => $order->id, 'weight' => $weight]);
     }
 
     public static function finalPriceUpdated(User $customer, $order, $oldPrice, $newPrice): void
     {
-        self::toUser($customer, 'final_price_updated', 'Final price updated', "Final price for order #{$order->order_number} is " . number_format((float) $newPrice, 2) . '.', ['order_id' => $order->id, 'old_price' => $oldPrice, 'new_price' => $newPrice]);
+        self::toUser($customer, 'final_price_updated', 'Harga Final Diperbarui', "Harga final untuk pesanan #{$order->order_number} adalah Rp " . number_format((float) $newPrice, 0, ',', '.') . '.', ['order_id' => $order->id, 'old_price' => $oldPrice, 'new_price' => $newPrice]);
     }
 
     public static function processing(User $customer, $order): void
     {
-        self::toUser($customer, 'processing', 'Laundry is being processed', "Your laundry for order #{$order->order_number} is being processed.", ['order_id' => $order->id]);
+        self::toUser($customer, 'processing', 'Cucian Sedang Diproses', "Cucian untuk pesanan #{$order->order_number} sedang dalam proses pencucian & perawatan oleh gerai.", ['order_id' => $order->id]);
     }
 
     public static function ready(User $customer, $order): void
     {
-        self::toUser($customer, 'ready', 'Laundry is ready', "Your laundry for order #{$order->order_number} is ready for delivery.", ['order_id' => $order->id]);
+        self::toUser($customer, 'ready', 'Cucian Siap Diantar', "Cucian untuk pesanan #{$order->order_number} telah selesai diproses dan siap untuk diantar.", ['order_id' => $order->id]);
     }
 
     public static function deliveryOngoing(User $customer, $order): void
     {
-        self::toUser($customer, 'out_for_delivery', 'Laundry on the way', "Your laundry for order #{$order->order_number} is out for delivery.", ['order_id' => $order->id]);
+        self::toUser($customer, 'out_for_delivery', 'Cucian Sedang Diantar', "Cucian untuk pesanan #{$order->order_number} sedang dalam perjalanan diantar oleh kurir ke alamat Anda.", ['order_id' => $order->id]);
     }
 
     public static function completed(User $customer, $order): void
     {
-        self::toUser($customer, 'completed', 'Order completed', "Order #{$order->order_number} is complete. Thanks for using LANDURYKU!", ['order_id' => $order->id]);
+        self::toUser($customer, 'completed', 'Pesanan Selesai', "Pesanan #{$order->order_number} telah selesai. Terima kasih telah mempercayakan cucian Anda di LaundryKu!", ['order_id' => $order->id]);
     }
 
     // ===== Payment =====
     public static function paymentRequired(User $customer, $order, $amount = null): void
     {
-        self::toUser($customer, 'payment_required', 'Payment required', "Payment is required for order #{$order->order_number}" . ($amount ? ' (' . number_format((float) $amount, 2) . ')' : '') . '.', ['order_id' => $order->id, 'amount' => $amount]);
+        self::toUser($customer, 'payment_required', 'Menunggu Pembayaran', "Menunggu pembayaran untuk pesanan #{$order->order_number}" . ($amount ? ' (Rp ' . number_format((float) $amount, 0, ',', '.') . ')' : '') . '. Silakan lakukan pembayaran agar pesanan dapat segera diproses.', ['order_id' => $order->id, 'amount' => $amount]);
     }
 
     public static function paymentSuccess(User $customer, $order): void
     {
-        self::toUser($customer, 'payment_success', 'Payment received', "Your payment for order #{$order->order_number} was successful.", ['order_id' => $order->id]);
+        self::toUser($customer, 'payment_success', 'Pembayaran Berhasil', "Pembayaran untuk pesanan #{$order->order_number} telah berhasil diverifikasi.", ['order_id' => $order->id]);
     }
 
     public static function paymentFailed(User $customer, $order): void
     {
-        self::toUser($customer, 'payment_failed', 'Payment failed', "Payment for order #{$order->order_number} failed. Please try another method.", ['order_id' => $order->id]);
+        self::toUser($customer, 'payment_failed', 'Pembayaran Belum Berhasil', "Pembayaran untuk pesanan #{$order->order_number} belum berhasil. Silakan coba metode pembayaran lainnya.", ['order_id' => $order->id]);
     }
 
     public static function paymentExpired(User $customer, $order): void
     {
-        self::toUser($customer, 'payment_expired', 'Payment expired', "Payment for order #{$order->order_number} expired. Please create a new payment.", ['order_id' => $order->id]);
+        self::toUser($customer, 'payment_expired', 'Pembayaran Kedaluwarsa', "Waktu pembayaran untuk pesanan #{$order->order_number} telah kedaluwarsa. Silakan lakukan pemesanan atau pembayaran ulang.", ['order_id' => $order->id]);
     }
 
     public static function codConfirmation(User $customer, $order): void
     {
-        self::toUser($customer, 'cod_confirmation', 'COD payment confirmation needed', "Please confirm the COD payment for order #{$order->order_number}.", ['order_id' => $order->id]);
+        self::toUser($customer, 'cod_confirmation', 'Konfirmasi Pembayaran COD', "Mohon konfirmasi pembayaran tunai (COD) untuk pesanan #{$order->order_number}.", ['order_id' => $order->id]);
     }
 
     // ===== Refund =====
@@ -160,7 +160,55 @@ class NotificationTrigger
     // ===== Generic order status (refactored legacy listener entry point) =====
     public static function orderStatusChanged(User $customer, $order, string $oldStatus, string $newStatus, ?string $reason = null): void
     {
-        self::toUser($customer, 'order_status', "Order #{$order->order_number} status updated", "Your order status changed from \"{$oldStatus}\" to \"{$newStatus}\"." . ($reason ? " Reason: {$reason}" : ''), ['order_id' => $order->id, 'old_status' => $oldStatus, 'new_status' => $newStatus, 'reason' => $reason]);
+        if ($oldStatus === 'created' && strtolower($newStatus) === 'created') {
+            self::toUser(
+                $customer,
+                'order_status',
+                'Pesanan Berhasil Dibuat',
+                "Pesanan Anda #{$order->order_number} telah berhasil dibuat dan sedang menunggu konfirmasi gerai.",
+                ['order_id' => $order->id, 'old_status' => $oldStatus, 'new_status' => $newStatus, 'reason' => $reason]
+            );
+            return;
+        }
+
+        $statusLabel = self::statusToIndonesian($newStatus);
+        $title = "Status Pesanan: {$statusLabel}";
+        $content = "Status pesanan #{$order->order_number} telah diperbarui menjadi {$statusLabel}." . ($reason ? " (Catatan: {$reason})" : '');
+
+        self::toUser($customer, 'order_status', $title, $content, [
+            'order_id' => $order->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'reason' => $reason,
+        ]);
+    }
+
+    public static function statusToIndonesian(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'created' => 'Pesanan Dibuat',
+            'waiting_pickup' => 'Menunggu Penjemputan',
+            'courier_assigned' => 'Kurir Penjemputan Ditugaskan',
+            'courier_to_customer' => 'Kurir Menuju Lokasi Anda',
+            'picked_up' => 'Cucian Telah Dijemput',
+            'in_transit_to_store' => 'Cucian Menuju Gerai',
+            'at_store', 'received_by_store' => 'Tiba di Gerai',
+            'weighed' => 'Selesai Ditimbang',
+            'awaiting_price_approval' => 'Menunggu Persetujuan Harga',
+            'price_approved' => 'Harga Disetujui',
+            'awaiting_payment', 'payment_required' => 'Menunggu Pembayaran',
+            'paid' => 'Sudah Dibayar',
+            'processing' => 'Sedang Diproses',
+            'ready_for_delivery' => 'Siap Diantar',
+            'courier_assigned_for_delivery' => 'Kurir Pengantaran Ditugaskan',
+            'out_for_delivery' => 'Sedang Diantar ke Pelanggan',
+            'delivered' => 'Tiba di Tujuan',
+            'completed' => 'Pesanan Selesai',
+            'cancelled' => 'Pesanan Dibatalkan',
+            'pickup_failed' => 'Penjemputan Gagal',
+            'delivery_failed' => 'Pengantaran Gagal',
+            default => ucwords(str_replace('_', ' ', $status)),
+        };
     }
 
     // ===== Tahap 11D: Event Triggers & Gap Closures =====

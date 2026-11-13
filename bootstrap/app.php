@@ -42,6 +42,9 @@ return Application::configure(basePath: dirname(__DIR__))
             return route('customer.dashboard');
         });
 
+        $middleware->trustProxies(at: '*');
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
         $middleware->alias([
             '2fa' => \App\Http\Middleware\VerifyTwoFactor::class,
             'admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,

@@ -145,6 +145,11 @@ class Order extends Model
         return $this->hasOne(Refund::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     public function settlementItem(): HasOne
     {
         return $this->hasOne(SettlementItem::class);

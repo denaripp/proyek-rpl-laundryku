@@ -104,20 +104,18 @@ class OrderService
             }
 
             // Platform fee and delivery fee according to checkout rules
-            $platformFee = array_key_exists('platform_fee', $data)
-                ? (float) $data['platform_fee']
-                : ($totalSubtotal > 0 ? 1000 : 0);
+            // Platform fee is enforced server-side and cannot be arbitrarily zeroed out by untrusted client input
+            $platformFee = ($totalSubtotal > 0) ? (float) config('laundryku.platform_fee', 1000) : 0;
+            if (!empty($data['is_internal']) && array_key_exists('platform_fee', $data)) {
+                $platformFee = (float) $data['platform_fee'];
+            }
+
             $deliveryFee = array_key_exists('delivery_fee', $data)
                 ? (float) $data['delivery_fee']
                 : 0;
             $pickupFee = array_key_exists('pickup_fee', $data)
                 ? (float) $data['pickup_fee']
                 : 0;
-
-            // If caller explicitly passed estimated_price matching pure subtotal without platform_fee, respect pure subtotal
-            if (isset($data['estimated_price']) && (float) $data['estimated_price'] == $totalSubtotal && !array_key_exists('platform_fee', $data)) {
-                $platformFee = 0;
-            }
 
             if ($totalSubtotal > 0) {
                 $grandTotal = $totalSubtotal + $platformFee + $deliveryFee + $pickupFee;
@@ -196,7 +194,7 @@ class OrderService
         $oldStatus = $order->status;
 
         // Validate transition
-        $this->validateTransition($order, $newStatus);
+        $this->validateTransition($order, $newStatus, $reason);
 
         return DB::transaction(function () use ($order, $newStatus, $actor, $reason, $metadata, $oldStatus) {
             $order->status = $newStatus;
@@ -235,7 +233,7 @@ class OrderService
     /**
      * Validate status transition.
      */
-    protected function validateTransition(Order $order, string $newStatus): void
+    protected function validateTransition(Order $order, string $newStatus, ?string $reason = null): void
     {
         $current = $order->status;
         $allowedTransitions = $this->getAllowedTransitions($current, $order);
@@ -246,7 +244,7 @@ class OrderService
 
         // Additional validation based on status
         if ($newStatus === OrderStatus::CANCELLED->value) {
-            $this->validateCancellation($order);
+            $this->validateCancellation($order, $reason);
         }
 
         if ($newStatus === OrderStatus::COMPLETED->value && $order->payment_status !== 'paid') {
@@ -384,7 +382,7 @@ class OrderService
     /**
      * Validate cancellation rules.
      */
-    protected function validateCancellation(Order $order): void
+    protected function validateCancellation(Order $order, ?string $reason = null): void
     {
         // Already cancelled or completed
         if (in_array($order->status, [OrderStatus::CANCELLED->value, OrderStatus::COMPLETED->value])) {
@@ -395,8 +393,8 @@ class OrderService
         if ($order->status === OrderStatus::PROCESSING->value ||
             $order->status === OrderStatus::READY_FOR_DELIVERY->value ||
             $order->status === OrderStatus::OUT_FOR_DELIVERY->value) {
-            // Allow cancellation but require reason and maybe approval
-            if (!$order->cancellation_reason) {
+            $effectiveReason = $reason ?? $order->cancellation_reason;
+            if (empty($effectiveReason)) {
                 throw new Exception('Cancellation reason is required for processing orders.');
             }
         }
@@ -560,7 +558,7 @@ class OrderService
         Gate::forUser($actor)->authorize('cancel', $order);
 
         // Validate cancellation
-        $this->validateCancellation($order);
+        $this->validateCancellation($order, $reason);
 
         return DB::transaction(function () use ($order, $actor, $reason) {
             $oldStatus = $order->status;

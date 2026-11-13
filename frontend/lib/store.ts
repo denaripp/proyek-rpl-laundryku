@@ -535,3 +535,55 @@ export async function updateStorePayoutAccount(payload: {
   });
   return res.data;
 }
+
+export interface StoreReportsData {
+  store_id: string;
+  window: { from: string; to: string };
+  revenue_total: number;
+  revenue_online: number;
+  revenue_cod: number;
+  refund_total: number;
+  order_count: number;
+  completed_count: number;
+  completion_rate: number;
+  avg_rating: number;
+  recent_orders: Array<{
+    id: string;
+    order_number: string;
+    customer_name: string;
+    payment_method: string;
+    final_price: number;
+    status: string;
+    created_at: string;
+  }>;
+}
+
+export interface StorePricingRules {
+  min_weight_discount_kg: number;
+  min_weight_discount_percent: number;
+  minimum_order_amount: number;
+  express_surcharge_amount: number;
+  is_promo_active: boolean;
+}
+
+export async function getStoreReports(from?: string, to?: string): Promise<StoreReportsData> {
+  const query = new URLSearchParams();
+  if (from) query.set('from', from);
+  if (to) query.set('to', to);
+  const qs = query.toString() ? '?' + query.toString() : '';
+  const res = await apiClient<ApiSuccessResponse<StoreReportsData>>('/store/reports' + qs);
+  return res.data;
+}
+
+export async function getStorePricingRules(): Promise<StorePricingRules> {
+  const res = await apiClient<ApiSuccessResponse<StorePricingRules>>('/store/pricing-rules');
+  return res.data;
+}
+
+export async function updateStorePricingRules(data: StorePricingRules): Promise<StorePricingRules> {
+  const res = await apiClient<ApiSuccessResponse<StorePricingRules>>('/store/pricing-rules', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return res.data;
+}

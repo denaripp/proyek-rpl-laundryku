@@ -33,7 +33,7 @@ Route::middleware('guest:web')->group(function () {
     Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
 });
 
-Route::middleware('auth:web')->group(function () {
+Route::middleware(['auth:web', '2fa'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/customer/dashboard', [PageController::class, 'dashboard'])->name('customer.dashboard');
@@ -65,7 +65,7 @@ Route::prefix('mitra')->name('mitra.')->group(function () {
         Route::post('/register', [MitraAuthController::class, 'register']);
     });
 
-    Route::middleware('auth:mitra')->group(function () {
+    Route::middleware(['auth:mitra', '2fa'])->group(function () {
         Route::post('/logout', [MitraAuthController::class, 'logout'])->name('logout');
         Route::get('/dashboard', [DashboardController::class, 'storeDashboard'])->name('dashboard');
         Route::get('/', fn() => redirect()->route('mitra.dashboard'));
@@ -81,7 +81,7 @@ Route::prefix('kurir')->name('kurir.')->group(function () {
         Route::post('/login', [CourierAuthController::class, 'login'])->middleware('throttle:login');
     });
 
-    Route::middleware('auth:kurir')->group(function () {
+    Route::middleware(['auth:kurir', '2fa'])->group(function () {
         Route::post('/logout', [CourierAuthController::class, 'logout'])->name('logout');
         Route::get('/dashboard', [DashboardController::class, 'courierDashboard'])->name('dashboard');
         Route::post('/availability', [DashboardController::class, 'courierToggleAvailability'])->name('availability');
@@ -100,7 +100,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/2fa', [AdminAuthController::class, 'verify2fa'])->name('2fa.verify');
     });
 
-    Route::middleware('auth:admin')->group(function () {
+    Route::middleware(['auth:admin', '2fa'])->group(function () {
         Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
         Route::get('/dashboard', [DashboardController::class, 'adminDashboard'])->name('dashboard');
         Route::post('/stores/{store}/approve', [DashboardController::class, 'adminApproveStore'])->name('stores.approve');

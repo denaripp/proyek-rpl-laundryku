@@ -18,9 +18,11 @@ import {
   Menu,
   X,
   Shield,
+  Bot,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { AuthUser } from '@/lib/auth';
+import { AiChatWidget } from '@/components/chatbot/AiChatWidget';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -33,6 +35,7 @@ const navItems = [
   { href: '/admin/stores', label: 'Persetujuan Toko', icon: Store },
   { href: '/admin/users', label: 'Manajemen Pengguna', icon: Users },
   { href: '/admin/categories', label: 'Kategori Layanan', icon: Tag },
+  { href: '/admin/settings/ai', label: 'Konfigurasi AI', icon: Bot },
   { href: '/admin/settings', label: 'Komisi Platform', icon: Sliders },
   { href: '/admin/audit-logs', label: 'Audit Log', icon: ShieldCheck },
 ];
@@ -298,6 +301,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {children}
         </div>
       </main>
+
+      {/* AI Assistant Chatbot Widget */}
+      <AiChatWidget />
     </div>
   );
 }

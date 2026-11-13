@@ -60,9 +60,13 @@ class CourierPortalController extends Controller
 
         $isAssignedToMe = ! $isDeliveryWaiting && (
             ((int) $order->courier_id === (int) $courier->user_id) ||
-            ((int) $order->courier_id === (int) $courier->id) ||
             ($currentTask && (int) $currentTask->courier_id === (int) $courier->id && !in_array($currentTask->status, [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value], true))
         );
+
+        $customerPhone = $order->customer?->phone;
+        if (! $isAssignedToMe && $customerPhone) {
+            $customerPhone = substr($customerPhone, 0, 4) . '****' . substr($customerPhone, -2);
+        }
 
         $effectiveCourierId = null;
         if (! $isDeliveryWaiting) {
@@ -133,7 +137,7 @@ class CourierPortalController extends Controller
             'courier_id' => $effectiveCourierId ? (string) $effectiveCourierId : null,
             'courier_name' => $order->courier?->name,
             'customer_name' => $order->customer?->name ?? 'Pelanggan',
-            'customer_phone' => $order->customer?->phone,
+            'customer_phone' => $customerPhone,
             'store_id' => (string) $order->store_id,
             'store_name' => $order->store?->name,
             'store_address' => $order->store?->address,
@@ -171,6 +175,17 @@ class CourierPortalController extends Controller
                 'success' => false,
                 'message' => 'Profil kurir tidak ditemukan.',
             ], 404);
+        }
+
+        if (! $courier->is_verified) {
+            return response()->json([
+                'courier' => [
+                    'id' => (string) $courier->id,
+                    'is_available' => (bool) $courier->is_available,
+                    'is_verified' => false,
+                ],
+                'tasks' => [],
+            ], 200);
         }
 
         $tasks = CourierTask::where('courier_id', $courier->id)
@@ -237,7 +252,26 @@ class CourierPortalController extends Controller
                 COUNT(CASE WHEN status = 'delivered' THEN 1 END) as completed_tasks
             ")->first();
 
-        $activeTasks = (int) ($taskStats->active_tasks ?? 0);
+        $activeOrdersCount = Order::where(function ($q) use ($courier) {
+                $q->where('courier_id', $courier->user_id)
+                ->orWhereHas('courierTasks', function ($tq) use ($courier) {
+                    $tq->where('courier_id', $courier->id)
+                        ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up']);
+                });
+            })
+            ->whereIn('status', [
+                OrderStatus::COURIER_ASSIGNED->value,
+                'pickup_assigned',
+                OrderStatus::COURIER_TO_CUSTOMER->value,
+                OrderStatus::PICKED_UP->value,
+                OrderStatus::IN_TRANSIT_TO_STORE->value,
+                OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value,
+                'delivery_assigned',
+                OrderStatus::OUT_FOR_DELIVERY->value,
+            ])
+            ->count();
+
+        $activeTasks = max((int) ($taskStats->active_tasks ?? 0), $activeOrdersCount);
         $completedTasks = (int) ($taskStats->completed_tasks ?? 0);
 
         return response()->json([
@@ -291,13 +325,11 @@ class CourierPortalController extends Controller
         $tab = $request->query('tab', 'all');
 
         $assignedToCourier = function ($q) use ($courier) {
-            $q->where(function ($sub) use ($courier) {
-                $sub->where('courier_id', $courier->user_id)
-                    ->orWhere('courier_id', $courier->id);
-            })->orWhereHas('courierTasks', function ($tq) use ($courier) {
-                $tq->where('courier_id', $courier->id)
-                    ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value]);
-            });
+            $q->where('courier_id', $courier->user_id)
+                ->orWhereHas('courierTasks', function ($tq) use ($courier) {
+                    $tq->where('courier_id', $courier->id)
+                        ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value]);
+                });
         };
 
         $activeStatuses = [
@@ -401,17 +433,44 @@ class CourierPortalController extends Controller
             ], 404);
         }
 
+        if (! $courier->is_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun kurir belum disetujui atau belum diverifikasi.',
+            ], 403);
+        }
+
         $order = Order::with(['store:id,name,address', 'customer:id,name,phone', 'items', 'courierTasks'])
             ->where('id', $orderId)
             ->where(function ($q) use ($courier) {
                 $q->where('courier_id', $courier->user_id)
-                    ->orWhere('courier_id', $courier->id)
                     ->orWhereHas('courierTasks', function ($tq) use ($courier) {
                         $tq->where('courier_id', $courier->id)
                             ->whereNotIn('status', ['cancelled', 'failed']);
                     });
                 if ($courier->store_id) {
-                    $q->orWhere('store_id', $courier->store_id);
+                    $q->orWhere(function ($sub) use ($courier) {
+                        $sub->where('store_id', $courier->store_id)
+                            ->where(function ($avail) {
+                                $avail->where(function ($pq) {
+                                    $pq->whereIn('status', [
+                                        OrderStatus::CREATED->value,
+                                        OrderStatus::WAITING_PICKUP->value,
+                                        'pending_pickup',
+                                        'waiting_for_courier',
+                                    ])->whereNull('courier_id')
+                                      ->whereDoesntHave('courierTasks', function ($t) {
+                                          $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
+                                      });
+                                })->orWhere(function ($dq) {
+                                    $dq->where('status', OrderStatus::READY_FOR_DELIVERY->value)
+                                      ->whereDoesntHave('courierTasks', function ($t) {
+                                          $t->where('task_type', 'delivery')
+                                            ->whereIn('status', CourierTask::ACTIVE_STATUSES);
+                                      });
+                                });
+                            });
+                    });
                 }
             })
             ->first();
@@ -444,6 +503,13 @@ class CourierPortalController extends Controller
                 'success' => false,
                 'message' => 'Profil kurir tidak ditemukan.',
             ], 404);
+        }
+
+        if (! $courier->is_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun kurir belum disetujui atau belum diverifikasi.',
+            ], 403);
         }
 
         if (! $courier->store_id) {
@@ -527,12 +593,50 @@ class CourierPortalController extends Controller
      */
     protected function isCourierAuthorizedForOrder(Order $order, Courier $courier): bool
     {
-        return ((int) $order->courier_id === (int) $courier->user_id)
-            || ((int) $order->courier_id === (int) $courier->id)
-            || CourierTask::where('order_id', $order->id)
+        $isDeliveryPhase = in_array(strtolower($order->status), [
+            OrderStatus::READY_FOR_DELIVERY->value,
+            OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value,
+            'delivery_assigned',
+            OrderStatus::OUT_FOR_DELIVERY->value,
+            OrderStatus::COMPLETED->value,
+            OrderStatus::DELIVERED->value,
+        ], true);
+
+        if ($isDeliveryPhase) {
+            // In delivery phase: must have active/valid delivery task, or be assigned courier during delivery
+            $hasDeliveryTask = CourierTask::where('order_id', $order->id)
                 ->where('courier_id', $courier->id)
+                ->where('task_type', 'delivery')
                 ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value])
                 ->exists();
+
+            if ($hasDeliveryTask) {
+                return true;
+            }
+
+            if ((int) $order->courier_id === (int) $courier->user_id) {
+                // Must not be a stale pickup courier when another courier owns delivery
+                $hasOtherDeliveryTask = CourierTask::where('order_id', $order->id)
+                    ->where('task_type', 'delivery')
+                    ->where('courier_id', '!=', $courier->id)
+                    ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value])
+                    ->exists();
+
+                return ! $hasOtherDeliveryTask;
+            }
+
+            return false;
+        }
+
+        if ((int) $order->courier_id === (int) $courier->user_id) {
+            return true;
+        }
+
+        return CourierTask::where('order_id', $order->id)
+            ->where('courier_id', $courier->id)
+            ->where('task_type', 'pickup')
+            ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value, CourierTaskStatus::DELIVERED->value])
+            ->exists();
     }
 
     /**
@@ -650,6 +754,13 @@ class CourierPortalController extends Controller
             ], 404);
         }
 
+        if (! $courier->is_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun kurir belum disetujui atau belum diverifikasi.',
+            ], 403);
+        }
+
         $order = Order::find($orderId);
         if (! $order) {
             return response()->json([
@@ -657,6 +768,8 @@ class CourierPortalController extends Controller
                 'message' => 'Pesanan tidak ditemukan.',
             ], 404);
         }
+
+        $toStatus = strtolower($request->input('to_status', ''));
 
         if (! $this->isCourierAuthorizedForOrder($order, $courier)) {
             return response()->json([
@@ -669,7 +782,7 @@ class CourierPortalController extends Controller
             $order->courier_id = $courier->user_id;
         }
 
-        $toStatus = strtolower($request->input('to_status', ''));
+
 
         // Strict allowed transitions for courier:
         // pickup flow: pickup_assigned -> picked_up -> at_store
@@ -741,6 +854,13 @@ class CourierPortalController extends Controller
             ], 404);
         }
 
+        if (! $courier->is_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun kurir belum disetujui atau belum diverifikasi.',
+            ], 403);
+        }
+
         $order = Order::find($orderId);
         if (! $order || (int) $order->courier_id !== (int) $courier->user_id) {
             return response()->json([
@@ -749,8 +869,35 @@ class CourierPortalController extends Controller
             ], 404);
         }
 
+        if (strtolower((string) $order->payment_method) !== 'cod') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Metode pembayaran pesanan bukan COD.',
+            ], 422);
+        }
+
+        if (strtolower((string) $order->payment_status) === 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pembayaran COD untuk pesanan ini sudah pernah dikonfirmasi.',
+            ], 422);
+        }
+
+        if (in_array(strtolower((string) $order->status), [OrderStatus::CANCELLED->value, 'cancelled', 'draft'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Status pesanan tidak valid untuk konfirmasi pembayaran COD.',
+            ], 422);
+        }
+
         $order->payment_status = 'paid';
+        $order->paid_at = now();
         $order->save();
+
+        \App\Models\Payment::where('order_id', $order->id)->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
 
         AuditLog::create([
             'actor_id' => $user->id,

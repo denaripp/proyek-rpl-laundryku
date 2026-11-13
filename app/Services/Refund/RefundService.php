@@ -30,6 +30,16 @@ class RefundService
      */
     public function requestRefund(Order $order, Payment $payment, float $amount, string $reason, string $method, User $requestedBy): Refund
     {
+        // Validate: payment must belong to the specified order
+        if ((int) $payment->order_id !== (int) $order->id) {
+            throw new Exception('Payment does not belong to the specified order.');
+        }
+
+        // Validate: amount must be strictly greater than zero
+        if ($amount <= 0) {
+            throw new Exception('Refund amount must be greater than zero.');
+        }
+
         // Validate: payment must be PAID
         if ($payment->status !== 'paid') {
             throw new Exception('Refund can only be requested for PAID payments.');
@@ -82,52 +92,62 @@ class RefundService
      */
     public function processRefund(Refund $refund, User $approvedBy): Refund
     {
-        if ($refund->status !== 'requested') {
-            throw new Exception('Refund can only be processed from REQUESTED status.');
-        }
+        return DB::transaction(function () use ($refund, $approvedBy) {
+            // Lock the refund row to prevent concurrent race condition
+            $lockedRefund = Refund::where('id', $refund->id)->lockForUpdate()->firstOrFail();
 
-        $payment = $refund->payment;
-        if ($payment->status !== 'paid') {
-            throw new Exception('Payment is not PAID, cannot refund.');
-        }
-
-        $refund->status = 'processing';
-        $refund->approved_by = $approvedBy->id;
-        $refund->approved_at = now();
-        $refund->save();
-
-        $this->logAudit($approvedBy, 'refund_approved', 'refunds', $refund->id, ['old_status' => 'requested'], ['new_status' => 'processing']);
-
-        try {
-            if ($payment->payment_method === 'online' && !empty($payment->xendit_invoice_id)) {
-                // Online refund via Xendit
-                $result = $this->processOnlineRefund($refund);
-            } else {
-                // COD or other: placeholder
-                $result = $this->processCodRefund($refund);
+            if ($lockedRefund->status !== 'requested') {
+                throw new Exception('Refund can only be processed from REQUESTED status.');
             }
 
-            $refund->status = 'completed';
-            $refund->completed_at = now();
-            $refund->save();
+            // Lock the payment row
+            $payment = Payment::where('id', $lockedRefund->payment_id)->lockForUpdate()->firstOrFail();
+            if ($payment->status !== 'paid') {
+                throw new Exception('Payment is not PAID, cannot refund.');
+            }
 
-            $this->logAudit($approvedBy, 'refund_completed', 'refunds', $refund->id, null, ['status' => 'completed']);
+            $lockedRefund->status = 'processing';
+            $lockedRefund->approved_by = $approvedBy->id;
+            $lockedRefund->approved_at = now();
+            $lockedRefund->save();
 
-            // Tahap 15: queued side-effect notification
-            NotificationTrigger::refundCompleted($refund->order->customer, $refund->order, $refund);
+            $this->logAudit($approvedBy, 'refund_approved', 'refunds', $lockedRefund->id, ['old_status' => 'requested'], ['new_status' => 'processing']);
 
-            return $refund;
+            try {
+                if ($payment->payment_method === 'online' && !empty($payment->xendit_invoice_id)) {
+                    // Online refund via Xendit
+                    $result = $this->processOnlineRefund($lockedRefund);
+                } else {
+                    // COD or other: placeholder
+                    $result = $this->processCodRefund($lockedRefund);
+                }
 
-        } catch (Exception $e) {
-            $refund->status = 'failed';
-            $refund->failed_at = now();
-            $refund->failure_reason = $e->getMessage();
-            $refund->save();
+                $lockedRefund->status = 'completed';
+                $lockedRefund->completed_at = now();
+                $lockedRefund->save();
 
-            $this->logAudit($approvedBy, 'refund_failed', 'refunds', $refund->id, null, ['failure_reason' => $e->getMessage()]);
+                // Update payment status to refunded
+                $payment->status = 'refunded';
+                $payment->save();
 
-            throw $e;
-        }
+                $this->logAudit($approvedBy, 'refund_completed', 'refunds', $lockedRefund->id, null, ['status' => 'completed']);
+
+                // Tahap 15: queued side-effect notification
+                NotificationTrigger::refundCompleted($lockedRefund->order->customer, $lockedRefund->order, $lockedRefund);
+
+                return $lockedRefund;
+
+            } catch (Exception $e) {
+                $lockedRefund->status = 'failed';
+                $lockedRefund->failed_at = now();
+                $lockedRefund->failure_reason = $e->getMessage();
+                $lockedRefund->save();
+
+                $this->logAudit($approvedBy, 'refund_failed', 'refunds', $lockedRefund->id, null, ['failure_reason' => $e->getMessage()]);
+
+                throw $e;
+            }
+        });
     }
 
     /**

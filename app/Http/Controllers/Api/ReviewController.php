@@ -62,8 +62,33 @@ class ReviewController extends Controller
      */
     public function orderRating(Request $request, Order $order)
     {
+        $user = $request->user();
+
+        // Authorization check (Anti-IDOR)
+        $isCustomerOwner = $user && (int) $user->id === (int) $order->customer_id;
+        $isStoreOwnerOrStaff = $user && $order->store && (
+            (int) $user->id === (int) $order->store->owner_user_id
+            || $order->store->staff()->where('user_id', $user->id)->where('is_active', true)->exists()
+        );
+        $isAdmin = $user && ($user->isSuperAdmin() || $user->hasPermissionTo('view_any_review'));
+
+        if (! $isCustomerOwner && ! $isStoreOwnerOrStaff && ! $isAdmin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk melihat rating pesanan ini.',
+            ], 403);
+        }
+
         $review = $order->review;
-        if (!$review) {
+        if (! $review) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+            ]);
+        }
+
+        // If review is hidden / moderated, hide from normal customer
+        if (! $review->is_visible && $isCustomerOwner && ! $isAdmin) {
             return response()->json([
                 'success' => true,
                 'data' => null,

@@ -66,11 +66,15 @@
             @yield('content')
         </main>
     </div>
+    {{-- AI Assistant widget --}}
+    @include('partials.ai-widget')
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.7.4/dist/axios.min.js"></script>
     <script>
         window.LK = {
             csrf: document.querySelector('meta[name=csrf-token]').content,
+            apiBase: '/api',
         };
         axios.defaults.headers.common['X-CSRF-TOKEN'] = window.LK.csrf;
     </script>

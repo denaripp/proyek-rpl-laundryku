@@ -498,4 +498,46 @@ class WhatsAppNotificationTest extends TestCase
             'status' => 'sent',
         ]);
     }
+
+    public function test_order_status_changed_event_has_single_listener_preventing_duplicate_spam(): void
+    {
+        $listeners = app('events')->getListeners(OrderStatusChangedEvent::class);
+        $this->assertCount(1, $listeners, 'OrderStatusChangedEvent must have exactly 1 listener to prevent duplicate notifications.');
+    }
+
+    public function test_order_creation_notification_content_and_humanized_whatsapp_formatting(): void
+    {
+        config([
+            'services.whatsapp.enabled' => true,
+            'services.whatsapp.driver' => 'log',
+            'app.url' => 'http://localhost:3000',
+        ]);
+
+        $customer = User::factory()->create(['phone' => '081234567890', 'role' => 'customer']);
+        $store = Store::factory()->create(['name' => 'Berkah Laundry']);
+        $order = Order::factory()->create([
+            'store_id' => $store->id,
+            'customer_id' => $customer->id,
+            'order_number' => 'ORD-TEST-WA-001',
+            'status' => 'created',
+        ]);
+        $order->setRelation('store', $store);
+        $order->setRelation('customer', $customer);
+
+        NotificationTrigger::orderStatusChanged($customer, $order, 'created', 'created');
+
+        $notif = Notification::where('user_id', $customer->id)->where('type', 'order_status')->first();
+        $this->assertNotNull($notif);
+        $this->assertEquals('Pesanan Berhasil Dibuat', $notif->title);
+        $this->assertStringContainsString('telah berhasil dibuat dan sedang menunggu konfirmasi gerai', $notif->content);
+        $this->assertStringNotContainsString('from "created" to "created"', $notif->content);
+
+        $builtMessage = WhatsAppService::buildMessage($notif);
+        $this->assertStringContainsString('*LaundryKu - Update Pesanan*', $builtMessage);
+        $this->assertStringContainsString('*No. Pesanan*: ORD-TEST-WA-001', $builtMessage);
+        $this->assertStringContainsString('*Gerai*: Berkah Laundry', $builtMessage);
+        $this->assertStringContainsString('*Status*: Pesanan Berhasil Dibuat', $builtMessage);
+        $this->assertStringContainsString('*Lihat Detail Pesanan:*', $builtMessage);
+        $this->assertStringContainsString('http://localhost:3000/orders/' . $order->id, $builtMessage);
+    }
 }

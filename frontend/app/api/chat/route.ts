@@ -3,6 +3,7 @@ import {
   LARAVEL_API_BASE_URL,
   PORTAL_COOKIE_NAMES,
   detectPortalFromRequest,
+  validateCsrfOrigin,
 } from '@/lib/bff';
 
 export const SYSTEM_PROMPT = `Kamu adalah AI Assistant resmi untuk marketplace laundry LaundryKu. Jawab langsung pertanyaan pengguna secara ringkas, jelas, dan santun.`;
@@ -18,6 +19,13 @@ export function normalizeUserQuery(text: string): string {
  * Tanpa template penolakan di lapisan BFF.
  */
 export async function POST(req: NextRequest) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json(
+      { success: false, error: { code: 'CSRF_FAILED', message: 'Validasi asal request (CSRF) gagal.' } },
+      { status: 403 }
+    );
+  }
+
   try {
     let body: any = {};
     try {

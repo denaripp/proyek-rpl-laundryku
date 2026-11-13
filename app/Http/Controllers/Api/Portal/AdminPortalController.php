@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiUsageLog;
 use App\Models\AuditLog;
 use App\Models\CommissionSetting;
 use App\Models\Order;
@@ -11,11 +12,14 @@ use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Store;
 use App\Models\User;
+use App\Services\Ai\AiAssistantService;
 use App\Services\StoreService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class AdminPortalController extends Controller
@@ -671,15 +675,42 @@ class AdminPortalController extends Controller
 
     public function updateUserStatus(Request $request, $id): JsonResponse
     {
+        $actor = $request->user();
+        if (!$actor || (!$actor->hasPermissionTo('manage_users') && !$actor->hasRole('platform_owner') && !$actor->hasRole('super_admin'))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden: Hak akses tidak memadai untuk mengubah status pengguna.',
+            ], 403);
+        }
+
         $request->validate([
             'status' => 'required|in:active,suspended,banned',
             'reason' => 'nullable|string',
         ]);
 
         $user = User::findOrFail($id);
+
+        if (($user->hasRole('platform_owner') || $user->hasRole('super_admin')) && !$actor->hasRole('platform_owner')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden: Hanya Platform Owner yang dapat mengubah status akun administrator.',
+            ], 403);
+        }
+
         $status = $request->input('status');
         $user->is_active = ($status === 'active');
         $user->save();
+
+        if (! $user->is_active) {
+            $user->tokens()->delete();
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('sessions')) {
+                    \Illuminate\Support\Facades\DB::table('sessions')->where('user_id', $user->id)->delete();
+                }
+            } catch (\Throwable $e) {
+                // Session driver may be array/file/redis
+            }
+        }
 
         AuditLog::create([
             'actor_id' => $request->user()->id,
@@ -910,6 +941,10 @@ class AdminPortalController extends Controller
 
     public function getCommission(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (!$user || (!$user->hasPermissionTo('view_commission') && !$user->hasRole('platform_owner') && !$user->hasRole('super_admin'))) {
+            return response()->json(['success' => false, 'message' => 'Forbidden: Akses hanya untuk Platform Owner.'], 403);
+        }
         $rate = (float) Setting::get('platform_commission_rate', 10);
         $updatedAt = Setting::where('key', 'platform_commission_rate')->value('updated_at');
 
@@ -924,8 +959,28 @@ class AdminPortalController extends Controller
         ]);
     }
 
+        protected function isPlatformOwner(?\App\Models\User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasRole('platform_owner') || $user->hasPermissionTo('manage_platform')) {
+            return true;
+        }
+
+        if ($user->hasRole('platform_admin')) {
+            return false;
+        }
+
+        return $user->role === \App\Models\User::ROLE_SUPER_ADMIN;
+    }
     public function updateCommission(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (! $this->isPlatformOwner($user)) {
+            return response()->json(['success' => false, 'message' => 'Forbidden: Akses hanya untuk Platform Owner.'], 403);
+        }
         $request->validate([
             'amount' => 'required|numeric|min:0|max:100',
             'description' => 'nullable|string',
@@ -965,6 +1020,10 @@ class AdminPortalController extends Controller
 
     public function auditLogs(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (!$user || (!$user->hasPermissionTo('view_audit_logs') && !$user->hasRole('platform_owner') && !$user->hasRole('super_admin'))) {
+            return response()->json(['success' => false, 'message' => 'Forbidden: Akses audit log dibatasi.'], 403);
+        }
         $query = AuditLog::with('actor:id,name,email');
 
         if ($request->filled('action')) {
@@ -1046,5 +1105,317 @@ class AdminPortalController extends Controller
         // Kolom created_at pada audit_logs menggunakan MySQL DEFAULT CURRENT_TIMESTAMP (waktu sistem WIB).
         // Kita parse dengan timezone Asia/Jakarta (+07:00) agar tepat dan tidak bergeser +7 jam di browser.
         return Carbon::parse($raw, 'Asia/Jakarta')->toIso8601String();
+    }
+// =========================================================================
+    // 8. AI ASSISTANT CONFIGURATION & MODEL SWITCHER
+    // =========================================================================
+
+    /**
+     * GET /api/v1/admin/ai-settings
+     */
+    public function getAiSettings(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (!$user->hasPermissionTo('view_ai_usage') && !$user->hasPermissionTo('manage_platform') && !$user->hasRole('platform_owner') && !$user->hasRole('super_admin'))) {
+            return response()->json(['success' => false, 'message' => 'Forbidden: Akses pengaturan AI dibatasi.'], 403);
+        }
+        $aiService = app(AiAssistantService::class);
+        $activeModel = $aiService->getActiveModel();
+        $temperature = $aiService->getTemperature();
+        $maxToolRounds = $aiService->getMaxToolRounds();
+
+        $setting = Setting::with('updatedByUser:id,name,email')->where('key', 'AI_MODEL')->first();
+        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+
+        $presets = [
+            // --- Kategori Gratis (Free Tier OpenRouter - Saldo $0) ---
+            [
+                'id' => 'google/gemini-2.0-flash-exp:free',
+                'name' => 'Google Gemini 2.0 Flash (Free)',
+                'provider' => 'Google',
+                'category' => 'free',
+                'badge' => 'Rekomendasi Gratis',
+                'description' => 'Model multimodal super cepat & cerdas dari Google tanpa biaya token.',
+                'cost_estimate' => 'Rp 0 / Free Tier',
+                'is_free' => true,
+            ],
+            [
+                'id' => 'meta-llama/llama-3.3-70b-instruct:free',
+                'name' => 'Meta Llama 3.3 70B (Free)',
+                'provider' => 'Meta',
+                'category' => 'free',
+                'badge' => 'Open Source Gratis',
+                'description' => 'Model 70B parameter open-source kelas atas dengan penalaran matang.',
+                'cost_estimate' => 'Rp 0 / Free Tier',
+                'is_free' => true,
+            ],
+            [
+                'id' => 'deepseek/deepseek-r1:free',
+                'name' => 'DeepSeek R1 (Free Reasoning)',
+                'provider' => 'DeepSeek',
+                'category' => 'free',
+                'badge' => 'Penalaran Gratis',
+                'description' => 'Model reasoning open-weights dengan penalaran langkah demi langkah.',
+                'cost_estimate' => 'Rp 0 / Free Tier',
+                'is_free' => true,
+            ],
+            [
+                'id' => 'liquid/lfm-2.5-2.6b:free',
+                'name' => 'Liquid LFM 2.5 2.6B (Free)',
+                'provider' => 'Liquid',
+                'category' => 'free',
+                'badge' => 'Gratis Ringan',
+                'description' => 'Model arsitektur LFM sangat ringan, ideal untuk pengujian dev/staging.',
+                'cost_estimate' => 'Rp 0 / Free Tier',
+                'is_free' => true,
+            ],
+
+            // --- Kategori Berbayar (Commercial Tier - Butuh Saldo OpenRouter) ---
+            [
+                'id' => 'google/gemini-2.5-flash',
+                'name' => 'Google Gemini 2.5 Flash',
+                'provider' => 'Google',
+                'category' => 'paid',
+                'badge' => 'Rekomendasi Utama',
+                'description' => 'Sangat cepat, akurasi penalaran & pemanggilan tools optimal dengan latensi rendah.',
+                'cost_estimate' => '~$0.075 / 1M token (Sangat Murah)',
+                'is_free' => false,
+            ],
+            [
+                'id' => 'openai/gpt-4o-mini',
+                'name' => 'OpenAI GPT-4o Mini',
+                'provider' => 'OpenAI',
+                'category' => 'paid',
+                'badge' => 'Standar Industri',
+                'description' => 'Model hemat biaya OpenAI dengan kepatuhan format JSON dan tool-calling handal.',
+                'cost_estimate' => '~$0.15 / 1M token (Hemat)',
+                'is_free' => false,
+            ],
+            [
+                'id' => 'deepseek/deepseek-chat',
+                'name' => 'DeepSeek V3 (Chat)',
+                'provider' => 'DeepSeek',
+                'category' => 'paid',
+                'badge' => 'Ekonomis & Handal',
+                'description' => 'Model serbaguna performa tinggi dengan rasio efisiensi biaya luar biasa.',
+                'cost_estimate' => '~$0.14 / 1M token (Murah)',
+                'is_free' => false,
+            ],
+            [
+                'id' => 'anthropic/claude-3.5-haiku',
+                'name' => 'Anthropic Claude 3.5 Haiku',
+                'provider' => 'Anthropic',
+                'category' => 'paid',
+                'badge' => 'Cepat & Cerdas',
+                'description' => 'Model generasi kilat Anthropic dengan pemahaman konteks & keandalan tinggi.',
+                'cost_estimate' => '~$0.80 / 1M token (Premium)',
+                'is_free' => false,
+            ],
+        ];
+
+        $catalog = $this->fetchOpenRouterCatalog();
+        $presets = array_map(function (array $preset) use ($catalog): array {
+            $preset['available_on_openrouter'] = $catalog !== [] ? isset($catalog[$preset['id']]) : null;
+            return $preset;
+        }, $presets);
+
+        $presetIds = array_flip(array_column($presets, 'id'));
+        $liveFreeModels = array_values(array_filter(
+            $catalog,
+            fn (array $m): bool => !empty($m['is_free']) && !isset($presetIds[$m['id']])
+        ));
+        usort($liveFreeModels, function (array $a, array $b): int {
+            return (($b['supports_tools'] ?? false) <=> ($a['supports_tools'] ?? false))
+                ?: strcmp((string) $a['name'], (string) $b['name']);
+        });
+
+        $recentUsage = AiUsageLog::latest('id')
+            ->limit(10)
+            ->get(['id', 'model', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'status', 'flags', 'created_at'])
+            ->map(fn (AiUsageLog $log): array => [
+                'id' => (string) $log->id,
+                'model' => $log->model,
+                'resolved_model' => is_array($log->flags) ? ($log->flags['resolved_model'] ?? null) : null,
+                'status' => $log->status,
+                'prompt_tokens' => (int) $log->prompt_tokens,
+                'completion_tokens' => (int) $log->completion_tokens,
+                'total_tokens' => (int) $log->total_tokens,
+                'error' => is_array($log->flags) ? ($log->flags['provider_error'] ?? null) : null,
+                'created_at' => $log->created_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
+        $isCustom = !in_array($activeModel, array_column($presets, 'id'), true);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'active_model' => $activeModel,
+                'temperature' => $temperature,
+                'max_tool_rounds' => $maxToolRounds,
+                'is_custom_model' => $isCustom,
+                'presets' => $presets,
+                'live_free_models' => $liveFreeModels,
+                'recent_usage' => $recentUsage,
+                'provider' => 'OpenRouter (OpenAI-compatible)',
+                'api_key_configured' => !empty($apiKey),
+                'updated_at' => $setting?->updated_at?->toIso8601String(),
+                'updated_by' => $setting?->updatedByUser ? [
+                    'id' => (string) $setting->updatedByUser->id,
+                    'name' => $setting->updatedByUser->name,
+                    'email' => $setting->updatedByUser->email,
+                ] : null,
+            ],
+        ]);
+    }
+
+    /**
+     * Fetch OpenRouter public model catalog (cached 1h; tests read cache only to stay offline-safe).
+     *
+     * @return array<string, array{id: string, name: string, is_free: bool, supports_tools: bool, context_length: int}>
+     */
+    protected function fetchOpenRouterCatalog(): array
+    {
+        $cacheKey = 'openrouter:models_catalog_v1';
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        if (app()->runningUnitTests()) {
+            return [];
+        }
+
+        try {
+            $response = Http::timeout(4)->acceptJson()->get('https://openrouter.ai/api/v1/models');
+            if (!$response->successful()) {
+                return [];
+            }
+
+            $map = [];
+            foreach ((array) $response->json('data', []) as $m) {
+                $id = (string) ($m['id'] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+                $prompt = (float) ($m['pricing']['prompt'] ?? 1);
+                $completion = (float) ($m['pricing']['completion'] ?? 1);
+                $map[$id] = [
+                    'id' => $id,
+                    'name' => (string) ($m['name'] ?? $id),
+                    'is_free' => str_ends_with($id, ':free') || ($prompt === 0.0 && $completion === 0.0 && $id !== 'openrouter/auto'),
+                    'supports_tools' => in_array('tools', (array) ($m['supported_parameters'] ?? []), true),
+                    'context_length' => (int) ($m['context_length'] ?? 0),
+                ];
+            }
+
+            if ($map !== []) {
+                Cache::put($cacheKey, $map, 3600);
+            }
+
+            return $map;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * PUT /api/v1/admin/ai-settings
+     */
+    public function updateAiSettings(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $this->isPlatformOwner($user)) {
+            return response()->json(['success' => false, 'message' => 'Forbidden: Hanya Platform Owner yang dapat mengubah pengaturan AI.'], 403);
+        }
+        $request->validate([
+            'model' => 'required|string|min:3|max:120',
+            'temperature' => 'nullable|numeric|min:0|max:1',
+            'max_tool_rounds' => 'nullable|integer|min:1|max:10',
+        ]);
+
+        $aiService = app(AiAssistantService::class);
+        $oldModel = $aiService->getActiveModel();
+        $oldTemp = $aiService->getTemperature();
+        $oldRounds = $aiService->getMaxToolRounds();
+
+        $newModel = trim($request->input('model'));
+        $newTemp = $request->has('temperature') ? (float) $request->input('temperature') : $oldTemp;
+        $newRounds = $request->has('max_tool_rounds') ? (int) $request->input('max_tool_rounds') : $oldRounds;
+
+        $userId = $request->user()?->id;
+
+        Setting::set('AI_MODEL', $newModel, 'string', 'ai', 'Model LLM aktif chatbot LaundryKu', $userId);
+        if ($request->has('temperature')) {
+            Setting::set('AI_TEMPERATURE', $newTemp, 'float', 'ai', 'Temperatur kreativitas model LLM', $userId);
+        }
+        if ($request->has('max_tool_rounds')) {
+            Setting::set('AI_MAX_TOOL_ROUNDS', $newRounds, 'integer', 'ai', 'Batas maksimal putaran tool calling AI', $userId);
+        }
+
+        $settingRecord = Setting::where('key', 'AI_MODEL')->first();
+
+        AuditLog::create([
+            'actor_id' => $userId,
+            'actor_role' => $request->user()?->role,
+            'action' => 'UPDATE_AI_MODEL',
+            'resource_type' => 'setting',
+            'resource_id' => $settingRecord?->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'before_value' => json_encode([
+                'model' => $oldModel,
+                'temperature' => $oldTemp,
+                'max_tool_rounds' => $oldRounds,
+            ], JSON_UNESCAPED_SLASHES),
+            'after_value' => json_encode([
+                'model' => $newModel,
+                'temperature' => $newTemp,
+                'max_tool_rounds' => $newRounds,
+            ], JSON_UNESCAPED_SLASHES),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Model AI berhasil diubah menjadi {$newModel}.",
+            'data' => [
+                'active_model' => $newModel,
+                'temperature' => $newTemp,
+                'max_tool_rounds' => $newRounds,
+                'updated_at' => now()->toIso8601String(),
+                'updated_by' => $request->user() ? [
+                    'id' => (string) $request->user()->id,
+                    'name' => $request->user()->name,
+                    'email' => $request->user()->email,
+                ] : null,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/admin/ai-settings/test
+     */
+    public function testAiModel(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $this->isPlatformOwner($user)) {
+            return response()->json(['success' => false, 'message' => 'Forbidden: Hanya Platform Owner yang dapat menguji model AI.'], 403);
+        }
+        $request->validate([
+            'model' => 'required|string|min:3|max:120',
+        ]);
+
+        $model = trim($request->input('model'));
+        $aiService = app(AiAssistantService::class);
+        $result = $aiService->testModelConnection($model);
+
+        $status = ($result['success'] ?? false) ? 200 : 422;
+
+        return response()->json([
+            'success' => $result['success'] ?? false,
+            'message' => $result['message'] ?? 'Uji koneksi selesai.',
+            'data' => $result,
+        ], $status);
     }
 }

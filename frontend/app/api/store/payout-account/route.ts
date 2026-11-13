@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { payoutAccountSchema } from '@/lib/validations/payoutAccount';
-import { LARAVEL_API_BASE_URL, PORTAL_COOKIE_NAMES } from '@/lib/bff';
+import { LARAVEL_API_BASE_URL, PORTAL_COOKIE_NAMES, validateCsrfOrigin } from '@/lib/bff';
 
 export async function GET(request: NextRequest) {
   const token = request.cookies.get(PORTAL_COOKIE_NAMES.mitra)?.value;
@@ -26,6 +26,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: { code: 'CSRF_FAILED', message: 'Validasi asal request (CSRF) gagal.' } },
+      { status: 403 }
+    );
+  }
+
   const token = request.cookies.get(PORTAL_COOKIE_NAMES.mitra)?.value;
   if (!token) {
     return NextResponse.json({ success: false, message: 'Unauthenticated.' }, { status: 401 });

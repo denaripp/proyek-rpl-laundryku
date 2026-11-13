@@ -264,7 +264,7 @@
                                 <td class="text-end">
                                     <div class="d-inline-flex gap-1">
                                         @if(in_array($s->status, ['submitted', 'resubmitted', 'under_review', 'draft']))
-                                            <form action="{{ route('admin.stores.approve', $s->id) }}" method="POST" onsubmit="return confirm('Approve toko {{ $s->name }}?');">
+                                            <form action="{{ route('admin.stores.approve', $s->id) }}" method="POST" class="d-inline store-action-form" data-action="Approve" data-store-name="{{ $s->name }}">
                                                 @csrf
                                                 <button type="submit" class="btn btn-sm btn-success">
                                                     <i class="bi bi-check-lg me-1"></i>Approve
@@ -330,7 +330,7 @@
                                                 </div>
                                             </div>
                                         @else
-                                            <form action="{{ route('admin.stores.reactivate', $s->id) }}" method="POST" onsubmit="return confirm('Aktifkan kembali toko {{ $s->name }}?');">
+                                            <form action="{{ route('admin.stores.reactivate', $s->id) }}" method="POST" class="d-inline store-action-form" data-action="Aktifkan kembali" data-store-name="{{ $s->name }}">
                                                 @csrf
                                                 <button type="submit" class="btn btn-sm btn-outline-success">
                                                     <i class="bi bi-arrow-counterclockwise me-1"></i>Aktifkan
@@ -802,3 +802,19 @@
         </div>
     @endif
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form.store-action-form').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                const action = form.getAttribute('data-action') || 'Proses';
+                const storeName = form.getAttribute('data-store-name') || 'toko';
+                if (!confirm(action + ' toko ' + storeName + '?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    });
+</script>
+@endpush

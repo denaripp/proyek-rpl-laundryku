@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 680" width="1040" height="680" style="background:#FFFFFF;font-family:'Plus Jakarta Sans','Segoe UI',Arial,sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0E7490"/>
+    </marker>
+    <marker id="open-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#0B192C" stroke-width="1.5"/>
+    </marker>
+    <marker id="impl-triangle" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.6"/>
+    </marker>
+    <marker id="diamond-comp" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="diamond-agg" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#FFFFFF" stroke="#0B192C" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-many" viewBox="0 0 14 12" refX="12" refY="6" markerWidth="11" markerHeight="10" orient="auto">
+      <path d="M 1 6 L 12 1 M 1 6 L 12 6 M 1 6 L 12 11 M 1 2 L 1 10" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-one" viewBox="0 0 10 12" refX="6" refY="6" markerWidth="8" markerHeight="10" orient="auto">
+      <path d="M 4 1 L 4 11 M 8 1 L 8 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-zero-one" viewBox="0 0 16 12" refX="12" refY="6" markerWidth="12" markerHeight="10" orient="auto">
+      <circle cx="4" cy="6" r="3" fill="#FFFFFF" stroke="#334155" stroke-width="1.3"/>
+      <path d="M 10 1 L 10 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    
+  </defs>
+  <rect x="0" y="0" width="205" height="680" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/><rect x="0" y="0" width="205" height="34" fill="#0B192C"/><text x="102.5" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Customer</text><rect x="205" y="0" width="235" height="680" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/><rect x="205" y="0" width="235" height="34" fill="#0B192C"/><text x="322.5" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Next.js BFF &amp; Laravel API</text><rect x="440" y="0" width="195" height="680" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/><rect x="440" y="0" width="195" height="34" fill="#0B192C"/><text x="537.5" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Kurir</text><rect x="635" y="0" width="215" height="680" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/><rect x="635" y="0" width="215" height="34" fill="#0B192C"/><text x="742.5" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Mitra Toko</text><rect x="850" y="0" width="190" height="680" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/><rect x="850" y="0" width="190" height="34" fill="#0B192C"/><text x="945" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Xendit Gateway</text><circle cx="102" cy="58" r="9" fill="#0B192C"/><rect x="19.5" y="83" width="165" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="102" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">1. Pilih Toko &amp; Layanan</text>
+      <text x="102" y="113" text-anchor="middle" font-size="9" fill="#475569">Isi estimasi berat &amp; alamat</text><path d="M102,67 L102,83" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="224.5" y="81" width="195" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="322" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">2. OrderService::createOrder</text>
+      <text x="322" y="113" text-anchor="middle" font-size="9" fill="#475569">DB::transaction -&gt; status: created</text><path d="M185,102 L224,102" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="454.5" y="81" width="165" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="537" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">3. Klaim Tugas &amp; Pickup</text>
+      <text x="537" y="113" text-anchor="middle" font-size="9" fill="#475569">accepted -&gt; arrived -&gt; picked_up</text><path d="M420,102 L454,102" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="652" y="154" width="180" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="742" y="172" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">4. Terima &amp; Timbang Riil</text>
+      <text x="742" y="186" text-anchor="middle" font-size="9" fill="#475569">setActualWeight(order, kg)</text><path d="M537,123 L537,175 L652,175" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><polygon points="322,211 364,235 322,259 280,235" fill="#FFFBEB" stroke="#D97706" stroke-width="1.7"/>
+      <text x="322" y="233" text-anchor="middle" font-size="9" font-weight="700" fill="#92400E">Selisih Harga</text>
+      <text x="322" y="245" text-anchor="middle" font-size="8.5" fill="#92400E">&gt; Ambang?</text><path d="M742,196 L742,235 L376,235" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="19.5" y="216" width="165" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="102" y="232" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">5. Konfirmasi Pelanggan</text>
+      <text x="102" y="246" text-anchor="middle" font-size="9" fill="#475569">Approve perubahan harga</text><path d="M268,235 L185,235" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="200" y="217" width="52" height="14" rx="3" fill="#FFFFFF"/><text x="226" y="227" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Ya</text><rect x="227" y="296" width="190" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="322" y="312" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">6. Tagihan Siap Dibayar</text>
+      <text x="322" y="326" text-anchor="middle" font-size="9" fill="#475569">status: payment_required</text><path d="M102,254 L102,315 L227,315" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="124" y="296" width="52" height="14" rx="3" fill="#FFFFFF"/><text x="150" y="306" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Setuju</text><path d="M322,259 L322,296" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="319" y="267" width="52" height="14" rx="3" fill="#FFFFFF"/><text x="345" y="277" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Tidak</text><polygon points="322,366 364,390 322,414 280,390" fill="#FFFBEB" stroke="#D97706" stroke-width="1.7"/>
+      <text x="322" y="388" text-anchor="middle" font-size="9" font-weight="700" fill="#92400E">Metode</text>
+      <text x="322" y="400" text-anchor="middle" font-size="8.5" fill="#92400E">Pembayaran?</text><path d="M322,334 L322,366" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="862.5" y="369" width="165" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="945" y="387" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">7a. Buat QRIS / Invoice</text>
+      <text x="945" y="401" text-anchor="middle" font-size="9" fill="#475569">Xendit REST API -&gt; QR / URL</text><path d="M376,390 L862,390" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="594" y="371" width="52" height="14" rx="3" fill="#FFFFFF"/><text x="620" y="381" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Online</text><rect x="862.5" y="444" width="165" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="945" y="462" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">8a. Callback Webhook</text>
+      <text x="945" y="476" text-anchor="middle" font-size="9" fill="#475569">x-callback-token + Event ID</text><path d="M945,411 L945,444" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="454.5" y="444" width="165" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="537" y="462" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">7b. Konfirmasi Tunai COD</text>
+      <text x="537" y="476" text-anchor="middle" font-size="9" fill="#475569">verifyCodPayment &lt;= Rp500rb</text><path d="M322,414 L322,465 L454,465" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="359" y="446" width="52" height="14" rx="3" fill="#FFFFFF"/><text x="385" y="456" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">COD</text><rect x="652" y="500" width="180" height="40" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="742" y="517" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">9. Status Paid &amp; Proses Cuci</text>
+      <text x="742" y="531" text-anchor="middle" font-size="9" fill="#475569">processing -&gt; ready_for_delivery</text><path d="M862,465 L742,465 L742,500" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><path d="M537,486 L537,520 L652,520" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="454.5" y="566" width="165" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="537" y="582" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">10. Pengantaran Akhir</text>
+      <text x="537" y="596" text-anchor="middle" font-size="9" fill="#475569">out_for_delivery -&gt; delivered</text><path d="M742,540 L742,585 L620,585" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="19.5" y="566" width="165" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="102" y="582" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">11. Pesanan Selesai</text>
+      <text x="102" y="596" text-anchor="middle" font-size="9" fill="#475569">completed + Ulasan / Komplain</text><path d="M454,585 L185,585" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="222" y="626" width="200" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+      <text x="322" y="642" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">12. SettlementService</text>
+      <text x="322" y="656" text-anchor="middle" font-size="9" fill="#475569">Hitung komisi &amp; payout mingguan</text><path d="M102,604 L102,645 L222,645" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><circle cx="485" cy="645" r="11" fill="none" stroke="#0B192C" stroke-width="2"/><circle cx="485" cy="645" r="6" fill="#0B192C"/><path d="M422,645 L474,645" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/>
+</svg>

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Courier;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
@@ -171,8 +172,8 @@ class StoreDashboardAndChatbotComparisonTest extends TestCase
             'total_amount' => 55000,
         ]);
 
-        // 4. Completed Today (3 orders completed today, total amount = 120.000)
-        Order::factory()->create([
+        // 4. Completed Today (3 orders completed today, total amount = 120.000, with paid payments)
+        $o1 = Order::factory()->create([
             'store_id' => $this->storeA->id,
             'customer_id' => $this->customer->id,
             'order_number' => 'ORD-A-DONE-01',
@@ -180,7 +181,15 @@ class StoreDashboardAndChatbotComparisonTest extends TestCase
             'total_amount' => 40000,
             'completed_at' => now()->startOfDay()->addHours(9),
         ]);
-        Order::factory()->create([
+        Payment::create([
+            'order_id' => $o1->id,
+            'payment_method' => 'online',
+            'amount' => 40000,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $o2 = Order::factory()->create([
             'store_id' => $this->storeA->id,
             'customer_id' => $this->customer->id,
             'order_number' => 'ORD-A-DONE-02',
@@ -188,7 +197,15 @@ class StoreDashboardAndChatbotComparisonTest extends TestCase
             'total_amount' => 40000,
             'completed_at' => now()->startOfDay()->addHours(10),
         ]);
-        Order::factory()->create([
+        Payment::create([
+            'order_id' => $o2->id,
+            'payment_method' => 'online',
+            'amount' => 40000,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $o3 = Order::factory()->create([
             'store_id' => $this->storeA->id,
             'customer_id' => $this->customer->id,
             'order_number' => 'ORD-A-DONE-03',
@@ -196,15 +213,29 @@ class StoreDashboardAndChatbotComparisonTest extends TestCase
             'total_amount' => 40000,
             'completed_at' => now()->startOfDay()->addHours(11),
         ]);
+        Payment::create([
+            'order_id' => $o3->id,
+            'payment_method' => 'online',
+            'amount' => 40000,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
 
         // Seed Orders for Store B (must never leak to Store A):
-        Order::factory()->create([
+        $oB = Order::factory()->create([
             'store_id' => $this->storeB->id,
             'customer_id' => $this->customer->id,
             'order_number' => 'ORD-B-SECRET-99',
             'status' => 'completed',
             'total_amount' => 999999,
             'completed_at' => now(),
+        ]);
+        Payment::create([
+            'order_id' => $oB->id,
+            'payment_method' => 'online',
+            'amount' => 999999,
+            'status' => 'paid',
+            'paid_at' => now(),
         ]);
     }
 

@@ -25,7 +25,25 @@ class EnsureUserRole
             abort(401, 'Unauthenticated.');
         }
 
-        // Direct real-time check against database users.role column or user_roles table
+        if (! $user->is_active) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Akun Anda dinonaktifkan.'], 403);
+            }
+            abort(403, 'Akun Anda dinonaktifkan.');
+        }
+
+        // Block provisional 2FA tokens from role-protected endpoints
+        if ($user->currentAccessToken() && method_exists($user->currentAccessToken(), 'can') && $user->currentAccessToken()->can('2fa-pending')) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'message' => 'Selesaikan verifikasi 2FA terlebih dahulu sebelum mengakses endpoint ini.',
+                    'requires_2fa' => true,
+                ], 403);
+            }
+            abort(403, 'Selesaikan verifikasi 2FA terlebih dahulu.');
+        }
+
+        // Direct real-time check against database users.role column or active user_roles table
         $dbRole = \Illuminate\Support\Facades\DB::table('users')
             ->where('id', $user->id)
             ->value('role');
@@ -36,6 +54,7 @@ class EnsureUserRole
             $hasRole = \Illuminate\Support\Facades\DB::table('user_roles')
                 ->join('roles', 'user_roles.role_id', '=', 'roles.id')
                 ->where('user_roles.user_id', $user->id)
+                ->where('user_roles.status', 'active')
                 ->whereIn('roles.name', $roles)
                 ->exists();
         }

@@ -501,6 +501,14 @@ class OrderController extends Controller
     {
         Gate::forUser($request->user())->authorize('update', $order);
 
+        // Cannot update weight on completed, delivered, or cancelled orders
+        if (in_array(strtolower((string) $order->status), [OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value, OrderStatus::CANCELLED->value], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Berat aktual tidak dapat diubah pada pesanan yang sudah selesai atau dibatalkan.',
+            ], 422);
+        }
+
         $updated = $this->orderService->setActualWeight(
             $order,
             (float) $request->input('weight'),

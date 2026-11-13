@@ -27,13 +27,17 @@ class StorePolicy
             return true;
         }
 
-        // Customer/marketplace browsing is open to any authenticated user
-        // (search/detail endpoints are public-ish).
-        if ($user->hasPermissionTo('view_store')) {
+        // Store staff/owner can view their store regardless of status
+        if ($this->userHasStoreAccess($user, $store)) {
             return true;
         }
 
-        return $this->userHasStoreAccess($user, $store);
+        // Customer with view_store permission can view approved and active stores
+        if ($user->hasPermissionTo('view_store')) {
+            return $store->status === 'approved' && $store->is_active;
+        }
+
+        return false;
     }
 
     /**
@@ -97,7 +101,7 @@ class StorePolicy
         }
 
         // Otherwise, users with at least one store access can see their own.
-        return $user->ownedStores()->exists() || $user->storeStaff()->exists();
+        return $user->ownedStores()->exists() || $user->storeStaff()->where('is_active', true)->exists();
     }
 
     /**

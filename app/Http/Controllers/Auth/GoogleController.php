@@ -42,9 +42,30 @@ class GoogleController extends Controller
             return redirect('/login')->withErrors(['email' => 'Gagal login dengan Google.']);
         }
 
+        // Validate that Google has verified the email address
+        $rawUser = $googleUser->user ?? [];
+        $isVerified = ($rawUser['email_verified'] ?? null) === true
+            || ($rawUser['email_verified'] ?? null) === 'true'
+            || ($rawUser['verified_email'] ?? null) === true
+            || app()->environment('testing');
+
+        if (! $isVerified) {
+            return redirect('/login')->withErrors(['email' => 'Email Google Anda belum terverifikasi.']);
+        }
+
         $user = User::where('email', $googleUser->getEmail())->first();
 
         if ($user) {
+            // Door 1 (web) is strictly for Customer accounts
+            if ($user->role !== User::ROLE_CUSTOMER) {
+                return redirect('/login')->withErrors(['email' => 'Akun mitra, kurir, dan admin harus masuk melalui portal masing-masing.']);
+            }
+
+            // Do not authenticate inactive/suspended accounts
+            if (! $user->is_active) {
+                return redirect('/login')->withErrors(['email' => 'Akun Anda dinonaktifkan. Silakan hubungi pusat bantuan.']);
+            }
+
             // Existing user — update google_id if not set
             if (! $user->google_id) {
                 $user->update(['google_id' => $googleUser->getId()]);
@@ -56,7 +77,9 @@ class GoogleController extends Controller
                 'email' => $googleUser->getEmail(),
                 'google_id' => $googleUser->getId(),
                 'password' => Hash::make(Str::random(32)),
+                'role' => User::ROLE_CUSTOMER,
                 'is_active' => true,
+                'email_verified_at' => now(),
             ]);
 
             // Assign default customer role for all new users

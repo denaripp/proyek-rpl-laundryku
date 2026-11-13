@@ -85,7 +85,7 @@ class WhatsAppService
 
     /**
      * Build clean plain-text WhatsApp notification without emoji or promotional text.
-     * Contains: nomor pesanan, status, nama toko, link.
+     * Contains: nomor pesanan, status, nama gerai, keterangan, dan link.
      */
     public static function buildMessage(Notification $notification): string
     {
@@ -94,30 +94,53 @@ class WhatsAppService
         $order = $orderId ? Order::with('store')->find($orderId) : null;
         $baseUrl = rtrim(config('app.url', 'http://localhost:3000'), '/');
 
+        // Bersihkan keterangan dari URL duplikat di akhir teks bila sudah ada
+        $rawContent = $notification->content ?? '';
+        $cleanContent = preg_replace('/\s*(Cek pesanan:?\s*http\S+|Silakan proses pesanan di portal toko:?\s*http\S+)/i', '', $rawContent);
+        $cleanContent = trim($cleanContent);
+
         $lines = [];
 
         if ($order) {
-            $lines[] = 'Pesanan: ' . $order->order_number;
+            $lines[] = '*LaundryKu - Update Pesanan*';
+            $lines[] = '';
+            $lines[] = '*No. Pesanan*: ' . $order->order_number;
             if ($order->store?->name) {
-                $lines[] = 'Toko: ' . $order->store->name;
+                $lines[] = '*Gerai*: ' . $order->store->name;
             }
-            $lines[] = 'Status: ' . ($notification->title ?: $order->status);
-            if ($notification->content) {
-                $lines[] = 'Keterangan: ' . $notification->content;
+            $statusText = $notification->title ?: ($order->status ?? 'Dalam Proses');
+            $lines[] = '*Status*: ' . $statusText;
+            if ($cleanContent) {
+                $lines[] = '*Keterangan*: ' . $cleanContent;
             }
-            $lines[] = 'Link: ' . $baseUrl . '/orders/' . $order->id;
+            $lines[] = '';
+
+            // Tentukan link target: mitra toko ke portal toko, pelanggan ke pelacakan pesanan
+            $isStoreUser = str_contains($notification->type ?? '', 'store')
+                || in_array($notification->user?->role ?? '', ['store_admin', 'store_owner'], true);
+
+            $lines[] = '*Lihat Detail Pesanan:*';
+            if ($isStoreUser) {
+                $lines[] = $baseUrl . '/store/orders/' . $order->id;
+            } else {
+                $lines[] = $baseUrl . '/orders/' . $order->id;
+            }
         } else {
-            $lines[] = $notification->title;
-            if ($notification->content) {
-                $lines[] = 'Keterangan: ' . $notification->content;
+            $title = $notification->title ?: 'Notifikasi LaundryKu';
+            $lines[] = "*LaundryKu - {$title}*";
+            $lines[] = '';
+            if ($cleanContent) {
+                $lines[] = '*Keterangan*: ' . $cleanContent;
             }
             if (!empty($data['store_id'])) {
                 $store = Store::find($data['store_id']);
                 if ($store?->name) {
-                    $lines[] = 'Toko: ' . $store->name;
+                    $lines[] = '*Gerai*: ' . $store->name;
                 }
             }
-            $lines[] = 'Link: ' . $baseUrl;
+            $lines[] = '';
+            $lines[] = '*Buka LaundryKu:*';
+            $lines[] = $baseUrl;
         }
 
         return implode("\n", $lines);

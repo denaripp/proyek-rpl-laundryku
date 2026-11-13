@@ -113,19 +113,24 @@ class CourierPortalAuthorizationTest extends TestCase
     }
 
     /**
-     * Test: User dengan token customer yang role-nya telah menjadi kurir dapat memanggil endpoint kurir.
+     * Test: User dengan token customer ditolak mengakses portal kurir (harus token role:courier).
      */
     public function test_token_customer_lama_dapat_mengakses_portal_kurir_setelah_role_kurir_aktif(): void
     {
-        // Token awalnya memiliki ability 'role:customer'
+        // Token customer harus ditolak 403 karena tidak memiliki ability role:courier
         Sanctum::actingAs($this->courierUser, ['role:customer']);
 
         $res = $this->getJson('/api/v1/courier/tasks?tab=available');
-        $res->assertStatus(200);
+        $res->assertStatus(403);
 
         $profileRes = $this->getJson('/api/v1/courier/profile');
-        $profileRes->assertStatus(200);
-        $profileRes->assertJsonPath('data.name', 'Arieef Kurir Tangguh');
+        $profileRes->assertStatus(403);
+
+        // Setelah login dengan token role:courier, baru diizinkan (200)
+        Sanctum::actingAs($this->courierUser, ['role:courier']);
+        $validRes = $this->getJson('/api/v1/courier/profile');
+        $validRes->assertStatus(200);
+        $validRes->assertJsonPath('data.name', 'Arieef Kurir Tangguh');
     }
 
     /**
@@ -326,5 +331,62 @@ class CourierPortalAuthorizationTest extends TestCase
 
         $res->assertStatus(422);
         $res->assertJsonPath('success', false);
+    }
+
+    /**
+     * Test: Profil kurir mengembalikan statistik tugas aktif dan riwayat selesai yang konsisten.
+     */
+    public function test_profil_kurir_mengembalikan_statistik_tugas_konsisten_dengan_order(): void
+    {
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        // Buat 1 order aktif ditugaskan ke kurir
+        $orderActive = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'courier_id' => $this->courierUser->id,
+            'status' => 'pickup_assigned',
+        ]);
+        CourierTask::create([
+            'order_id' => $orderActive->id,
+            'courier_id' => $this->courier->id,
+            'task_type' => 'pickup',
+            'status' => 'assigned',
+            'assigned_at' => now(),
+        ]);
+
+        // Buat 1 order selesai
+        $orderCompleted = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'courier_id' => $this->courierUser->id,
+            'status' => 'completed',
+        ]);
+        CourierTask::create([
+            'order_id' => $orderCompleted->id,
+            'courier_id' => $this->courier->id,
+            'task_type' => 'delivery',
+            'status' => 'delivered',
+            'assigned_at' => now()->subDay(),
+            'delivered_at' => now()->subHours(2),
+        ]);
+
+        Sanctum::actingAs($this->courierUser, ['role:courier']);
+
+        // Check profile stats
+        $resProfile = $this->getJson('/api/v1/courier/profile');
+        $resProfile->assertStatus(200);
+        $resProfile->assertJsonPath('data.stats.active_tasks', 1);
+        $resProfile->assertJsonPath('data.stats.completed_tasks', 1);
+
+        // Check active tasks
+        $resActive = $this->getJson('/api/v1/courier/tasks?tab=active');
+        $resActive->assertStatus(200);
+        $resActive->assertJsonCount(1, 'data');
+
+        // Check completed tasks
+        $resCompleted = $this->getJson('/api/v1/courier/tasks?tab=completed');
+        $resCompleted->assertStatus(200);
+        $resCompleted->assertJsonCount(1, 'data');
     }
 }

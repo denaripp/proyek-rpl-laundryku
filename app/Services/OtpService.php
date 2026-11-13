@@ -273,20 +273,25 @@ class OtpService
         $challenge->consumed_at = now();
         $challenge->save();
 
-        // Apply pending credentials from verified challenge metadata
-        if (!empty($challenge->metadata['pending_password_hash'])) {
-            $user->password = $challenge->metadata['pending_password_hash'];
-        }
-        if (!empty($challenge->metadata['pending_name'])) {
-            $user->name = $challenge->metadata['pending_name'];
-        }
+        // Apply pending credentials from verified challenge metadata only for unverified customer
+        if ($user->role === \App\Models\User::ROLE_CUSTOMER && is_null($user->email_verified_at) && is_null($user->phone_verified_at)) {
+            if (!empty($challenge->metadata['pending_password_hash'])) {
+                $user->password = $challenge->metadata['pending_password_hash'];
+            }
+            if (!empty($challenge->metadata['pending_name'])) {
+                $user->name = $challenge->metadata['pending_name'];
+            }
 
-        // Activate user
-        $user->is_active = true;
-        if (empty($user->email_verified_at)) {
-            $user->email_verified_at = now();
+            // Activate user
+            $user->is_active = true;
+            if (empty($user->email_verified_at)) {
+                $user->email_verified_at = now();
+            }
+            $user->save();
+        } elseif ($user->role === \App\Models\User::ROLE_CUSTOMER && $user->is_active) {
+            // Already active customer verifying OTP: do not mutate password
+            $user->save();
         }
-        $user->save();
 
         return [
             'success' => true,

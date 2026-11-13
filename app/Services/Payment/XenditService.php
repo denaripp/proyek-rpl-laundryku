@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentEvent;
 use App\Notifications\NotificationTrigger;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -284,128 +285,158 @@ class XenditService
         }
 
         if (!$payment && !empty($externalId) && preg_match('/order[_-](\d+)/', $externalId, $m)) {
-            $payment = Payment::where('order_id', $m[1])->first();
+            $candidate = Payment::where('order_id', $m[1])->latest('id')->first();
+            // Stale invoice protection: do not match payment if candidate already has a different active invoice_id
+            if ($candidate && (empty($candidate->xendit_invoice_id) || $candidate->xendit_invoice_id === $xenditInvoiceId)) {
+                $payment = $candidate;
+            }
         }
 
         if (!$payment) {
             throw new Exception('Payment not found for invoice: ' . ($xenditInvoiceId ?? ($externalId ?? 'unknown')));
         }
 
-        // Jika order sudah paid, return tanpa proses ulang
-        $order = $payment->order;
-        if (($order && ($order->payment_status === 'paid' || $order->status === 'paid')) || $payment->status === 'paid') {
-            return;
-        }
+        DB::transaction(function () use ($payment, $data, $eventType, $xenditInvoiceId) {
+            // Lock payment record to prevent concurrent execution races
+            $lockedPayment = Payment::where('id', $payment->id)->lockForUpdate()->firstOrFail();
 
-        // Idempotency: check if we already processed this webhook event
-        $xenditEventId = $data['event_id'] ?? null;
-        if ($xenditEventId) {
-            $exists = PaymentEvent::where('xendit_event_id', $xenditEventId)
-                ->where('payment_id', $payment->id)
-                ->exists();
-            if ($exists) {
-                Log::info('Duplicate webhook ignored', [
-                    'payment_id' => $payment->id,
-                    'event_id' => $xenditEventId,
-                ]);
+            // Jika order/payment sudah berstatus terminal ('paid', 'refunded', 'cancelled'), return tanpa proses ulang
+            $order = $lockedPayment->order;
+            if (($order && in_array($order->payment_status, ['paid', 'refunded', 'cancelled']))
+                || in_array($lockedPayment->status, ['paid', 'refunded', 'cancelled'])) {
                 return;
             }
-        }
 
-        // Record event
-        PaymentEvent::create([
-            'payment_id' => $payment->id,
-            'event_type' => $eventType,
-            'xendit_event_id' => $xenditEventId,
-            'payload' => $data,
-            'occurred_at' => now(),
-        ]);
+            // Idempotency: deterministic event ID generation to guard null event_id
+            $xenditEventId = $data['event_id'] ?? null;
+            if (!$xenditEventId && !empty($xenditInvoiceId)) {
+                $rawStatus = $data['status'] ?? ($data['data']['status'] ?? 'UNKNOWN');
+                $xenditEventId = 'evt_' . strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $eventType)) . '_' . $xenditInvoiceId . '_' . strtolower((string) $rawStatus);
+            }
 
-        // Update payment status based on Xendit status
-        $rawStatus = $data['status'] ?? ($data['data']['status'] ?? 'PENDING');
-        $xenditStatus = strtoupper((string) $rawStatus);
-        $payment->xendit_webhook_id = $xenditEventId;
-        $payment->webhook_received_at = now();
-
-        if (in_array($xenditStatus, ['PAID', 'COMPLETED', 'SUCCEEDED'])) {
-            // Verify amount matches order
-            $paidAmount = (float) ($data['amount'] ?? ($data['data']['amount'] ?? $payment->amount));
-            $isQr = str_contains(strtolower($eventType), 'qr')
-                || strtolower((string) $payment->payment_method) === 'qris'
-                || isset($data['qr_id'])
-                || isset($data['data']['qr_id']);
-
-            $orderTotal = (float) ($payment->order?->total_amount ?? $payment->amount);
-
-            if ($isQr) {
-                if (abs($paidAmount - $orderTotal) > 0.01) {
-                    Log::warning('Webhook amount mismatch for QR payment, not setting paid', [
-                        'payment_id' => $payment->id,
-                        'order_id' => $payment->order_id,
-                        'expected' => $orderTotal,
-                        'received' => $paidAmount,
+            if ($xenditEventId) {
+                $exists = PaymentEvent::where('xendit_event_id', $xenditEventId)
+                    ->where('payment_id', $lockedPayment->id)
+                    ->lockForUpdate()
+                    ->exists();
+                if ($exists) {
+                    Log::info('Duplicate webhook ignored', [
+                        'payment_id' => $lockedPayment->id,
+                        'event_id' => $xenditEventId,
                     ]);
                     return;
                 }
-            } else {
-                if (abs($paidAmount - $payment->amount) > 0.01) {
-                    Log::error('Webhook amount mismatch', [
-                        'payment_id' => $payment->id,
-                        'expected' => $payment->amount,
-                        'received' => $paidAmount,
+            }
+
+            // Record event
+            PaymentEvent::create([
+                'payment_id' => $lockedPayment->id,
+                'event_type' => $eventType,
+                'xendit_event_id' => $xenditEventId,
+                'payload' => $data,
+                'occurred_at' => now(),
+            ]);
+
+            // Update payment status based on Xendit status
+            $rawStatus = $data['status'] ?? ($data['data']['status'] ?? 'PENDING');
+            $xenditStatus = strtoupper((string) $rawStatus);
+            $lockedPayment->xendit_webhook_id = $xenditEventId;
+            $lockedPayment->webhook_received_at = now();
+
+            if (in_array($xenditStatus, ['PAID', 'COMPLETED', 'SUCCEEDED'])) {
+                // Verify amount exists and matches order (do not default to expected amount)
+                $rawAmount = $data['amount'] ?? ($data['data']['amount'] ?? null);
+                if ($rawAmount === null || !is_numeric($rawAmount) || (float) $rawAmount <= 0) {
+                    Log::error('Webhook payload missing valid positive amount', [
+                        'payment_id' => $lockedPayment->id,
+                        'raw_amount' => $rawAmount,
                     ]);
-                    throw new Exception('Amount mismatch: expected ' . $payment->amount . ' got ' . $paidAmount);
+                    throw new Exception('Webhook payload missing valid positive amount.');
+                }
+                $paidAmount = (float) $rawAmount;
+
+                $isQr = str_contains(strtolower($eventType), 'qr')
+                    || strtolower((string) $lockedPayment->payment_method) === 'qris'
+                    || isset($data['qr_id'])
+                    || isset($data['data']['qr_id']);
+
+                $orderTotal = (float) ($lockedPayment->order?->total_amount ?? $lockedPayment->amount);
+
+                if ($isQr) {
+                    if (abs($paidAmount - $orderTotal) > 0.01) {
+                        Log::warning('Webhook amount mismatch for QR payment, not setting paid', [
+                            'payment_id' => $lockedPayment->id,
+                            'order_id' => $lockedPayment->order_id,
+                            'expected' => $orderTotal,
+                            'received' => $paidAmount,
+                        ]);
+                        return;
+                    }
+                } else {
+                    if (abs($paidAmount - $lockedPayment->amount) > 0.01) {
+                        Log::error('Webhook amount mismatch', [
+                            'payment_id' => $lockedPayment->id,
+                            'expected' => $lockedPayment->amount,
+                            'received' => $paidAmount,
+                        ]);
+                        throw new Exception('Amount mismatch: expected ' . $lockedPayment->amount . ' got ' . $paidAmount);
+                    }
+                }
+
+                // Check if payment already expired
+                if ($lockedPayment->expires_at && $lockedPayment->expires_at->isPast()) {
+                    Log::warning('Payment expired but webhook says PAID', [
+                        'payment_id' => $lockedPayment->id,
+                        'expires_at' => $lockedPayment->expires_at,
+                    ]);
+                    // Reconciliation: log alert and do NOT change status to paid
+                    $lockedPayment->metadata = array_merge($lockedPayment->metadata ?? [], [
+                        'reconciliation_needed' => true,
+                        'reconciliation_note' => 'Late webhook: payment was expired',
+                    ]);
+                    $lockedPayment->save();
+                    return;
+                }
+
+                $lockedPayment->status = 'paid';
+                $lockedPayment->paid_at = now();
+                $lockedPayment->xendit_payment_id = $data['payment_id'] ?? null;
+                $lockedPayment->xendit_payment_method = $data['payment_method'] ?? null;
+                $lockedPayment->xendit_payment_channel = $data['payment_channel'] ?? null;
+
+                // Update order payment_status
+                $order = $lockedPayment->order;
+                if ($order) {
+                    $this->markOrderAsPaid($order, 'Xendit payment confirmed');
+
+                    // Tahap 15: queued side-effect notification
+                    NotificationTrigger::paymentSuccess($order->customer, $order);
+                    NotificationTrigger::orderPaidForStore($order);
+                }
+
+            } elseif ($xenditStatus === 'EXPIRED') {
+                if (!in_array($lockedPayment->status, ['paid', 'refunded'])) {
+                    $lockedPayment->status = 'expired';
+                    if ($lockedPayment->order) {
+                        NotificationTrigger::paymentExpired($lockedPayment->order->customer, $lockedPayment->order);
+                    }
+                }
+            } elseif ($xenditStatus === 'CANCELLED') {
+                if (!in_array($lockedPayment->status, ['paid', 'refunded'])) {
+                    $lockedPayment->status = 'cancelled';
+                    if ($lockedPayment->order) {
+                        NotificationTrigger::paymentFailed($lockedPayment->order->customer, $lockedPayment->order);
+                    }
+                }
+            } else {
+                // PENDING or other status: do not regress terminal status
+                if (!in_array($lockedPayment->status, ['paid', 'refunded', 'expired', 'cancelled'])) {
+                    $lockedPayment->status = strtolower($xenditStatus);
                 }
             }
 
-            // Check if payment already expired
-            if ($payment->expires_at && $payment->expires_at->isPast()) {
-                Log::warning('Payment expired but webhook says PAID', [
-                    'payment_id' => $payment->id,
-                    'expires_at' => $payment->expires_at,
-                ]);
-                // Reconciliation: log alert and do NOT change status to paid
-                // We'll mark as reconciliation_needed in metadata
-                $payment->metadata = array_merge($payment->metadata ?? [], [
-                    'reconciliation_needed' => true,
-                    'reconciliation_note' => 'Late webhook: payment was expired',
-                ]);
-                $payment->save();
-                return;
-            }
-
-            $payment->status = 'paid';
-            $payment->paid_at = now();
-            $payment->xendit_payment_id = $data['payment_id'] ?? null;
-            $payment->xendit_payment_method = $data['payment_method'] ?? null;
-            $payment->xendit_payment_channel = $data['payment_channel'] ?? null;
-
-            // Update order payment_status
-            $order = $payment->order;
-            if ($order) {
-                $this->markOrderAsPaid($order, 'Xendit payment confirmed');
-
-                // Tahap 15: queued side-effect notification
-                NotificationTrigger::paymentSuccess($order->customer, $order);
-                NotificationTrigger::orderPaidForStore($order);
-            }
-
-        } elseif ($xenditStatus === 'EXPIRED') {
-            $payment->status = 'expired';
-            if ($payment->order) {
-                NotificationTrigger::paymentExpired($payment->order->customer, $payment->order);
-            }
-        } elseif ($xenditStatus === 'CANCELLED') {
-            $payment->status = 'cancelled';
-            if ($payment->order) {
-                NotificationTrigger::paymentFailed($payment->order->customer, $payment->order);
-            }
-        } else {
-            // PENDING or other status
-            $payment->status = strtolower($xenditStatus);
-        }
-
-        $payment->save();
+            $lockedPayment->save();
+        });
     }
 
     /**

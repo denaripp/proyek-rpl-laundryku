@@ -175,6 +175,66 @@ export interface AdminPayment {
   created_at: string;
 }
 
+export interface AiModelPreset {
+  id: string;
+  name: string;
+  provider: string;
+  category: 'free' | 'paid';
+  badge: string;
+  description: string;
+  cost_estimate: string;
+  is_free: boolean;
+  available_on_openrouter?: boolean | null;
+}
+
+export interface AiLiveFreeModel {
+  id: string;
+  name: string;
+  is_free: boolean;
+  supports_tools: boolean;
+  context_length: number;
+}
+
+export interface AiUsageLogItem {
+  id: string;
+  model: string;
+  resolved_model?: string | null;
+  status: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  error?: string | null;
+  created_at?: string | null;
+}
+
+export interface AiSettingsData {
+  active_model: string;
+  temperature: number;
+  max_tool_rounds: number;
+  is_custom_model: boolean;
+  presets: AiModelPreset[];
+  live_free_models?: AiLiveFreeModel[];
+  recent_usage?: AiUsageLogItem[];
+  provider: string;
+  api_key_configured: boolean;
+  updated_at?: string | null;
+  updated_by?: {
+    id: string;
+    name: string;
+    email?: string;
+  } | null;
+}
+
+export interface AiTestResult {
+  success: boolean;
+  latency_ms: number;
+  message: string;
+  model: string;
+  resolved_model?: string;
+  reply?: string;
+  error?: string;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export const adminApi = {
@@ -384,6 +444,27 @@ export const adminApi = {
 
   async getAuditLog(id: string) {
     const res = await apiClient<ApiSuccessResponse<AuditLogItem>>(`/admin/audit-logs/${id}`);
+    return res.data;
+  },
+
+  // 9. AI Configuration & Model Switcher
+  async getAiSettings() {
+    const res = await apiClient<ApiSuccessResponse<AiSettingsData>>('/admin/ai-settings');
+    return res.data;
+  },
+
+  async updateAiSettings(data: { model: string; temperature?: number; max_tool_rounds?: number }) {
+    return apiClient<ApiSuccessResponse<any>>('/admin/ai-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async testAiModel(model: string) {
+    const res = await apiClient<ApiSuccessResponse<AiTestResult>>('/admin/ai-settings/test', {
+      method: 'POST',
+      body: JSON.stringify({ model }),
+    });
     return res.data;
   },
 };

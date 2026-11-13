@@ -68,18 +68,27 @@ class StoreController extends Controller
         $serviceRadius = (float) ($store->service_radius_km ?? 10);
         $isServiceable = $distance !== null ? ($distance <= $serviceRadius) : true;
 
-        return array_merge($store->toArray(), [
+        return [
             'id' => $store->id,
+            'owner_user_id' => $store->owner_user_id,
             'name' => $store->name,
             'slug' => $store->slug ?? Str::slug($store->name),
             'description' => $store->description,
+            'phone' => $store->phone,
             'address' => $store->address,
             'address_text' => $store->address,
             'short_address' => $shortAddress,
             'alamat_singkat' => $shortAddress,
+            'city' => $store->city,
+            'province' => $store->province,
+            'postal_code' => $store->postal_code,
             'latitude' => $store->latitude !== null ? (float) $store->latitude : null,
             'longitude' => $store->longitude !== null ? (float) $store->longitude : null,
             'service_radius_km' => $serviceRadius,
+            'minimum_order_amount' => $store->minimum_order_amount !== null ? (float) $store->minimum_order_amount : 0,
+            'pickup_fee' => (float) ($store->pickup_fee ?? 0),
+            'delivery_fee' => (float) ($store->delivery_fee ?? 0),
+            'cod_enabled' => (bool) $store->cod_enabled,
             'opening_hours' => $store->operational_hours ?? ['all_day' => '08:00 - 20:00'],
             'opening_hours_today' => ['open' => '08:00', 'close' => '20:00', 'raw' => '08:00 - 20:00'],
             'jam_buka_tutup_hari_ini' => '08:00 - 20:00',
@@ -87,7 +96,11 @@ class StoreController extends Controller
             'status_buka_sekarang' => true,
             'approval_status' => $store->status ?? 'approved',
             'operational_status' => $store->is_active ? 'active' : 'inactive',
+            'status' => $store->status,
+            'is_active' => (bool) $store->is_active,
+            'logo' => $store->logo,
             'logo_url' => $store->logo,
+            'banner' => $store->banner,
             'categories' => $categories,
             'services' => $services,
             'top_services' => $topServices,
@@ -105,7 +118,8 @@ class StoreController extends Controller
             'jarak' => $distance,
             'is_serviceable' => $isServiceable,
             'created_at' => $store->created_at?->toISOString() ?? now()->toISOString(),
-        ]);
+            'updated_at' => $store->updated_at?->toISOString() ?? now()->toISOString(),
+        ];
     }
 
     /**
@@ -160,7 +174,7 @@ class StoreController extends Controller
 
         $store->load([
             'servicePrices.service',
-            'staff.user:id,name,email',
+            // staff excluded from public profile
             'reviews' => function ($q) {
                 $q->visible()->with('customer:id,name')->latest()->take(10);
             },
@@ -313,9 +327,23 @@ class StoreController extends Controller
      */
     public function estimatePrice(Request $request)
     {
-        $storeId = $request->input('store_id');
-        $store = Store::find($storeId);
-        $items = $request->input('items', []);
+        $validated = $request->validate([
+            'store_id' => 'required|integer',
+            'items' => 'required|array|min:1',
+            'items.*.service_id' => 'required',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+        ]);
+
+        $storeId = $validated['store_id'];
+        $store = Store::where('id', $storeId)->where('status', 'approved')->where('is_active', true)->first();
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Toko tidak ditemukan atau belum aktif.',
+            ], 404);
+        }
+
+        $items = $validated['items'];
 
         $estimatedItems = [];
         $totalRaw = 0;

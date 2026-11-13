@@ -74,6 +74,9 @@ class CourierAssignmentService
                 ? OrderStatus::COURIER_ASSIGNED->value 
                 : OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value;
             $order->status = $statusField;
+            if ($courier->user_id) {
+                $order->courier_id = $courier->user_id;
+            }
             $order->save();
 
             $actor = auth()->user() ?? ($courier->user_id ? User::find($courier->user_id) : null);

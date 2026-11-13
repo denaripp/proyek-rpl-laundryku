@@ -62,10 +62,14 @@ class SettlementService
         }
 
         return DB::transaction(function () use ($store, $actor, $from, $to, $config, $interval, $disputeWindowDays) {
+            // Lock store row to serialize concurrent settlement generation for this store
+            Store::where('id', $store->id)->lockForUpdate()->firstOrFail();
+
             // Idempotency: no overlapping period for the same store
             $overlap = SettlementPeriod::where('store_id', $store->id)
                 ->where('period_start', '<', $to)
                 ->where('period_end', '>', $from)
+                ->lockForUpdate()
                 ->exists();
             if ($overlap) {
                 throw new Exception('An overlapping settlement period already exists for this store.');
@@ -176,6 +180,7 @@ class SettlementService
 
         return Order::where('store_id', $store->id)
             ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereNotNull('completed_at')
             ->whereBetween('completed_at', [$from, $to])
             // dispute window must have fully passed
@@ -183,6 +188,10 @@ class SettlementService
             // no open dispute on the order
             ->whereDoesntHave('disputes', function ($q) {
                 $q->whereIn('status', Dispute::OPEN_STATUSES);
+            })
+            // no active, processing, or completed refund on the order
+            ->whereDoesntHave('refunds', function ($q) {
+                $q->whereIn('status', ['requested', 'processing', 'completed']);
             })
             // never double-settle
             ->whereDoesntHave('settlementItem')

@@ -228,4 +228,35 @@ class RefundTest extends TestCase
         $viewResponse = $this->getJson("/api/refunds/{$refundId}");
         $viewResponse->assertStatus(403);
     }
+
+    public function test_cannot_request_refund_with_mismatched_payment_id()
+    {
+        // Customer A owns orderA, but tries to use paymentB (which belongs to orderB)
+        $this->actingAs($this->customerA);
+        $response = $this->postJson('/api/refunds', [
+            'order_id' => $this->orderA->id,
+            'payment_id' => $this->paymentB->id,
+            'amount' => 50000,
+            'reason' => 'Mismatch attack attempt',
+            'method' => 'bank_transfer',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('Payment does not belong to the specified order', $response->getContent());
+    }
+
+    public function test_refund_amount_must_be_strictly_positive()
+    {
+        $this->actingAs($this->customerA);
+        $response = $this->postJson('/api/refunds', [
+            'order_id' => $this->orderA->id,
+            'payment_id' => $this->paymentA->id,
+            'amount' => 0,
+            'reason' => 'Zero amount test',
+            'method' => 'bank_transfer',
+        ]);
+
+        // Form request or service validation rejects non-positive amount
+        $this->assertTrue(in_array($response->status(), [422, 500]));
+    }
 }

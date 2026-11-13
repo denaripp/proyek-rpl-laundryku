@@ -14,9 +14,11 @@ import {
   Modal,
 } from '@/components/ui';
 import {
+  getCourierProfile,
   getCourierTasks,
   claimCourierTask,
   transitionCourierTask,
+  CourierProfileSummary,
   CourierTaskItem,
 } from '@/lib/courier';
 import { ORDER_STATUS_META, OrderStatus, confirmCourierCod } from '@/lib/order';
@@ -41,6 +43,7 @@ import {
 export default function CourierTasksPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [courierProfile, setCourierProfile] = useState<CourierProfileSummary | null>(null);
   const [tasks, setTasks] = useState<CourierTaskItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +71,13 @@ export default function CourierTasksPage() {
       const user = getStoredUser();
       setCurrentUser(user);
 
-      const tasksData = await getCourierTasks(activeTab);
+      const [profileData, tasksData] = await Promise.all([
+        getCourierProfile().catch(() => null),
+        getCourierTasks(activeTab),
+      ]);
+      if (profileData) {
+        setCourierProfile(profileData);
+      }
       setTasks(tasksData || []);
     } catch (err: unknown) {
       setError(formatFriendlyErrorMessage(err, 'Gagal memuat tugas pengantaran.'));
@@ -79,7 +88,13 @@ export default function CourierTasksPage() {
 
   const fetchTasksSilent = useCallback(async () => {
     try {
-      const tasksData = await getCourierTasks(activeTab);
+      const [profileData, tasksData] = await Promise.all([
+        getCourierProfile().catch(() => null),
+        getCourierTasks(activeTab),
+      ]);
+      if (profileData) {
+        setCourierProfile(profileData);
+      }
       setTasks(tasksData || []);
     } catch {
       // Silent catch for background auto-refresh
@@ -195,17 +210,17 @@ export default function CourierTasksPage() {
     {
       id: 'active',
       label: 'Tugas aktif saya',
-      count: tasks.filter((t) => t.is_assigned_to_me && t.status !== 'COMPLETED').length,
+      count: courierProfile?.stats?.active_tasks ?? tasks.filter((t) => t.is_assigned_to_me && t.status !== 'COMPLETED').length,
     },
     {
       id: 'available',
       label: 'Tugas tersedia',
-      count: tasks.filter((t) => !t.courier_id).length,
+      count: courierProfile?.stats?.available_tasks ?? tasks.filter((t) => !t.courier_id).length,
     },
     {
       id: 'completed',
       label: 'Riwayat selesai',
-      count: tasks.filter((t) => t.status === 'COMPLETED').length,
+      count: courierProfile?.stats?.completed_tasks ?? tasks.filter((t) => t.status === 'COMPLETED').length,
     },
     {
       id: 'all',
@@ -216,8 +231,8 @@ export default function CourierTasksPage() {
   return (
     <DashboardLayout
       userRole="courier"
-      userName={currentUser?.name || 'Kurir LaundryKu'}
-      userEmail={currentUser?.email || 'kurir@laundryku.id'}
+      userName={courierProfile?.name || currentUser?.name || 'Kurir LaundryKu'}
+      userEmail={courierProfile?.email || currentUser?.email || 'kurir@laundryku.id'}
       onLogout={handleLogout}
     >
       <div className="space-y-6">

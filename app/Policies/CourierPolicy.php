@@ -61,6 +61,6 @@ class CourierPolicy
 
     private function hasAnyStoreAccess(User $user): bool
     {
-        return $user->ownedStores()->exists() || $user->storeStaff()->exists();
+        return $user->ownedStores()->exists() || $user->storeStaff()->where('is_active', true)->exists();
     }
 }

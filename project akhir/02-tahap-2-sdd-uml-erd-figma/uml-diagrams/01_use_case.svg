@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 725" width="1000" height="725" style="background:#FFFFFF;font-family:'Plus Jakarta Sans','Segoe UI',Arial,sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0E7490"/>
+    </marker>
+    <marker id="open-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#0B192C" stroke-width="1.5"/>
+    </marker>
+    <marker id="impl-triangle" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.6"/>
+    </marker>
+    <marker id="diamond-comp" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="diamond-agg" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#FFFFFF" stroke="#0B192C" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-many" viewBox="0 0 14 12" refX="12" refY="6" markerWidth="11" markerHeight="10" orient="auto">
+      <path d="M 1 6 L 12 1 M 1 6 L 12 6 M 1 6 L 12 11 M 1 2 L 1 10" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-one" viewBox="0 0 10 12" refX="6" refY="6" markerWidth="8" markerHeight="10" orient="auto">
+      <path d="M 4 1 L 4 11 M 8 1 L 8 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-zero-one" viewBox="0 0 16 12" refX="12" refY="6" markerWidth="12" markerHeight="10" orient="auto">
+      <circle cx="4" cy="6" r="3" fill="#FFFFFF" stroke="#334155" stroke-width="1.3"/>
+      <path d="M 10 1 L 10 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    
+  </defs>
+  <rect x="195" y="24" width="610" height="686" rx="12" fill="#F8FAFC" stroke="#0B192C" stroke-width="2"/><rect x="195" y="24" width="610" height="34" rx="10" fill="#0B192C"/><text x="500" y="45" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">Sistem LaundryKu — Multi-Tenant Marketplace &amp; Asisten AI Hibrida (LANDY)</text><g transform="translate(75,110)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Guest</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">(Publik)</text>
+  </g><g transform="translate(75,255)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Customer</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">(Pelanggan)</text>
+  </g><g transform="translate(75,435)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Kurir</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">(Logistik)</text>
+  </g><g transform="translate(75,595)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Mitra Toko</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">(Store Admin)</text>
+  </g><g transform="translate(925,130)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Super Admin</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">(Platform Owner)</text>
+  </g><g transform="translate(925,315)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">OpenRouter API</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">&lt;&lt;external system&gt;&gt;</text>
+  </g><g transform="translate(925,480)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Xendit Gateway</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">&lt;&lt;external system&gt;&gt;</text>
+  </g><g transform="translate(925,625)">
+    <circle cx="0" cy="-28" r="9" fill="#F0FDFA" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="-19" x2="0" y2="3" stroke="#0B192C" stroke-width="2"/>
+    <line x1="-13" y1="-11" x2="13" y2="-11" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <line x1="0" y1="3" x2="10" y2="20" stroke="#0B192C" stroke-width="2"/>
+    <text x="0" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#0B192C">Fonnte &amp; Nominatim</text>
+    <text x="0" y="46" text-anchor="middle" font-size="9.5" fill="#475569">&lt;&lt;external API&gt;&gt;</text>
+  </g><g>
+    <ellipse cx="360" cy="105" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="99" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-01: Registrasi, Login OTP</text>
+    <text x="360" y="115" text-anchor="middle" font-size="9.5" fill="#334155">&amp; TOTP 2FA Admin</text>
+  </g><g>
+    <ellipse cx="360" cy="175" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="169" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-02: Cari Toko &amp; Alamat GPS</text>
+    <text x="360" y="185" text-anchor="middle" font-size="9.5" fill="#334155">(Haversine + Peta)</text>
+  </g><g>
+    <ellipse cx="360" cy="250" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="244" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-03: Buat Pesanan &amp; Setujui</text>
+    <text x="360" y="260" text-anchor="middle" font-size="9.5" fill="#334155">Berat Aktual</text>
+  </g><g>
+    <ellipse cx="360" cy="325" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="319" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-04: Bayar QRIS / VA / COD</text>
+    <text x="360" y="335" text-anchor="middle" font-size="9.5" fill="#334155">&amp; Ajukan Refund</text>
+  </g><g>
+    <ellipse cx="360" cy="405" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="399" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-05: Klaim Tugas Kurir,</text>
+    <text x="360" y="415" text-anchor="middle" font-size="9.5" fill="#334155">Pickup, Delivery &amp; GPS</text>
+  </g><g>
+    <ellipse cx="360" cy="485" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="479" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-06: Chat P2P, Notifikasi,</text>
+    <text x="360" y="495" text-anchor="middle" font-size="9.5" fill="#334155">Review &amp; Komplain</text>
+  </g><g>
+    <ellipse cx="360" cy="565" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="559" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-07: Kelola Katalog, Harga,</text>
+    <text x="360" y="575" text-anchor="middle" font-size="9.5" fill="#334155">Kurir, Ledger &amp; Laporan</text>
+  </g><g>
+    <ellipse cx="360" cy="645" rx="125" ry="26" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="360" y="639" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-08: Ajukan Upgrade Mitra</text>
+    <text x="360" y="655" text-anchor="middle" font-size="9.5" fill="#334155">/ Pendaftaran Kurir</text>
+  </g><g>
+    <ellipse cx="655" cy="115" rx="125" ry="28" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="655" y="109" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-09: Moderasi Toko, Komisi,</text>
+    <text x="655" y="125" text-anchor="middle" font-size="9.5" fill="#334155">Kategori &amp; Audit Log</text>
+  </g><g>
+    <ellipse cx="655" cy="200" rx="125" ry="28" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="655" y="194" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-10: Kelola Model OpenRouter</text>
+    <text x="655" y="210" text-anchor="middle" font-size="9.5" fill="#334155">AI &amp; Uji Koneksi</text>
+  </g><g>
+    <ellipse cx="655" cy="315" rx="125" ry="30" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="655" y="309" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">UC-11: Tanya Asisten AI</text>
+    <text x="655" y="325" text-anchor="middle" font-size="9.5" fill="#334155">Hibrida 3-Layer (LANDY)</text>
+  </g><g>
+    <ellipse cx="655" cy="420" rx="115" ry="24" fill="#F0FDF4" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="655" y="414" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">SUB-01: Eksekusi 33 Tools</text>
+    <text x="655" y="430" text-anchor="middle" font-size="9.5" fill="#334155">RBAC &amp; PII Masking</text>
+  </g><g>
+    <ellipse cx="655" cy="505" rx="115" ry="24" fill="#FFFBEB" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="655" y="499" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">SUB-02: Verifikasi Webhook</text>
+    <text x="655" y="515" text-anchor="middle" font-size="9.5" fill="#334155">Xendit Idempoten</text>
+  </g><g>
+    <ellipse cx="655" cy="600" rx="115" ry="24" fill="#FFF1F2" stroke="#0E7490" stroke-width="1.7"/>
+    <text x="655" y="594" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0B192C">SUB-03: Eskalasi CS Resmi</text>
+    <text x="655" y="610" text-anchor="middle" font-size="9.5" fill="#334155">&amp; Penyelesaian Sengketa</text>
+  </g><line x1="92" y1="105" x2="235" y2="105" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="115" x2="235" y2="172" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="125" x2="530" y2="315" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="240" x2="235" y2="112" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="248" x2="235" y2="178" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="255" x2="235" y2="250" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="265" x2="235" y2="325" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="275" x2="235" y2="480" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="285" x2="235" y2="640" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="255" x2="530" y2="310" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="425" x2="235" y2="115" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="435" x2="235" y2="405" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="445" x2="235" y2="330" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="435" x2="530" y2="322" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="580" x2="235" y2="120" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="590" x2="235" y2="255" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="595" x2="235" y2="490" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="600" x2="235" y2="565" stroke="#475569" stroke-width="1.25"/><line x1="92" y1="595" x2="530" y2="330" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="125" x2="780" y2="115" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="138" x2="780" y2="200" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="148" x2="770" y2="600" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="142" x2="780" y2="305" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="315" x2="780" y2="315" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="480" x2="770" y2="505" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="615" x2="485" y2="108" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="625" x2="485" y2="175" stroke="#475569" stroke-width="1.25"/><line x1="905" y1="632" x2="485" y2="485" stroke="#475569" stroke-width="1.25"/><line x1="655" y1="345" x2="655" y2="396" stroke="#0E7490" stroke-width="1.35" stroke-dasharray="5,4" marker-end="url(#arrow-teal)"/><text x="662" y="374" font-size="9" font-weight="600" fill="#0E7490">&lt;&lt;include&gt;&gt;</text><line x1="485" y1="330" x2="540" y2="500" stroke="#0E7490" stroke-width="1.35" stroke-dasharray="5,4" marker-end="url(#arrow-teal)"/><text x="520" y="420" font-size="9" font-weight="600" fill="#0E7490">&lt;&lt;include&gt;&gt;</text><line x1="540" y1="595" x2="485" y2="492" stroke="#0E7490" stroke-width="1.35" stroke-dasharray="5,4" marker-end="url(#arrow-teal)"/><text x="515" y="550" font-size="9" font-weight="600" fill="#0E7490">&lt;&lt;extend&gt;&gt;</text><line x1="655" y1="576" x2="655" y2="345" stroke="#0E7490" stroke-width="1.35" stroke-dasharray="5,4" marker-end="url(#arrow-teal)"/><text x="715" y="455" font-size="9" font-weight="600" fill="#0E7490">&lt;&lt;extend&gt;&gt;</text>
+</svg>

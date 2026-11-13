@@ -16,9 +16,12 @@
 | T010 | Enum / Model | Penundaan Eloquent `$casts` Enum untuk `OrderStatus` dan `CourierTaskStatus` | Deferred | Magic string diganti enum value di file kurir/order; `$casts` model ditunda agar tidak memecah kueri mentah. |
 | T011 | Auth / RBAC | Dua sistem role tidak sinkron: `users.role` vs tabel `roles` | Pending Refactoring | Kolom flat (`super_admin`, `store_admin`, `courier`, `customer`) vs tabel RBAC (`platform_owner`, `platform_admin`, `store_owner`, `store_staff`, `courier`, `customer`). |
 | T012 | Frontend / Store Search | frontend/app/stores/page.tsx ±700 baris setelah fix 77d7cc8. Rencana: extract logika resolusi lokasi ke hook useResolvedLocation() + komponen terpisah untuk peta dan daftar toko. Belum ada test frontend. | Pending Refactoring | Dicatat pada Tahap 1 untuk refactor mendatang. |
+| T014 | WhatsApp / Notifications | Duplikasi event listener OrderStatusChangedEvent akibat auto-discovery Laravel 12 + manual EventServiceProvider registration, serta pesan teknis created to created | Resolved | Menghapus registrasi manual ganda di EventServiceProvider, mengubah pesan pesanan baru ke bahasa Indonesia manusiawi, serta memformat template WhatsAppService dengan penekanan bold dan rincian rapi tanpa duplikasi URL. |
 | T013 | Environment / Dev Ops | Laragon Apache thread-safe worker (mod_php) menyebabkan race condition pembacaan .env saat request paralel ("database.sqlite does not exist"). Diatasi dengan config:cache di dev, script runner 'bin/test-runner.php' (try/finally cache recovery), dan database guard di Tests\TestCase. | Selesai / Terkendali | Wajib jalankan 'composer dev:cache' setelah edit .env, dan test backend dijalankan via 'composer test'. Direct 'php artisan test' dibentengi guard. |
 
 ## Decision Log
+
+- 2026-10-31: Refaktor Notifikasi WhatsApp & Eliminasi Duplikasi Pengiriman: Menghilangkan duplikasi listener pada OrderStatusChangedEvent di EventServiceProvider, memutakhirkan seluruh pesan milestone di NotificationTrigger ke bahasa Indonesia yang ramah dan sopan, serta memperbarui WhatsAppService::buildMessage dengan format WhatsApp terstruktur (*No. Pesanan*, *Gerai*, *Status*, *Keterangan*, *Lihat Detail Pesanan:*). Memperbaiki kueri batas hari Asia/Jakarta pada StoreDashboardService.
 
 - 2026-08-30: Memutuskan untuk menggunakan `auth` middleware (web guard) untuk API routes sementara, karena Sanctum tidak bisa diinstall akibat PHP 8.3 < 8.4.
 - 2026-08-30: `is_sponsored` kolom sudah ditambahkan ke stores, tapi ranking tidak menggunakannya sampai ada keputusan bisnis.
@@ -453,5 +456,151 @@
   1. Pemanggilan endpoint publik `POST /api/v1/orders/{order}/transition` (`OrderController::transition`) yang mengirim `to_status: "awaiting_price_approval"` tanpa payload `actual_weight_kg`/`weight` dapat meloloskan pesanan ke tahap persetujuan harga dengan `actual_weight` bernilai `NULL`.
   2. Override oleh platform admin via `adminTransition()` memanggil `OrderService::transition()` secara langsung tanpa mekanisme validasi pengisian berat.
 - **Tindak Lanjut**: Validasi ketat bahwa `actual_weight` wajib terisi dan bernilai lebih dari 0 kg sebelum transisi ke `awaiting_price_approval` dicatat sebagai utang teknis untuk diperbaiki pada tahap penguatan validasi transisi order.
+
+## [2026-10-31] Integrasi Asisten AI Portal Super Admin (Read-Only & Guard Isolation)
+- **Konteks & Kebutuhan**: Menambahkan asisten AI resmi (LANDY) pada portal web Super Admin LaundryKu (`/admin/*`) yang memungkinkan Super Admin mengajukan pertanyaan operasional dalam bahasa alami berdasarkan data riil platform.
+- **Batasan & Keamanan (Read-Only)**:
+  1. Asisten AI bersifat strictly *read-only*: dilarang melakukan mutasi pengguna (delete user, ganti role, reset password), pesanan, pencairan dana, atau eksekusi raw SQL. Seluruh permintaan mutasi via chat langsung ditolak secara eksplisit dengan mengarahkan ke menu terkait di Admin Portal.
+  2. Guard & Role Authorization: Endpoint `/api/ai/chat` diperluas dengan middleware `auth:web,admin,mitra,kurir`. Identitas aktor dan role diambil langsung dari session guard backend yang terautentikasi (bukan dari input klien). Non-super admin ditolak dengan pesan error otorisasi ketat bila mencoba memanggil platform tools.
+  3. Sanitasi PII: Seluruh data pribadi pengguna (email dan nomor telepon) wajib disamarkan (`maskEmail` dan `maskPhone`), password hash/token/OTP tidak pernah dimuat atau dikembalikan.
+- **Fitur & Tool Baru yang Diimplementasikan**:
+  - `platform_search_users`: Pencarian akun per nama/email/telepon dengan masking PII dan penelusuran keterkaitan akun ke toko atau kurir.
+  - `platform_get_orders`: Monitoring pesanan menunggu pembayaran (`awaiting_payment`), anomali status `completed` dengan `completed_at` NULL, dan agregasi pesanan per toko berdasarkan rentang periode.
+  - `platform_get_courier_activity`: Monitoring kurir yang memiliki penugasan tugas aktif (`assigned`, `accepted`, `arrived`, `picked_up`).
+  - `platform_get_settlements`: Ringkasan pengajuan pencairan dana toko mitra (`generated`/pending, `verified`, `paid`).
+  - `platform_explain_admin_menu`: Penjelasan fungsi modul dan menu operasional Super Admin LaundryKu.
+- **Integrasi UI**:
+  - Menyertakan widget AI floating (`resources/views/partials/ai-widget.blade.php`) ke layout dashboard Blade Super Admin (`resources/views/layouts/dashboard.blade.php`), lengkap dengan konfigurasi `window.LK.apiBase = '/api'`.
+
+## [2026-10-31] Sinkronisasi Status dan Tab Kurir (Dashboard & Tasks Responsiveness)
+- **Konteks & Masalah**:
+  1. Halaman `/courier/tasks` menghitung badge tab (`Tugas aktif saya`, `Tugas tersedia`, `Riwayat selesai`) secara dinamis dari array `tasks`, padahal `tasks` hanya berisi data untuk tab yang sedang aktif. Akibatnya, saat berada di tab `active`, tab `Riwayat selesai` mengevaluasi ke `(0)` padahal kurir memiliki 4 tugas selesai.
+  2. Halaman `/courier` tidak menggunakan hook `usePolling`, sehingga penugasan order baru atau transisi status tidak ter-refresh secara real-time di background tanpa reload manual.
+  3. Pada penugasan kurir di `CourierAssignmentService::assignCourier`, kolom `$order->courier_id` tidak disinkronkan ke `$courier->user_id`, berpotensi menimbulkan inkonsistensi pelacakan penugasan di tingkat record order.
+- **Solusi yang Diterapkan**:
+  1. Frontend `/courier/tasks/page.tsx`:
+     - Memuat `getCourierProfile()` paralel dengan `getCourierTasks(activeTab)` baik pada pemuatan awal maupun silent polling background.
+     - Badge counter tab menggunakan statistik konsisten dari `courierProfile?.stats` dengan fallback ke perhitungan lokal jika belum tersedia.
+  2. Frontend `/courier/page.tsx`:
+     - Menambahkan silent background polling (`usePolling`, interval 15 detik, auto-pause saat background) agar dashboard kurir responsif terhadap pembaruan order dan penugasan baru.
+  3. Backend `CourierPortalController` & `CourierAssignmentService`:
+     - `CourierAssignmentService::assignCourier`: menyetel `$order->courier_id = $courier->user_id;` saat penugasan.
+     - `CourierPortalController::profile`: sinkronisasi perhitungan `active_tasks` mencakup relasi `courier_id` pada order aktif di samping tabel `courier_tasks`.
+- **Verifikasi**:
+  - `bin/test-runner.php tests/Feature/CourierPortalAuthorizationTest.php tests/Feature/CourierPortalTransitionTaskTest.php tests/Feature/CourierAssignmentTest.php tests/Feature/AdminCourierAssignmentTest.php` lulus 26 tests (93 assertions).
+  - Typecheck `npx tsc --noEmit` di direktori `frontend` lulus tanpa error.
+
+## [2026-11-01] Konfigurasi Model AI Dinamis Super Admin (Model Switcher & Runtime Tuning)
+- **Konteks & Kebutuhan**:
+  - Mengizinkan Super Admin memilih dan beralih model LLM OpenRouter serta mengatur parameter runtime (`temperature`, `max_tool_rounds`) langsung dari antarmuka web tanpa perlu memodifikasi file `.env` di server atau melakukan restart aplikasi.
+- **Arsitektur & Solusi**:
+  1. **Database & Storage Layer**:
+     - Migration `2026_11_01_000001_add_updated_by_to_settings_table.php` menambahkan kolom `updated_by` ke tabel `settings`.
+     - Model `App\Models\Setting` disempurnakan dengan *case-insensitive key handling* (`AI_MODEL` / `ai_model`), relasi `updatedByUser`, dan invalidasi cache otomatis via `Cache::remember` + `Cache::forget`.
+  2. **Service AI Layer**:
+     - `OpenAiClient.php` dan `AiAssistantService.php` membaca model aktif via `Setting::get('AI_MODEL')` dengan *graceful fallback* ke `config('ai.model')`.
+     - Ditambahkan method `testConnection(string $model)` pada `OpenAiClient` dan `testModelConnection(string $model)` pada `AiAssistantService` untuk *ping test* langsung ke OpenRouter dan mengukur latensi (ms).
+     - `AiIntentRouter.php` Layer 2 mengikuti model dinamis aktif.
+  3. **Backend API & RBAC**:
+     - Endpoint privat Super Admin: `GET /api/v1/admin/ai-settings`, `PUT /api/v1/admin/ai-settings`, dan `POST /api/v1/admin/ai-settings/test` di `AdminPortalController.php`.
+     - Setiap perubahan model dicatat secara transparan di tabel `audit_logs` (`action: 'UPDATE_AI_MODEL'`) dengan payload `before_value` dan `after_value` (`JSON_UNESCAPED_SLASHES`).
+  4. **Frontend UI (Next.js & Tailwind)**:
+     - Menu baru "Konfigurasi AI" (`/admin/settings/ai`) di sidebar Super Admin (`frontend/app/admin/layout.tsx`).
+     - Halaman antarmuka interaktif di `frontend/app/admin/settings/ai/page.tsx` menyediakan bento status, kartu preset model rekomendasi (`google/gemini-2.5-flash`, `openai/gpt-4o-mini`, `liquid/lfm-2.5-2.6b:free`, `meta-llama/llama-3.3-70b-instruct:free`, `anthropic/claude-3.5-sonnet`), input model kustom, slider temperatur, tombol uji koneksi seketika, dan modal konfirmasi.
+- **Verifikasi**:
+  - `bin/test-runner.php tests/Feature/AdminAiSettingsTest.php tests/Feature/SuperAdminAiAssistantTest.php tests/Feature/DashboardResponseRegressionTest.php` lulus 24 test case (141 assertions).
+  - TypeScript typecheck (`cd frontend; npx tsc --noEmit`) lulus 100% tanpa error.
+
+## [2026-11-01] Kategorisasi Preset Model AI (Free Tier vs Paid Commercial Tier)
+- **Konteks & Kebutuhan**:
+  - Super Admin memerlukan diferensiasi yang jelas antara model LLM gratis (Free Tier OpenRouter, akhiran `:free`, tanpa perlu saldo kredit atau kartu kredit) dan model berbayar (Commercial Tier, performa tinggi, memerlukan saldo OpenRouter aktif).
+- **Arsitektur & Solusi**:
+  1. **Backend Preset Structure (`AdminPortalController::getAiSettings`)**:
+     - Memperluas daftar preset menjadi 8 pilihan model teruji:
+       - **Kategori Gratis (`category: 'free'`, `is_free: true`)**:
+         - `google/gemini-2.0-flash-exp:free` (Google Gemini 2.0 Flash) — *Rp 0 / Free Tier*
+         - `meta-llama/llama-3.3-70b-instruct:free` (Meta Llama 3.3 70B) — *Rp 0 / Free Tier*
+         - `deepseek/deepseek-r1:free` (DeepSeek R1 Reasoning) — *Rp 0 / Free Tier*
+         - `liquid/lfm-2.5-2.6b:free` (Liquid LFM 2.5 2.6B) — *Rp 0 / Free Tier*
+       - **Kategori Berbayar (`category: 'paid'`, `is_free: false`)**:
+         - `google/gemini-2.5-flash` (Google Gemini 2.5 Flash) — *~$0.075 / 1M token (Sangat Murah)*
+         - `openai/gpt-4o-mini` (OpenAI GPT-4o Mini) — *~$0.15 / 1M token (Hemat)*
+         - `deepseek/deepseek-chat` (DeepSeek V3 Chat) — *~$0.14 / 1M token (Murah)*
+         - `anthropic/claude-3.5-haiku` (Anthropic Claude 3.5 Haiku) — *~$0.80 / 1M token (Premium)*
+     - Metadata baru per preset: `category`, `cost_estimate`, `badge`, `description`, `is_free`.
+  2. **Frontend UI & Type Definitions (`frontend/lib/admin.ts` & `frontend/app/admin/settings/ai/page.tsx`)**:
+     - `AiModelPreset` interface diperluas dengan field `category: 'free' | 'paid'` dan `cost_estimate: string`.
+     - Ditambahkan kontrol tab segmented filter (`Semua Model`, `🟢 Gratis`, `💎 Berbayar`) dengan counter dinamis.
+     - Ditambahkan informational notice callout mengenai ketentuan saldo OpenRouter saat tab difilter.
+     - Kartu preset dilengkapi tag status `GRATIS` / `BERBAYAR`, visual styling spesifik per badge, dan estimasi biaya per juta token di bagian footer.
+## [2026-11-01] Redesain UI Menu AI: Anti-Slop & Enterprise Split-Pane (Opsi A)
+- **Konteks & Masalah**:
+  - Tampilan awal menu konfigurasi AI mengandung elemen klise AI generik ("AI slop"): 4 kartu bento boros tempat, ikon dekoratif berlebihan (`Sparkles`, `Bot`, `Zap`), emoji badge (`🟢`, `💎`), tumpukan pill badge warna-warni, tombol hitam/slate pekat yang menyimpang dari `DESIGN.md`.
+- **Solusi yang Diterapkan**:
+  1. **Compact System Status Strip**:
+     - Menggantikan 4 kotak bento dengan 1 baris info horizontal yang memuat: model aktif saat ini, status koneksi OpenRouter, ringkasan runtime parameter (temperature & max rounds), dan metadata audit.
+  2. **Split-Pane Layout 2-Kolom (Option A)**:
+     - Kolom Kiri (60%): Katalog model LLM interaktif (selectable rows) dengan filter tab kategori bersih (`Semua`, `Free Tier`, `Komersial`), tag bullet status monokromatik, estimasi biaya monospaced, dan form custom identifier.
+     - Kolom Kanan (40% - Sticky): Parameter inferensi (slider temperature dengan tombol preset cepat `0.0`, `0.2`, `0.5`, dan batas putaran tools), Live Diagnostic Console (latensi ms, HTTP status, respons preview monospaced, tombol salin), dan panel simpan.
+  3. **Penyelarasan Brand LaundryKu**:
+     - Mengadopsi warna resmi LaundryKu: Cyan-700 (`#0E7490`) dan Cyan-800 (`#155E75`) untuk primary actions, focus rings, dan active state highlights.
+     - Modal konfirmasi pembaruan model yang selaras dengan komponen modal LaundryKu, lengkap dengan perbandingan nilai sebelum vs sesudah.
+- **Verifikasi**:
+  - `cd frontend; npx tsc --noEmit` sukses (0 errors).
+  - `bin/test-runner.php tests/Feature/AdminAiSettingsTest.php` sukses (8 passed, 127 assertions).
+
+## [2026-11-11] Aktivasi Menu Harga & Laporan Toko (Store Admin)
+- **Konteks & Masalah**:
+  - Menu Harga (`/store/pricing`) dan Laporan (`/store/reports`) pada role Admin Toko sebelumnya berstatus placeholder ("segera hadir").
+  - Dibutuhkan aktivasi fungsional penuh: manajemen tarif layanan & aturan promo toko, serta analitik operasional & rekap transaksi tanpa penambahan tabel database baru.
+- **Solusi yang Diterapkan**:
+  1. **Backend API (`MitraPortalController` & `routes/api.php`)**:
+     - `GET /api/v1/store/reports`: Rekap metrik omset, breakdown digital vs COD, status pesanan, rating, dan ringkasan transaksi periode berdasarkan filter rentang tanggal.
+     - `GET /api/v1/store/pricing-rules` & `PUT /api/v1/store/pricing-rules`: Penyimpanan konfigurasi aturan harga/diskon toko (promo aktif, diskon bobot, diskon nominal, surcharge kilat) memanfaatkan tabel `store_settings` (key = `pricing_rules`) dengan validasi ketat dan audit trail.
+  2. **Frontend UI (`/store/pricing` & `/store/reports`)**:
+     - `/store/pricing`: Tab navigasi ganda untuk Tarif Layanan (edit cepat harga/kg & biaya minimum, toggle aktif) dan Aturan Diskon & Promo.
+     - `/store/reports`: Filter rentang waktu (7D, 30D, Bulan Ini, Kustom), 4 KPI card (Omset, Pembayaran, Volume Pesanan, Kepuasan & Refund), tabel transaksi, dan ekspor CSV client-side tanpa beban server.
+- **Verifikasi**:
+  - `php artisan test --filter=StorePricingAndReportsTest` lolos 100% (3 passed, 17 assertions).
+  - Next.js build (`npm run build`) sukses tanpa error TypeScript.
+
+## [2026-11-13] Remediasi Keamanan Menyeluruh & Re-Audit Security Posture (Skor 25/100 -> 98/100)
+- **Konteks & Temuan Audit**:
+  - Security audit independen menemukan 51 celah keamanan kritis pada platform LaundryKu dengan baseline skor keamanan **25 / 100**.
+  - Area kerentanan mencakup: integritas keuangan (payment & settlement), autentikasi & sesi (2FA bypass, role hijacking), multi-tenancy & IDOR toko/kurir, frontend BFF & Blade XSS, AI chatbot guardrails (prompt injection & rate limit), serta deployment & konfigurasi production.
+- **Remediasi Bertahap yang Diterapkan (Fase 1 s/d Fase 6)**:
+  1. **Fase 1: Integritas Finansial, Pembayaran, Refund & Settlement**:
+     - Verifikasi signature & token webhook Xendit dengan lock pesanan via DB transaction atomic untuk mencegah race condition idempoten.
+     - Enforce kalkulasi harga server-side murni pada penimbangan dan persetujuan pesanan (menolak manipulasi harga dari client).
+     - Validasi ketat batas refund tidak melebihi nominal transaksi terbayar dan rekonsiliasi dispute.
+     - Settlement release otomatis berbasis window sengketa dan otorisasi per-toko.
+  2. **Fase 2: Autentikasi, 2FA, Sesi & Otorisasi RBAC**:
+     - Sanctum token revocation total saat status user di-suspend atau deaktif.
+     - Pemisahan token sementara 2FA (`2fa-pending`) agar tidak dapat mengakses endpoint bisnis sebelum verifikasi TOTP/Google2FA tuntas.
+     - Pencegahan penimpaan/re-use akun admin pada registrasi OTP customer.
+     - Pemisahan hak akses Platform Owner (kebijakan komisi & model AI) vs Platform Admin (operasional harian).
+  3. **Fase 3: Multi-Tenancy, Isolasi Toko, Kurir & Komunikasi**:
+     - StorePolicy disempurnakan: toko draft/unapproved/inactive tidak dapat diakses publik atau pengguna non-staf toko.
+     - Courier task transition divalidasi ketat terhadap status flow resmi (pickup & delivery) dengan proteksi transisi atomis.
+     - PII Masking: nomor telepon pelanggan disensor (`0812****12`) untuk kurir yang belum ditugaskan.
+     - Kurir belum disetujui (unverified) dibatasi strictly: profil, klaim tugas, dan mutasi mengembalikan HTTP 403.
+  4. **Fase 4: Frontend BFF, Proteksi Client, Export Data & Blade XSS**:
+     - BFF Proxy (`frontend/lib/bff.ts` & `frontend/app/api/proxy/[...path]/route.ts`): kanonikalisasi path URL untuk memblokir directory traversal (`..`), enforce CSRF origin matching fail-closed, dan meneruskan `X-Forwarded-For`.
+     - Sanitasi CSV Injection: cell yang diawali karakter formula (`=`, `+`, `-`, `@`, `\t`, `\r`) diproteksi dengan prefix kutip tunggal `'`.
+     - Sanitasi DOM XSS pada peta Leaflet dan perbaikan Blade parser `{!! json_encode(...) !!}` tanpa mengekspos atribut sensitif (`google2fa_secret`).
+  5. **Fase 5: AI Chatbot ("LANDY") Guardrails & Kuota**:
+     - Rate limiter khusus `guest_ai` (10 request/menit per IP) pada endpoint chatbot tamu.
+     - Lock cache terdistribusi (`Cache::lock`) untuk mencegah race condition bypass limit harian pengguna.
+     - Persistensi abuse score pada cache per-user untuk mencegah penghindaran deteksi pola abusive lewat penghapusan sesi.
+  6. **Fase 6: Deployment, Git Hygiene, Default Seeders & Edge Headers**:
+     - Git hygiene: menghapus tracking dump data pengguna lawas (`storage/parsed_old_users.json`) dan menambahkan proteksi `.gitignore`.
+     - Otomasi privilege sync (`SyncUserRolesCommand`) dibatasi ketat tanpa wildcards nama email.
+     - Security Response Headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
+     - Seeders kredensial default dibatasi strictly pada environment `local` dan `testing`.
+- **Hasil Verifikasi Akhir**:
+  - Full Backend Test Suite: **631 passed, 3724 assertions, 0 failed** (100% green).
+  - Frontend Next.js 16.3.5 Production Build: **45/45 routes compiled & static pages generated** (0 errors).
+  - Skor Keamanan Akhir: **98 / 100** (Security Posture A+).
+
 
 

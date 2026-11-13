@@ -181,12 +181,20 @@ class DashboardResponseRegressionTest extends TestCase
         ]);
 
         // 1 completed order today
-        Order::factory()->create([
+        $completedOrder = Order::factory()->create([
             'store_id' => $store->id,
             'customer_id' => $customer->id,
             'status' => 'completed',
             'completed_at' => now(),
             'total_amount' => 45000,
+        ]);
+
+        Payment::create([
+            'order_id' => $completedOrder->id,
+            'payment_method' => 'qris',
+            'amount' => 45000,
+            'status' => 'paid',
+            'paid_at' => now(),
         ]);
 
         // 1 courier available

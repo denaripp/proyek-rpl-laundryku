@@ -12,6 +12,8 @@ scratch/
 
 # Local-only storage + cache (may contain user data / SQL dumps).
 /storage/*.sql
+/storage/*.json
+/storage/parsed_old_users.json
 /storage/app/backups/
 /storage/backups/
 /storage/app/private/

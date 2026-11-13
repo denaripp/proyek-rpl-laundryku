@@ -4,6 +4,7 @@ import {
   PORTAL_COOKIE_NAMES,
   TEMP_2FA_COOKIE_NAMES,
   PortalType,
+  clearAllPortalCookies,
   getCookieOptions,
   validateCsrfOrigin,
 } from '@/lib/bff';
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     if (action === 'logout') {
-      const token = request.cookies.get(PORTAL_COOKIE_NAMES.customer)?.value;
+      const token = request.cookies.get(PORTAL_COOKIE_NAMES.customer)?.value || request.cookies.get('auth_token')?.value;
       if (token) {
         await fetch(`${LARAVEL_API_BASE_URL}/auth/logout`, {
           method: 'POST',
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       }
 
       const response = NextResponse.json({ success: true, message: 'Berhasil logout.' });
-      response.cookies.set(PORTAL_COOKIE_NAMES.customer, '', getCookieOptions(0));
+      clearAllPortalCookies(response);
       return response;
     }
   }
@@ -276,8 +277,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       }
 
       const response = NextResponse.json({ success: true, message: 'Berhasil logout.' });
-      response.cookies.set(PORTAL_COOKIE_NAMES.mitra, '', getCookieOptions(0));
-      response.cookies.set(TEMP_2FA_COOKIE_NAMES.mitra, '', getCookieOptions(0));
+      clearAllPortalCookies(response);
       return response;
     }
   }
@@ -324,7 +324,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       }
 
       const response = NextResponse.json({ success: true, message: 'Berhasil logout.' });
-      response.cookies.set(PORTAL_COOKIE_NAMES.courier, '', getCookieOptions(0));
+      clearAllPortalCookies(response);
       return response;
     }
   }
@@ -426,8 +426,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       }
 
       const response = NextResponse.json({ success: true, message: 'Berhasil logout.' });
-      response.cookies.set(PORTAL_COOKIE_NAMES.admin, '', getCookieOptions(0));
-      response.cookies.set(TEMP_2FA_COOKIE_NAMES.admin, '', getCookieOptions(0));
+      clearAllPortalCookies(response);
       return response;
     }
   }
@@ -470,7 +469,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       if (!res.ok) {
         // Token invalid or revoked in database
         const response = NextResponse.json({ success: false, user: null }, { status: 401 });
-        if (hadDedicatedCookie) {
+        if (hadDedicatedCookie && res.status === 401) {
           response.cookies.set(cookieName, '', getCookieOptions(0));
         }
         return response;

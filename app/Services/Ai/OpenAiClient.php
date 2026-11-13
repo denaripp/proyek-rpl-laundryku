@@ -2,6 +2,7 @@
 
 namespace App\Services\Ai;
 
+use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -30,7 +31,9 @@ class OpenAiClient implements AiClientInterface
 
         $baseUrl = rtrim((string) config('ai.base_url', 'https://openrouter.ai/api/v1'), '/');
         $endpoint = "{$baseUrl}/chat/completions";
-        $model = config('ai.model', 'liquid/lfm-2.5-2.6b:free');
+        $model = Setting::get('AI_MODEL') ?: config('ai.model', 'liquid/lfm-2.5-2.6b:free');
+        $rawTemp = Setting::get('AI_TEMPERATURE');
+        $temperature = is_numeric($rawTemp) ? (float) $rawTemp : (float) config('ai.temperature', 0.2);
 
         $headers = [
             'HTTP-Referer' => config('ai.http_referer', 'http://localhost:3000'),
@@ -40,7 +43,7 @@ class OpenAiClient implements AiClientInterface
         $payload = [
             'model' => $model,
             'messages' => $messages,
-            'temperature' => 0.2,
+            'temperature' => $temperature,
         ];
 
         if (!empty($tools)) {
@@ -108,11 +111,102 @@ class OpenAiClient implements AiClientInterface
         return [
             'content' => $message['content'] ?? null,
             'tool_calls' => $toolCalls,
+            'model' => is_string($body['model'] ?? null) ? trim($body['model']) : $model,
             'usage' => [
                 'prompt_tokens' => (int) ($body['usage']['prompt_tokens'] ?? 0),
                 'completion_tokens' => (int) ($body['usage']['completion_tokens'] ?? 0),
             ],
         ];
+    }
+
+    /**
+     * Test connection to a specific model via OpenRouter/OpenAI API.
+     *
+     * @return array{success: bool, latency_ms: int, message: string, error?: string, model: string}
+     */
+    public function testConnection(string $model): array
+    {
+        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+
+        if (empty($apiKey)) {
+            if ((app()->isLocal() || app()->runningUnitTests()) && config('ai.mock_in_local', false)) {
+                return [
+                    'success' => true,
+                    'latency_ms' => 45,
+                    'message' => "Simulasi koneksi model {$model} berhasil (mock mode aktif).",
+                    'model' => $model,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'latency_ms' => 0,
+                'message' => 'API Key AI belum dikonfigurasi di server (.env).',
+                'error' => 'AI_API_KEY_NOT_CONFIGURED',
+                'model' => $model,
+            ];
+        }
+
+        $baseUrl = rtrim((string) config('ai.base_url', 'https://openrouter.ai/api/v1'), '/');
+        $endpoint = "{$baseUrl}/chat/completions";
+
+        $headers = [
+            'HTTP-Referer' => config('ai.http_referer', 'http://localhost:3000'),
+            'X-Title' => config('ai.x_title', 'LaundryKu'),
+        ];
+
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'user', 'content' => 'Ping test. Reply with "PONG" only.'],
+            ],
+            'max_tokens' => 10,
+            'temperature' => 0,
+        ];
+
+        $startTime = microtime(true);
+
+        try {
+            $response = Http::withToken($apiKey)
+                ->withHeaders($headers)
+                ->timeout((int) config('ai.timeout', 15))
+                ->post($endpoint, $payload);
+
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+
+            if ($response->successful()) {
+                $body = $response->json();
+                $content = trim((string) ($body['choices'][0]['message']['content'] ?? ''));
+                $resolved = is_string($body['model'] ?? null) ? trim($body['model']) : $model;
+
+                return [
+                    'success' => true,
+                    'latency_ms' => $latencyMs,
+                    'message' => "Koneksi ke model {$model} berhasil (respon dalam {$latencyMs}ms).",
+                    'model' => $model,
+                    'resolved_model' => $resolved,
+                    'reply' => $content ?: 'PONG',
+                ];
+            }
+
+            $errMsg = $this->sanitizeErrorBody($response->body());
+            return [
+                'success' => false,
+                'latency_ms' => $latencyMs,
+                'message' => "Koneksi gagal (HTTP {$response->status()}): {$errMsg}",
+                'error' => $errMsg,
+                'model' => $model,
+            ];
+        } catch (\Throwable $e) {
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+            return [
+                'success' => false,
+                'latency_ms' => $latencyMs,
+                'message' => 'Gagal menghubungi server AI: ' . $e->getMessage(),
+                'error' => $e->getMessage(),
+                'model' => $model,
+            ];
+        }
     }
 
     /**
@@ -289,8 +383,65 @@ class OpenAiClient implements AiClientInterface
             }
         }
 
+        // Platform search users or account linkage
+        if ($matchedTool === null && (str_contains($lower, 'cari user') || str_contains($lower, 'cari pengguna') || str_contains($lower, 'cari akun') || str_contains($lower, 'terhubung ke toko') || str_contains($lower, 'keterkaitan akun') || str_contains($lower, 'toko mana'))) {
+            if (in_array('platform_search_users', $toolNames, true)) {
+                $matchedTool = 'platform_search_users';
+                $cleanQuery = $lastUserMsg;
+                if (preg_match('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $lastUserMsg, $em)) {
+                    $cleanQuery = $em[0];
+                } elseif (preg_match('/(?:bernama|nama)\s+([a-zA-Z0-9\s._-]+?)(?:\s+terhubung|\s+ke|\?|$)/i', $lastUserMsg, $nm)) {
+                    $cleanQuery = trim($nm[1]);
+                } elseif (preg_match('/(?:pengguna|user|akun)\s+([a-zA-Z0-9\s._-]+?)(?:\s+terhubung|\s+ke|\?|$)/i', $lastUserMsg, $nm)) {
+                    $cleanQuery = trim($nm[1]);
+                }
+                $matchedArgs = ['query' => $cleanQuery];
+            }
+        }
+
+        // Platform orders
+        if ($matchedTool === null && (str_contains($lower, 'pesanan') || str_contains($lower, 'order')) && in_array('platform_get_orders', $toolNames, true)) {
+            $matchedTool = 'platform_get_orders';
+            if (str_contains($lower, 'menunggu pembayaran') || str_contains($lower, 'belum bayar') || str_contains($lower, 'awaiting_payment')) {
+                $matchedArgs = ['status' => 'awaiting_payment'];
+            } elseif (str_contains($lower, 'completed_at') || str_contains($lower, 'kosong') || str_contains($lower, 'null')) {
+                $matchedArgs = ['status' => 'completed', 'null_completed_at' => true];
+            } elseif (str_contains($lower, 'per toko') || str_contains($lower, 'tiap toko')) {
+                $matchedArgs = ['status' => 'completed', 'period' => 'this_week', 'group_by_store' => true];
+            }
+        }
+
+        // Platform couriers active tasks
+        if ($matchedTool === null && str_contains($lower, 'kurir') && (str_contains($lower, 'tugas') || str_contains($lower, 'aktif')) && in_array('platform_get_courier_activity', $toolNames, true)) {
+            $matchedTool = 'platform_get_courier_activity';
+            $matchedArgs = ['only_active' => true];
+        }
+
+        // Platform settlements
+        if ($matchedTool === null && (str_contains($lower, 'settlement') || str_contains($lower, 'pencairan')) && in_array('platform_get_settlements', $toolNames, true)) {
+            $matchedTool = 'platform_get_settlements';
+            $matchedArgs = ['status' => 'generated'];
+        }
+
+        // Platform explain admin menu
+        if ($matchedTool === null && (str_contains($lower, 'menu') || str_contains($lower, 'fungsi')) && in_array('platform_explain_admin_menu', $toolNames, true)) {
+            $matchedTool = 'platform_explain_admin_menu';
+            $key = 'overview';
+            if (str_contains($lower, 'pengguna') || str_contains($lower, 'user') || str_contains($lower, 'pelanggan')) $key = 'users';
+            elseif (str_contains($lower, 'toko') || str_contains($lower, 'mitra')) $key = 'stores';
+            elseif (str_contains($lower, 'pesanan') || str_contains($lower, 'order')) $key = 'orders';
+            elseif (str_contains($lower, 'kurir')) $key = 'couriers';
+            elseif (str_contains($lower, 'pembayaran')) $key = 'payments';
+            elseif (str_contains($lower, 'refund')) $key = 'refunds';
+            elseif (str_contains($lower, 'dispute') || str_contains($lower, 'sengketa') || str_contains($lower, 'komplain')) $key = 'disputes';
+            elseif (str_contains($lower, 'audit')) $key = 'audit';
+            elseif (str_contains($lower, 'komisi')) $key = 'commission';
+            elseif (str_contains($lower, 'ai')) $key = 'ai';
+            $matchedArgs = ['menu_key' => $key];
+        }
+
         // Platform users
-        if ($matchedTool === null && (str_contains($lower, 'user') || str_contains($lower, 'pengguna'))) {
+        if ($matchedTool === null && (str_contains($lower, 'user') || str_contains($lower, 'pengguna') || str_contains($lower, 'terdaftar') || (str_contains($lower, 'customer') && str_contains($lower, 'kurir')))) {
             if (in_array('platform_get_user_stats', $toolNames, true)) {
                 $matchedTool = 'platform_get_user_stats';
             }
@@ -522,7 +673,7 @@ class OpenAiClient implements AiClientInterface
             return "Statistik Pengguna Platform LaundryKu:\n" .
                 "- Total Pengguna: {$data['total_users']}\n" .
                 "- Pelanggan: {$data['customers']}\n" .
-                "- Mitra Toko: {$data['store_managers']}\n" .
+                "- Pengelola Toko: {$data['store_managers']}\n" .
                 "- Kurir: {$data['couriers']}.";
         }
 
@@ -546,6 +697,76 @@ class OpenAiClient implements AiClientInterface
             $lines = ["Daftar komplain ({$data['total_complaints']}):"];
             foreach ($data['complaints'] as $c) {
                 $lines[] = "- Pesanan {$c['order_number']}: \"{$c['reason']}\" (Status: {$c['status']})";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 18. Platform Search Users
+        if (isset($data['users']) && isset($data['total'])) {
+            if ($data['total'] === 0) {
+                return $data['message'] ?? 'Pengguna tidak ditemukan.';
+            }
+            $lines = ["Hasil pencarian pengguna ({$data['total']} akun):"];
+            foreach ($data['users'] as $u) {
+                $lines[] = "- {$u['name']} (Role: {$u['role']}, Email: {$u['masked_email']}, Telepon: {$u['masked_phone']}, Status: {$u['status']}, {$u['linkage']})";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 19. Platform Orders
+        if (isset($data['breakdown'])) {
+            if (empty($data['breakdown'])) {
+                return "Tidak ada pesanan pada periode ini.";
+            }
+            $lines = ["Jumlah pesanan selesai minggu ini per toko:"];
+            foreach ($data['breakdown'] as $b) {
+                $lines[] = "- {$b['store_name']}: {$b['count']} pesanan";
+            }
+            return implode("\n", $lines);
+        }
+        if (isset($data['orders']) && isset($data['total'])) {
+            if ($data['total'] === 0) {
+                return "Tidak ada pesanan yang sesuai kriteria.";
+            }
+            $lines = ["Daftar pesanan ({$data['total']} pesanan):"];
+            foreach ($data['orders'] as $o) {
+                $lines[] = "- {$o['order_number']} (Toko: {$o['store_name']}, Pelanggan: {$o['customer_name']}, Status: {$o['status']}, Total: Rp " . number_format($o['total_amount'], 0, ',', '.') . ")";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 20. Platform Courier Activity
+        if (isset($data['active_tasks'])) {
+            if (empty($data['active_tasks'])) {
+                return "Saat ini tidak ada kurir yang sedang memiliki tugas aktif.";
+            }
+            $lines = ["Daftar kurir dengan tugas aktif:"];
+            foreach ($data['active_tasks'] as $t) {
+                $lines[] = "- {$t['courier_name']} (Toko: {$t['store_name']}): Tugas {$t['task_type']} untuk pesanan {$t['order_number']} (Status: {$t['status']})";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 21. Platform Settlements
+        if (isset($data['status']) && isset($data['total_settlements']) && isset($data['formatted_nominal'])) {
+            if ($data['total_settlements'] === 0) {
+                return "Saat ini tidak ada pengajuan settlement dengan status {$data['status']}.";
+            }
+            $lines = ["Terdapat {$data['total_settlements']} pengajuan settlement ({$data['status']}) dengan total {$data['formatted_nominal']}:"];
+            foreach ($data['items'] as $item) {
+                $lines[] = "- {$item['reference']} (Toko: {$item['store_name']}, Periode: {$item['period']}, Nominal: Rp " . number_format($item['net_amount'], 0, ',', '.') . ")";
+            }
+            return implode("\n", $lines);
+        }
+
+        // 22. Platform Explain Admin Menu
+        if (isset($data['explanation'])) {
+            return $data['explanation'];
+        }
+        if (isset($data['menus'])) {
+            $lines = [$data['overview'] ?? 'Menu Admin:'];
+            foreach ($data['menus'] as $k => $desc) {
+                $lines[] = "- " . ucfirst($k) . ": {$desc}";
             }
             return implode("\n", $lines);
         }

@@ -22,6 +22,10 @@ class EnsurePlatformAdmin
             return redirect()->route('login');
         }
 
+        if (!$user->is_active) {
+            abort(403, 'Akun Anda dinonaktifkan.');
+        }
+
         $isAdminOrOwner = $user->hasRole('platform_admin')
             || $user->hasRole('platform_owner')
             || $user->hasPermissionTo('view_admin_dashboard')

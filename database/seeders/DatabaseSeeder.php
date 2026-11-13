@@ -14,8 +14,13 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolesAndPermissionsSeeder::class,
             SettingsSeeder::class,
-            SuperAdminSeeder::class,
-            DefaultUsersSeeder::class,
         ]);
+
+        if (app()->environment('local', 'testing')) {
+            $this->call([
+                SuperAdminSeeder::class,
+                DefaultUsersSeeder::class,
+            ]);
+        }
     }
 }

@@ -27,7 +27,7 @@ class CourierTaskController extends Controller
     public function accept(Request $request, CourierTask $task)
     {
         $user = $request->user();
-        Gate::forUser($user)->authorize('update', $task->courier);
+        Gate::forUser($user)->authorize('operate', $task);
 
         if ($task->status !== 'assigned') {
             return response()->json(['error' => 'Task can only be accepted when in ASSIGNED status.'], 422);
@@ -46,7 +46,7 @@ class CourierTaskController extends Controller
     public function reject(Request $request, CourierTask $task)
     {
         $user = $request->user();
-        Gate::forUser($user)->authorize('update', $task->courier);
+        Gate::forUser($user)->authorize('operate', $task);
 
         if ($task->status !== 'assigned') {
             return response()->json(['error' => 'Task can only be rejected when in ASSIGNED status.'], 422);
@@ -75,7 +75,7 @@ class CourierTaskController extends Controller
     public function updateStatus(Request $request, CourierTask $task)
     {
         $user = $request->user();
-        Gate::forUser($user)->authorize('update', $task->courier);
+        Gate::forUser($user)->authorize('operate', $task);
 
         $validated = $request->validate([
             'status' => 'required|string|in:arrived,picked_up,delivered,failed',
@@ -135,7 +135,7 @@ class CourierTaskController extends Controller
     public function updateLocation(Request $request, CourierTask $task)
     {
         $user = $request->user();
-        Gate::forUser($user)->authorize('update', $task->courier);
+        Gate::forUser($user)->authorize('operate', $task);
 
         $validated = $request->validate([
             'latitude' => 'required|numeric|between:-90,90',

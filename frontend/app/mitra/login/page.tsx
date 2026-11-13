@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Store, Lock, Mail, AlertCircle, ArrowRight, ArrowLeft, KeyRound } from 'lucide-react';
 import { OTPInput } from '@/components/ui/OTPInput';
+import { getSafeRedirectPath } from '@/lib/auth';
 
 function MitraLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = searchParams.get('redirect') || '/store';
+  const safeRedirect = getSafeRedirectPath(searchParams.get('redirect'), '/store');
+  const redirectTarget = safeRedirect && safeRedirect !== '/mitra/login' ? safeRedirect : '/store';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

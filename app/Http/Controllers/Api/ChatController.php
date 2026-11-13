@@ -201,6 +201,14 @@ class ChatController extends Controller
             return $this->errorResponse('FORBIDDEN', 'Hanya pelanggan yang dapat memulai percakapan dengan toko.', null, 403);
         }
 
+        // Validate order ownership and store matching if order_id is provided (Anti-IDOR)
+        if ($orderId) {
+            $order = Order::find($orderId);
+            if (! $order || (! $isSuperAdmin && (int) $order->customer_id !== (int) $user->id) || (int) $order->store_id !== (int) $storeId) {
+                return $this->errorResponse('FORBIDDEN', 'Pesanan tidak valid atau bukan milik Anda pada gerai ini.', null, 403);
+            }
+        }
+
         // If order_id provided, find conversation for this order first
         $conversation = null;
         if ($orderId) {

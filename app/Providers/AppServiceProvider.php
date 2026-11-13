@@ -52,6 +52,19 @@ class AppServiceProvider extends ServiceProvider
             \App\Models\User::class => \App\Models\User::class,
         ]);
 
+        // Security: Inactive/suspended users cannot authenticate with existing Sanctum tokens
+        \Laravel\Sanctum\Sanctum::authenticateAccessTokensUsing(function ($accessToken, $isValid) {
+            if (! $isValid || ! $accessToken->tokenable_id) {
+                return false;
+            }
+
+            $isActive = \Illuminate\Support\Facades\DB::table('users')
+                ->where('id', $accessToken->tokenable_id)
+                ->value('is_active');
+
+            return (bool) $isActive;
+        });
+
         $this->configureRateLimiters();
     }
 
@@ -98,6 +111,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', function (Request $request) {
             $email = Str::lower((string) $request->input('email', ''));
             return Limit::perMinute(5)->by($email . '|' . $request->ip());
+        });
+
+        // Guest AI Chatbot query: 10 per minute per IP to prevent LLM quota exhaustion
+        RateLimiter::for('guest_ai', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
         });
     }
 }

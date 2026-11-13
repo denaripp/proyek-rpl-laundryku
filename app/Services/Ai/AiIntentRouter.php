@@ -3,6 +3,7 @@
 namespace App\Services\Ai;
 
 use App\Models\Order;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
@@ -808,7 +809,7 @@ class AiIntentRouter
         // --- SUPER_ADMIN_USERS (Super admin asking user counts per role without PII) ---
         $adminUsersScore = 0;
         if (in_array($role, ['super_admin', 'platform_owner', 'platform_admin'], true) || str_contains($text, 'di sistem') || str_contains($text, 'di platform') || str_contains($text, 'di laundryku')) {
-            if (str_contains($text, 'pengguna per peran') || str_contains($text, 'user per peran') || str_contains($text, 'total pengguna') || str_contains($text, 'total user') || str_contains($text, 'jumlah user') || str_contains($text, 'jumlah pelanggan mitra') || str_contains($text, 'total customer di laundryku') || str_contains($text, 'jumlah kurir terdaftar di platform') || str_contains($text, 'total customer di platform')) {
+            if (str_contains($text, 'pengguna per peran') || str_contains($text, 'user per peran') || str_contains($text, 'total pengguna') || str_contains($text, 'total user') || str_contains($text, 'jumlah user') || str_contains($text, 'jumlah pelanggan mitra') || str_contains($text, 'total customer di laundryku') || str_contains($text, 'jumlah kurir terdaftar di platform') || str_contains($text, 'total customer di platform') || (str_contains($text, 'customer') && str_contains($text, 'kurir')) || str_contains($text, 'terdaftar')) {
                 $adminUsersScore += 95;
             }
             if (str_contains($text, 'user aktif platform') || str_contains($text, 'jumlah pelanggan') || str_contains($text, 'total customer')) {
@@ -1071,7 +1072,8 @@ class AiIntentRouter
      */
     public function evaluateLayer2(User $user, string $normalized, ?string $orderNumber, ?string $modelOverride = null): array
     {
-        $routerModel = $modelOverride ?? config('ai.router_model', config('ai.model', 'liquid/lfm-2.5-2.6b:free'));
+        $defaultModel = Setting::get('AI_MODEL') ?: config('ai.model', 'liquid/lfm-2.5-2.6b:free');
+        $routerModel = $modelOverride ?? config('ai.router_model', $defaultModel);
         $apiKey = config('ai.api_key', config('ai.openai_api_key'));
 
         if (empty($apiKey) || !$this->client || $this->client instanceof \Tests\Feature\FakeAiClient || $this->client instanceof \Tests\Feature\FakeTrackingAiClient) {

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 620" width="1040" height="620" style="background:#FFFFFF;font-family:'Plus Jakarta Sans','Segoe UI',Arial,sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0E7490"/>
+    </marker>
+    <marker id="open-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#0B192C" stroke-width="1.5"/>
+    </marker>
+    <marker id="impl-triangle" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.6"/>
+    </marker>
+    <marker id="diamond-comp" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="diamond-agg" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#FFFFFF" stroke="#0B192C" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-many" viewBox="0 0 14 12" refX="12" refY="6" markerWidth="11" markerHeight="10" orient="auto">
+      <path d="M 1 6 L 12 1 M 1 6 L 12 6 M 1 6 L 12 11 M 1 2 L 1 10" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-one" viewBox="0 0 10 12" refX="6" refY="6" markerWidth="8" markerHeight="10" orient="auto">
+      <path d="M 4 1 L 4 11 M 8 1 L 8 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-zero-one" viewBox="0 0 16 12" refX="12" refY="6" markerWidth="12" markerHeight="10" orient="auto">
+      <circle cx="4" cy="6" r="3" fill="#FFFFFF" stroke="#334155" stroke-width="1.3"/>
+      <path d="M 10 1 L 10 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    
+  </defs>
+  <text x="520" y="22" text-anchor="middle" font-size="13" font-weight="800" fill="#0B192C">Sequence Diagram A — Alur Pesan Frontend, Backend, Database &amp; OpenRouter AI</text><rect x="9" y="34" width="132" height="38" rx="6" fill="#0B192C"/><text x="75" y="51" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">:User</text><text x="75" y="64" text-anchor="middle" font-size="8.5" fill="#99F6E4">(Browser)</text><line x1="75" y1="72" x2="75" y2="605" stroke="#94A3B8" stroke-width="1.3" stroke-dasharray="5,4"/><rect x="164" y="34" width="132" height="38" rx="6" fill="#0B192C"/><text x="230" y="51" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">:Next.js UI</text><text x="230" y="64" text-anchor="middle" font-size="8.5" fill="#99F6E4">&amp; BFF (/api/chat)</text><line x1="230" y1="72" x2="230" y2="605" stroke="#94A3B8" stroke-width="1.3" stroke-dasharray="5,4"/><rect x="334" y="34" width="132" height="38" rx="6" fill="#0B192C"/><text x="400" y="51" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">:AiChatController</text><text x="400" y="64" text-anchor="middle" font-size="8.5" fill="#99F6E4">&amp; AiAssistantSvc</text><line x1="400" y1="72" x2="400" y2="605" stroke="#94A3B8" stroke-width="1.3" stroke-dasharray="5,4"/><rect x="519" y="34" width="132" height="38" rx="6" fill="#0B192C"/><text x="585" y="51" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">:AiIntentRouter</text><text x="585" y="64" text-anchor="middle" font-size="8.5" fill="#99F6E4">&amp; AiToolRegistry</text><line x1="585" y1="72" x2="585" y2="605" stroke="#94A3B8" stroke-width="1.3" stroke-dasharray="5,4"/><rect x="699" y="34" width="132" height="38" rx="6" fill="#0B192C"/><text x="765" y="51" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">:MySQL 8</text><text x="765" y="64" text-anchor="middle" font-size="8.5" fill="#99F6E4">(DB &amp; Settings)</text><line x1="765" y1="72" x2="765" y2="605" stroke="#94A3B8" stroke-width="1.3" stroke-dasharray="5,4"/><rect x="879" y="34" width="132" height="38" rx="6" fill="#0B192C"/><text x="945" y="51" text-anchor="middle" font-size="10" font-weight="700" fill="#FFFFFF">:OpenRouter</text><text x="945" y="64" text-anchor="middle" font-size="8.5" fill="#99F6E4">(LLM Cloud API)</text><line x1="945" y1="72" x2="945" y2="605" stroke="#94A3B8" stroke-width="1.3" stroke-dasharray="5,4"/><line x1="75" y1="102" x2="230" y2="102" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="62.5" y="88" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="152.5" y="98" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">1. Kirim pesan di AiChatWidget</text><line x1="230" y1="134" x2="400" y2="134" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="225" y="120" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="315" y="130" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">2. POST /api/v1/chatbot/send (+Bearer)</text><line x1="400" y1="166" x2="765" y2="166" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="492.5" y="152" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="582.5" y="162" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">3. Baca settings(active_model) &amp; history</text><line x1="765" y1="196" x2="400" y2="196" stroke="#0B192C" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+      <rect x="492.5" y="182" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="582.5" y="192" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">4. Return config &amp; conversation</text><line x1="400" y1="228" x2="585" y2="228" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="402.5" y="214" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="492.5" y="224" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">5. normalize + guardrail + route()</text><rect x="330" y="246" width="665" height="232" rx="6" fill="none" stroke="#0E7490" stroke-width="1.5"/><rect x="330" y="246" width="120" height="18" fill="#0E7490"/><text x="390" y="259" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">alt [Routing Layer]</text><text x="462" y="259" font-size="9" font-weight="700" fill="#0E7490">[Layer 1 Hit: KB 21 Topik / Query Data Langsung (0 Token)]</text><line x1="585" y1="286" x2="765" y2="286" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="585" y="272" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="675" y="282" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">6a. Query terotorisasi Policy (jika data)</text><line x1="765" y1="314" x2="400" y2="314" stroke="#0B192C" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+      <rect x="492.5" y="300" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="582.5" y="310" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">6b. Return hasil &amp; mask PII</text><line x1="330" y1="330" x2="995" y2="330" stroke="#0E7490" stroke-width="1" stroke-dasharray="4,4"/><text x="342" y="344" font-size="9" font-weight="700" fill="#B45309">[else: Layer 2/3 LLM Inference + Tool Calling Loop (max_tool_rounds)]</text><line x1="400" y1="372" x2="945" y2="372" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="582.5" y="358" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="672.5" y="368" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">7a. POST /chat/completions (model aktif + tools)</text><line x1="945" y1="402" x2="400" y2="402" stroke="#0B192C" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+      <rect x="582.5" y="388" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="672.5" y="398" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">7b. Return tool_calls JSON</text><line x1="400" y1="432" x2="585" y2="432" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="402.5" y="418" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="492.5" y="428" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">7c. execute(toolName, args, actor)</text><line x1="585" y1="456" x2="765" y2="456" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="585" y="442" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="675" y="452" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">7d. SELECT scoped tenant/role -&gt; hasil</text><line x1="400" y1="472" x2="945" y2="472" stroke="#0E7490" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="582.5" y="458" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="672.5" y="468" text-anchor="middle" font-size="9" font-weight="600" fill="#0E7490">7e. Kirim tool_result -&gt; final answer</text><line x1="400" y1="514" x2="765" y2="514" stroke="#0B192C" stroke-width="1.4"  marker-end="url(#arrow)"/>
+      <rect x="492.5" y="500" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="582.5" y="510" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">8. INSERT ai_messages &amp; ai_usage_logs</text><line x1="400" y1="546" x2="230" y2="546" stroke="#0B192C" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+      <rect x="225" y="532" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="315" y="542" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">9. JSON {reply, model, usage}</text><line x1="230" y1="578" x2="75" y2="578" stroke="#0B192C" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+      <rect x="62.5" y="564" width="180" height="13" fill="#FFFFFF" opacity="0.92"/>
+      <text x="152.5" y="574" text-anchor="middle" font-size="9" font-weight="600" fill="#0B192C">10. Render balasan di Chat Widget</text>
+</svg>

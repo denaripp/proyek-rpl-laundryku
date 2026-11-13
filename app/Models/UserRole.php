@@ -13,6 +13,7 @@ class UserRole extends Pivot
         'user_id',
         'role_id',
         'store_id',
+        'status',
         'assigned_at',
         'assigned_by',
     ];

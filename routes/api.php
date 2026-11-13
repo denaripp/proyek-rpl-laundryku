@@ -82,7 +82,7 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // ===== AI Assistant (Browser-facing widget, Session & CSRF protected via 'web' middleware) =====
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth:web,admin,mitra,kurir'])->group(function () {
     Route::post('/ai/chat', [AiChatController::class, 'chat']);
     Route::get('/ai/conversations', [AiChatController::class, 'index']);
     Route::get('/ai/conversations/{conversation}', [AiChatController::class, 'show']);
@@ -235,11 +235,11 @@ Route::prefix('v1')->group(function () {
     // ===== Public Chatbot FAQ & Guest Prompt =====
     Route::prefix('chatbot')->group(function () {
         Route::get('/faq', [ChatbotController::class, 'faq']);
-        Route::post('/guest/ask', [ChatbotController::class, 'guestAsk']);
+        Route::post('/guest/ask', [ChatbotController::class, 'guestAsk'])->middleware('throttle:guest_ai');
     });
 
     // ===== Protected Customer & User Endpoints =====
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', '2fa'])->group(function () {
         Route::get('/profile', [CustomerController::class, 'profile']);
         Route::put('/profile', [CustomerController::class, 'updateProfile']);
         Route::patch('/profile', [CustomerController::class, 'updateProfile']);
@@ -276,6 +276,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('chatbot')->group(function () {
             Route::get('/sessions', [ChatbotController::class, 'index']);
             Route::post('/sessions', [ChatbotController::class, 'store']);
+            Route::delete('/sessions', [ChatbotController::class, 'destroyAll']);
             Route::get('/sessions/{id}', [ChatbotController::class, 'show']);
             Route::post('/sessions/{id}/messages', [ChatbotController::class, 'sendMessage']);
             Route::delete('/sessions/{id}', [ChatbotController::class, 'destroy']);
@@ -328,8 +329,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/ledger', [MitraPortalController::class, 'ledger']);
             Route::get('/payment-methods', [MitraPortalController::class, 'getPaymentMethods']);
             Route::put('/payment-methods', [MitraPortalController::class, 'updatePaymentMethods']);
-        Route::get('/payout-account', [MitraPortalController::class, 'getPayoutAccount']);
-        Route::put('/payout-account', [MitraPortalController::class, 'updatePayoutAccount']);
+            Route::get('/payout-account', [MitraPortalController::class, 'getPayoutAccount']);
+            Route::put('/payout-account', [MitraPortalController::class, 'updatePayoutAccount']);
+            Route::get('/reports', [MitraPortalController::class, 'reports']);
+            Route::get('/pricing-rules', [MitraPortalController::class, 'getPricingRules']);
+            Route::put('/pricing-rules', [MitraPortalController::class, 'updatePricingRules']);
             Route::post('/orders/{order}/confirm-cod', [MitraPortalController::class, 'confirmCod']);
         });
 
@@ -405,10 +409,15 @@ Route::prefix('v1')->group(function () {
         // 7. Audit Logs
         Route::get('/audit-logs', [AdminPortalController::class, 'auditLogs']);
         Route::get('/audit-logs/{id}', [AdminPortalController::class, 'auditLogDetail']);
+
+        // 8. AI Assistant Settings & Model Configuration
+        Route::get('/ai-settings', [AdminPortalController::class, 'getAiSettings']);
+        Route::put('/ai-settings', [AdminPortalController::class, 'updateAiSettings']);
+        Route::post('/ai-settings/test', [AdminPortalController::class, 'testAiModel']);
     });
 
     // ===== User Session Info =====
     Route::get('/me', [OtpRegistrationApiController::class, 'me'])
-        ->middleware('auth:sanctum');
+        ->middleware(['auth:sanctum', '2fa']);
 });
 

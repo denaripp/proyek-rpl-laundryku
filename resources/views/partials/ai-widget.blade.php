@@ -64,7 +64,8 @@
         appendMsg('user', text);
         appendTyping();
         try {
-            const { data } = await axios.post(window.LK.apiBase + '/ai/chat', { 
+            const apiBase = window.LK?.apiBase || '/api';
+            const { data } = await axios.post(apiBase + '/ai/chat', { 
                 message: text, 
                 conversation_id: sessionId ? parseInt(sessionId, 10) : null 
             });

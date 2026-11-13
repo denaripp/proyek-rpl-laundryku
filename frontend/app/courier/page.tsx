@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -25,6 +25,7 @@ import { ORDER_STATUS_META, OrderStatus, confirmCourierCod } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
+import { usePolling } from '@/hooks/usePolling';
 import {
   Truck,
   Store,
@@ -104,9 +105,29 @@ export default function CourierDashboardPage() {
     }
   };
 
+  const fetchDataSilent = useCallback(async () => {
+    try {
+      const [profileData, tasksData] = await Promise.all([
+        getCourierProfile().catch(() => null),
+        getCourierTasks(activeTab),
+      ]);
+      if (profileData) {
+        setCourierProfile(profileData);
+      }
+      setTasks(tasksData || []);
+    } catch {
+      // Silent catch for background auto-refresh
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  // Polling 15s with auto-pause on background tab & refetch on refocus
+  usePolling(fetchDataSilent, 15000, {
+    enabled: !!activeTab,
+  });
 
   const handleLogout = async () => {
     await logoutAndRedirectHome('courier');

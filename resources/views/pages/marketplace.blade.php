@@ -103,6 +103,13 @@
         const useGoogle = window.LK.mapsKey;
         const stores = @json($mapStores);
 
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
         if (!useGoogle) {
             // Pakai Leaflet + OSM sebagai fallback (selalu tersedia)
             try {
@@ -112,8 +119,11 @@
                     maxZoom: 19,
                 }).addTo(map);
                 stores.forEach(s => {
+                    const safeName = escapeHtml(s.name);
+                    const safeAddress = escapeHtml(s.address ?? '');
+                    const safeSlug = encodeURIComponent(s.slug || '');
                     L.marker([s.lat, s.lng]).addTo(map)
-                        .bindPopup(`<strong>${s.name}</strong><br>${s.address ?? ''}<br><a href="/stores/${s.slug}">Detail</a>`);
+                        .bindPopup(`<strong>${safeName}</strong><br>${safeAddress}<br><a href="/stores/${safeSlug}">Detail</a>`);
                 });
                 return;
             } catch (e) {
@@ -141,7 +151,7 @@
 
         function renderTextFallback() {
             mapEl.innerHTML = '<div class="lk-map-fallback"><i class="bi bi-map" style="font-size:3rem"></i><p>Peta tidak dapat dimuat. Alamat laundry:</p><ul class="list-unstyled small">' +
-                stores.map(s => `<li><strong>${s.name}</strong> — ${s.address ?? '-'}</li>`).join('') + '</ul></div>';
+                stores.map(s => `<li><strong>${escapeHtml(s.name)}</strong> — ${escapeHtml(s.address ?? '-')}</li>`).join('') + '</ul></div>';
         }
     })();
 </script>

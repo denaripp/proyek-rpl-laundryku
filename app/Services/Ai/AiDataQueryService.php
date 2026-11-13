@@ -2,6 +2,7 @@
 
 namespace App\Services\Ai;
 
+use App\Enums\CourierTaskStatus;
 use App\Enums\OrderStatus;
 use App\Models\Courier;
 use App\Models\CourierTask;
@@ -10,6 +11,8 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Refund;
 use App\Models\Review;
+use App\Models\SettlementPeriod;
+use App\Models\StoreStaff;
 use App\Models\Service;
 use App\Models\ServicePrice;
 use App\Models\Setting;
@@ -1311,6 +1314,10 @@ class AiDataQueryService
         }
 
         $store = Store::whereIn('id', $storeIds)->first();
+        if (!$store || $store->status !== 'approved' || !$store->is_active) {
+            return 'Toko Anda belum berstatus aktif dan disetujui oleh admin platform, sehingga belum dapat melihat atau merekrut pelamar kurir.';
+        }
+
         $storeName = $this->getStoreDisplayName($store);
 
         $rejectedIds = DB::table('audit_logs')
@@ -1571,24 +1578,60 @@ class AiDataQueryService
             return "Detail Pesanan {$orderNumber}: Toko {$storeName}, Status '{$label}', Nominal Rp " . number_format($total, 0, ',', '.') . ".";
         }
 
-        // 2. Approvals / pending registrations
-        if (str_contains($normalizedMessage, 'approval') || str_contains($normalizedMessage, 'persetujuan') || str_contains($normalizedMessage, 'menunggu') || str_contains($normalizedMessage, 'verifikasi kurir') || str_contains($normalizedMessage, 'pendaftaran') || str_contains($normalizedMessage, 'mitra baru') || str_contains($normalizedMessage, 'kurir baru')) {
+        // 2. Account linkage to store or courier
+        if (str_contains($normalizedMessage, 'terhubung ke toko') || str_contains($normalizedMessage, 'terhubung ke mana') || str_contains($normalizedMessage, 'toko mana') || str_contains($normalizedMessage, 'keterkaitan akun')) {
+            return $this->getSuperAdminAccountLinkageResponse($user, $normalizedMessage);
+        }
+
+        // 3. Completed orders with empty/null completed_at (anomaly check)
+        if ((str_contains($normalizedMessage, 'completed') || str_contains($normalizedMessage, 'selesai')) && (str_contains($normalizedMessage, 'completed_at') || str_contains($normalizedMessage, 'kosong') || str_contains($normalizedMessage, 'null'))) {
+            return $this->getSuperAdminAnomalyOrdersResponse($user, $normalizedMessage);
+        }
+
+        // 4. Orders awaiting payment
+        if (str_contains($normalizedMessage, 'menunggu pembayaran') || str_contains($normalizedMessage, 'awaiting_payment') || str_contains($normalizedMessage, 'belum dibayar') || str_contains($normalizedMessage, 'belum bayar')) {
+            return $this->getSuperAdminAwaitingPaymentOrdersResponse($user, $normalizedMessage);
+        }
+
+        // 5. Orders completed per store in period (e.g. minggu ini)
+        if (str_contains($normalizedMessage, 'per toko') || str_contains($normalizedMessage, 'tiap toko') || (str_contains($normalizedMessage, 'selesai') && (str_contains($normalizedMessage, 'minggu ini') || str_contains($normalizedMessage, 'bulan ini')))) {
+            return $this->getSuperAdminOrdersPerStoreResponse($user, $normalizedMessage);
+        }
+
+        // 6. Couriers with active tasks / courier duty status
+        if (str_contains($normalizedMessage, 'kurir') && (str_contains($normalizedMessage, 'tugas aktif') || str_contains($normalizedMessage, 'sedang bertugas') || str_contains($normalizedMessage, 'punya tugas') || str_contains($normalizedMessage, 'tugas'))) {
+            return $this->getSuperAdminActiveCouriersResponse($user, $normalizedMessage);
+        }
+
+        // 7. Pending settlements
+        if (str_contains($normalizedMessage, 'settlement') || str_contains($normalizedMessage, 'pencairan')) {
+            return $this->getSuperAdminPendingSettlementsResponse($user, $normalizedMessage);
+        }
+
+        // 8. Admin menu explanation
+        if (str_contains($normalizedMessage, 'fungsi menu') || str_contains($normalizedMessage, 'menu manajemen') || str_contains($normalizedMessage, 'apa fungsi menu') || str_contains($normalizedMessage, 'manajemen pengguna') || str_contains($normalizedMessage, 'fungsi dari menu')) {
+            return $this->getSuperAdminMenuExplanationResponse($user, $normalizedMessage);
+        }
+
+        // 9. User counts per role (tanpa PII)
+        if (str_contains($normalizedMessage, 'per peran') || str_contains($normalizedMessage, 'jumlah user') || str_contains($normalizedMessage, 'total user') || str_contains($normalizedMessage, 'jumlah pengguna') || str_contains($normalizedMessage, 'total pengguna') || str_contains($normalizedMessage, 'daftar peran') || str_contains($normalizedMessage, 'berapa user') || str_contains($normalizedMessage, 'berapa pengguna') || (str_contains($normalizedMessage, 'customer') && str_contains($normalizedMessage, 'kurir')) || (str_contains($normalizedMessage, 'terdaftar') && (str_contains($normalizedMessage, 'customer') || str_contains($normalizedMessage, 'kurir') || str_contains($normalizedMessage, 'admin') || str_contains($normalizedMessage, 'pengguna')))) {
+            return $this->getSuperAdminUsersResponse($user, $normalizedMessage);
+        }
+
+        // 10. Approvals / pending registrations
+        if (str_contains($normalizedMessage, 'approval') || str_contains($normalizedMessage, 'persetujuan') || str_contains($normalizedMessage, 'verifikasi kurir') || str_contains($normalizedMessage, 'pendaftaran') || str_contains($normalizedMessage, 'mitra baru') || str_contains($normalizedMessage, 'kurir baru')) {
             return $this->getSuperAdminApprovalsResponse($user, $normalizedMessage);
         }
 
-        // 3. Platform complaints / disputes
+        // 11. Platform complaints / disputes
         if (str_contains($normalizedMessage, 'komplain') || str_contains($normalizedMessage, 'dispute') || str_contains($normalizedMessage, 'keluhan')) {
             return $this->getSuperAdminComplaintsResponse($user, $normalizedMessage);
-        }
-
-        // 4. User counts per role (tanpa PII)
-        if (str_contains($normalizedMessage, 'per peran') || str_contains($normalizedMessage, 'jumlah user') || str_contains($normalizedMessage, 'total user') || str_contains($normalizedMessage, 'jumlah pengguna') || str_contains($normalizedMessage, 'total pengguna') || str_contains($normalizedMessage, 'daftar peran') || str_contains($normalizedMessage, 'berapa user') || str_contains($normalizedMessage, 'berapa pengguna')) {
-            return $this->getSuperAdminUsersResponse($user, $normalizedMessage);
         }
 
         // 5. Search for users (sensitive data like email and phone MUST be masked; passwords/tokens never shown)
         if (str_contains($normalizedMessage, 'cari user') || str_contains($normalizedMessage, 'cari pengguna') || str_contains($normalizedMessage, 'cari akun') || str_contains($normalizedMessage, 'cari pelanggan') || str_contains($normalizedMessage, 'info user') || str_contains($normalizedMessage, 'info pengguna')) {
             $term = trim(preg_replace('/^(.*)(cari user|cari pengguna|cari akun|cari pelanggan|info user|info pengguna)\s*/iu', '', $normalizedMessage));
+            $term = trim(preg_replace('/^(bernama|nama|dengan nama|email|nomor|no)\s+/iu', '', $term));
             $term = trim(str_replace(['?', '!', '.', ','], '', $term));
 
             if ($term === '') {
@@ -1598,7 +1641,7 @@ class AiDataQueryService
             $users = User::where('name', 'like', "%{$term}%")
                 ->orWhere('email', 'like', "%{$term}%")
                 ->orWhere('phone', 'like', "%{$term}%")
-                ->take(3)
+                ->take(5)
                 ->get();
 
             if ($users->isEmpty()) {
@@ -1611,7 +1654,24 @@ class AiDataQueryService
                 $maskedPhone = $this->maskPhone($u->phone);
                 $roleLabel = $u->role ?? 'pelanggan';
                 $status = $u->is_active ? 'aktif' : 'nonaktif';
-                $lines[] = "- {$u->name} (Role: {$roleLabel}, Email: {$maskedEmail}, Telepon: {$maskedPhone}, Status: {$status})";
+
+                $linkage = '';
+                $ownedStores = Store::where('owner_user_id', $u->id)->pluck('name')->all();
+                if (!empty($ownedStores)) {
+                    $linkage = ', Toko: ' . implode(', ', $ownedStores);
+                } else {
+                    $staffStores = StoreStaff::where('user_id', $u->id)->with('store:id,name')->get()->pluck('store.name')->filter()->all();
+                    if (!empty($staffStores)) {
+                        $linkage = ', Staf Toko: ' . implode(', ', $staffStores);
+                    } else {
+                        $courier = Courier::where('user_id', $u->id)->with('store:id,name')->first();
+                        if ($courier) {
+                            $linkage = ', Kurir: ' . ($courier->store ? $courier->store->name : 'Independen');
+                        }
+                    }
+                }
+
+                $lines[] = "- {$u->name} (Role: {$roleLabel}, Email: {$maskedEmail}, Telepon: {$maskedPhone}, Status: {$status}{$linkage})";
             }
 
             return implode("\n", $lines);
@@ -1674,6 +1734,258 @@ class AiDataQueryService
         }
 
         return null;
+    }
+
+    public function getSuperAdminAccountLinkageResponse(User $actor, string $normalizedMessage): string
+    {
+        preg_match('/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i', $normalizedMessage, $emailMatches);
+        $email = $emailMatches[0] ?? null;
+
+        $targetUser = null;
+        if ($email) {
+            $targetUser = User::where('email', $email)->first();
+        }
+
+        if (!$targetUser) {
+            $cleaned = preg_replace('/^(.*)(akun|pengguna|user)\s+/iu', '', $normalizedMessage);
+            $cleaned = trim(preg_replace('/\s+(terhubung|ke toko|toko mana|ke mana|milik).*$/iu', '', $cleaned));
+            $cleaned = trim(str_replace(['?', '!', '.', ','], '', $cleaned));
+
+            if ($cleaned !== '' && $cleaned !== 'ini') {
+                $targetUser = User::where('name', 'like', "%{$cleaned}%")
+                    ->orWhere('email', 'like', "%{$cleaned}%")
+                    ->first();
+            }
+        }
+
+        if (!$targetUser) {
+            return 'Silakan sebutkan nama atau email pengguna yang ingin diperiksa keterkaitannya dengan toko atau kurir (contoh: "Akun budi@example.com terhubung ke toko mana?").';
+        }
+
+        $ownedStores = Store::where('owner_user_id', $targetUser->id)->pluck('name')->all();
+        if (!empty($ownedStores)) {
+            $storeNames = implode(', ', $ownedStores);
+            return "Akun {$targetUser->name} ({$this->maskEmail($targetUser->email)}) terdaftar sebagai Pemilik Toko (Mitra) dan terhubung pada toko: {$storeNames}.";
+        }
+
+        $staffStores = StoreStaff::where('user_id', $targetUser->id)->with('store:id,name')->get()->pluck('store.name')->filter()->all();
+        if (!empty($staffStores)) {
+            $storeNames = implode(', ', $staffStores);
+            return "Akun {$targetUser->name} ({$this->maskEmail($targetUser->email)}) terhubung sebagai Staf Toko pada toko: {$storeNames}.";
+        }
+
+        $courier = Courier::where('user_id', $targetUser->id)->with('store:id,name')->first();
+        if ($courier) {
+            $storeName = $courier->store?->name ?? 'Kurir Platform (Independen)';
+            $status = $courier->is_available ? 'Siap/Available' : 'Sibuk/Off';
+            return "Akun {$targetUser->name} ({$this->maskEmail($targetUser->email)}) terhubung sebagai Mitra Kurir pada toko {$storeName} (Status ketersediaan: {$status}).";
+        }
+
+        if ($targetUser->isCustomer()) {
+            return "Akun {$targetUser->name} ({$this->maskEmail($targetUser->email)}) terdaftar sebagai Pelanggan Umum platform LaundryKu (tidak terikat pada pengelolaan toko mitra atau kurir).";
+        }
+
+        return "Akun {$targetUser->name} ({$this->maskEmail($targetUser->email)}) dengan peran {$targetUser->role} tidak memiliki keterkaitan langsung dengan toko mitra maupun kurir.";
+    }
+
+    public function getSuperAdminAnomalyOrdersResponse(User $actor, string $normalizedMessage): string
+    {
+        $orders = Order::where('status', 'completed')
+            ->whereNull('completed_at')
+            ->with('store:id,name')
+            ->latest('id')
+            ->take(10)
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return 'Seluruh pesanan berstatus completed telah memiliki data completed_at terisi dengan lengkap (tidak ditemukan pesanan completed tanpa completed_at).';
+        }
+
+        $count = $orders->count();
+        $lines = ["Ditemukan {$count} pesanan berstatus completed dengan completed_at kosong (anomali):"];
+        foreach ($orders as $o) {
+            $store = $o->store?->name ?? 'Toko';
+            $date = optional($o->order_date)->format('d M Y');
+            $lines[] = "- {$o->order_number} (Toko: {$store}, Tanggal: {$date}, Nominal: Rp " . number_format((float) ($o->total_amount ?: $o->total_price ?: 0), 0, ',', '.') . ")";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getSuperAdminAwaitingPaymentOrdersResponse(User $actor, string $normalizedMessage): string
+    {
+        $orders = Order::where('status', 'awaiting_payment')
+            ->with(['store:id,name', 'customer:id,name'])
+            ->latest('id')
+            ->take(10)
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return 'Saat ini tidak ada pesanan yang masih menunggu pembayaran (awaiting_payment).';
+        }
+
+        $count = $orders->count();
+        $lines = ["Daftar {$count} pesanan yang masih menunggu pembayaran (awaiting_payment):"];
+        foreach ($orders as $o) {
+            $store = $o->store?->name ?? 'Toko';
+            $cust = $this->maskCustomerName($o->customer?->name);
+            $total = number_format((float) ($o->total_amount ?: $o->total_price ?: 0), 0, ',', '.');
+            $date = optional($o->order_date)->format('d M Y H:i');
+            $lines[] = "- {$o->order_number} (Toko: {$store}, Pelanggan: {$cust}, Total: Rp {$total}, Tanggal: {$date})";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getSuperAdminOrdersPerStoreResponse(User $actor, string $normalizedMessage): string
+    {
+        $periodLabel = 'minggu ini';
+        $startDate = Carbon::now()->startOfWeek();
+
+        if (str_contains($normalizedMessage, 'bulan ini')) {
+            $periodLabel = 'bulan ini';
+            $startDate = Carbon::now()->startOfMonth();
+        } elseif (str_contains($normalizedMessage, 'hari ini')) {
+            $periodLabel = 'hari ini';
+            $startDate = Carbon::now()->startOfDay();
+        }
+
+        $results = Order::where('status', 'completed')
+            ->where(function ($q) use ($startDate) {
+                $q->where('completed_at', '>=', $startDate)
+                  ->orWhere(function ($sq) use ($startDate) {
+                      $sq->whereNull('completed_at')->where('order_date', '>=', $startDate);
+                  });
+            })
+            ->select('store_id', DB::raw('count(*) as total'))
+            ->groupBy('store_id')
+            ->with('store:id,name')
+            ->get();
+
+        if ($results->isEmpty()) {
+            return "Tidak ada pesanan selesai pada periode {$periodLabel}.";
+        }
+
+        $lines = ["Jumlah pesanan selesai {$periodLabel} per toko:"];
+        foreach ($results as $r) {
+            $storeName = $r->store?->name ?? ('Toko #' . $r->store_id);
+            $lines[] = "- {$storeName}: {$r->total} pesanan";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getSuperAdminActiveCouriersResponse(User $actor, string $normalizedMessage): string
+    {
+        $activeStatuses = [
+            CourierTaskStatus::ASSIGNED->value,
+            CourierTaskStatus::ACCEPTED->value,
+            CourierTaskStatus::ARRIVED->value,
+            CourierTaskStatus::PICKED_UP->value,
+        ];
+
+        $tasks = CourierTask::whereIn('status', $activeStatuses)
+            ->with(['courier.user:id,name', 'courier.store:id,name', 'order:id,order_number,status'])
+            ->latest('assigned_at')
+            ->take(15)
+            ->get();
+
+        if ($tasks->isEmpty()) {
+            return 'Saat ini tidak ada kurir yang sedang memiliki tugas penjemputan atau pengantaran aktif.';
+        }
+
+        $lines = ["Daftar kurir yang sedang memiliki tugas aktif:"];
+        foreach ($tasks as $t) {
+            $courierName = $t->courier?->user?->name ?? 'Kurir';
+            $storeName = $t->courier?->store?->name ?? 'Independen';
+            $taskType = $t->task_type === 'pickup' ? 'penjemputan (pickup)' : 'pengantaran (delivery)';
+            $orderNum = $t->order?->order_number ?? '-';
+            $status = $t->status;
+            $lines[] = "- {$courierName} (Toko: {$storeName}): Sedang menjalankan tugas {$taskType} untuk pesanan {$orderNum} (status: {$status}).";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function getSuperAdminPendingSettlementsResponse(User $actor, string $normalizedMessage): string
+    {
+        $settlements = SettlementPeriod::where('status', 'generated')
+            ->with('store:id,name')
+            ->latest('id')
+            ->get();
+
+        if ($settlements->isEmpty()) {
+            return 'Saat ini tidak ada pengajuan pencairan dana (settlement) toko mitra yang berstatus pending (menunggu verifikasi).';
+        }
+
+        $count = $settlements->count();
+        $totalNominal = (float) $settlements->sum('net_amount');
+        $formattedTotal = 'Rp ' . number_format($totalNominal, 0, ',', '.');
+
+        $lines = ["Terdapat {$count} pengajuan settlement toko mitra yang masih pending (menunggu verifikasi) dengan total nominal {$formattedTotal}:"];
+        foreach ($settlements as $s) {
+            $storeName = $s->store?->name ?? 'Toko';
+            $period = optional($s->period_start)->format('d/m') . ' - ' . optional($s->period_end)->format('d/m/Y');
+            $nom = 'Rp ' . number_format((float) $s->net_amount, 0, ',', '.');
+            $lines[] = "- {$s->reference} (Toko: {$storeName}, Periode: {$period}, Nominal: {$nom}, Orders: {$s->order_count})";
+        }
+        $lines[] = 'Verifikasi pencairan dana dapat disetujui melalui menu Keuangan & Settlement di Admin Portal.';
+
+        return implode("\n", $lines);
+    }
+
+    public function getSuperAdminMenuExplanationResponse(User $actor, string $normalizedMessage): string
+    {
+        if (str_contains($normalizedMessage, 'pengguna') || str_contains($normalizedMessage, 'user') || str_contains($normalizedMessage, 'pelanggan')) {
+            return 'Menu Manajemen Pengguna / Pelanggan berfungsi untuk melihat seluruh akun pengguna yang terdaftar di platform, memeriksa status keaktifan akun (aktif/nonaktif), memantau peran/role pengguna (customer, kurir, mitra toko, super admin), serta meninjau riwayat pendaftaran akun.';
+        }
+
+        if (str_contains($normalizedMessage, 'toko') || str_contains($normalizedMessage, 'mitra') || str_contains($normalizedMessage, 'approval')) {
+            return 'Menu Manajemen Toko & Approval berfungsi untuk memverifikasi pendaftaran toko baru, menyetujui (approve), menolak (reject), menonaktifkan sementara (suspend), atau mengaktifkan kembali mitra toko.';
+        }
+
+        if (str_contains($normalizedMessage, 'pesanan') || str_contains($normalizedMessage, 'order')) {
+            return 'Menu Pesanan berfungsi untuk memantau seluruh transaksi di platform secara lintas toko mitra, status pencucian, riwayat status, dan kurir yang bertugas.';
+        }
+
+        if (str_contains($normalizedMessage, 'kurir')) {
+            return 'Menu Kurir berfungsi untuk memantau daftar mitra kurir, verifikasi dokumen SIM/KTP/kendaraan, memantau ketersediaan kurir, serta penugasan kurir pada toko mitra.';
+        }
+
+        if (str_contains($normalizedMessage, 'pembayaran') || str_contains($normalizedMessage, 'transaksi')) {
+            return 'Menu Pembayaran menampilkan riwayat transaksi pembayaran online (QRIS/VA) dan COD secara real-time beserta status verifikasi transaksi.';
+        }
+
+        if (str_contains($normalizedMessage, 'refund') || str_contains($normalizedMessage, 'pengembalian')) {
+            return 'Menu Refund digunakan untuk memproses pengembalian dana kepada pelanggan untuk pesanan yang dibatalkan sesuai kebijakan garansi dan persetujuan admin.';
+        }
+
+        if (str_contains($normalizedMessage, 'dispute') || str_contains($normalizedMessage, 'sengketa') || str_contains($normalizedMessage, 'komplain')) {
+            return 'Menu Sengketa (Disputes) adalah wadah mediasi keluhan cucian rusak/hilang antara pelanggan dan toko mitra dalam batas waktu garansi 1x24 jam.';
+        }
+
+        if (str_contains($normalizedMessage, 'audit')) {
+            return 'Menu Audit Log mencatat seluruh aktivitas keamanan, login gagal, dan perubahan data penting di platform untuk audit akuntabilitas.';
+        }
+
+        if (str_contains($normalizedMessage, 'komisi')) {
+            return 'Menu Pengaturan Komisi mengatur persentase pembagian komisi platform per layanan laundry.';
+        }
+
+        if (str_contains($normalizedMessage, 'ai')) {
+            return 'Menu Monitoring AI menyajikan transparansi biaya, konsumsi token, dan riwayat panggilan OpenAI Assistant untuk evaluasi operasional asisten.';
+        }
+
+        return "Menu utama di Portal Super Admin LaundryKu meliputi:\n"
+            . "- Overview: Ringkasan performa platform (GMV, order, toko, pengguna, security snapshot)\n"
+            . "- Toko & Approval: Verifikasi pendaftaran toko baru & manajemen mitra\n"
+            . "- Pesanan: Monitoring seluruh pesanan di ekosistem platform lintas toko mitra\n"
+            . "- Pengguna: Manajemen akun pengguna, status akun, dan role\n"
+            . "- Kurir: Monitoring mitra kurir, verifikasi dokumen, dan status tugas\n"
+            . "- Pembayaran: Riwayat pembayaran QRIS/VA dan COD\n"
+            . "- Refund & Dispute: Penanganan pengembalian dana dan mediasi keluhan\n"
+            . "- Audit Log: Rekam jejak aktivitas keamanan dan sistem\n"
+            . "- Komisi & AI: Pengaturan tarif komisi dan monitoring AI";
     }
 
     public function getSuperAdminApprovalsResponse(User $user, string $message = ''): string

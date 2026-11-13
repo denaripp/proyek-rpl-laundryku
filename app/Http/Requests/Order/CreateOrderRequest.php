@@ -56,30 +56,33 @@ class CreateOrderRequest extends FormRequest
             $merge['estimated_weight'] = max(0.1, $weight);
         }
 
-        if (!$this->has('estimated_price')) {
-            $items = $this->input('items', []);
-            $storeId = $this->input('store_id');
-            $subtotalServices = 0;
-            if (is_array($items) && $storeId) {
-                foreach ($items as $it) {
-                    $qty = (float) ($it['quantity'] ?? 1);
-                    $sp = ServicePrice::where('store_id', $storeId)
-                        ->where('is_active', true)
-                        ->where(function ($q) use ($it) {
-                            if (isset($it['service_id'])) {
-                                $q->where('id', $it['service_id'])->orWhere('service_id', $it['service_id']);
-                            }
-                        })
-                        ->first();
-                    if ($sp) {
-                        $raw = $qty * (float) $sp->price_per_unit;
-                        $min = (float) ($sp->minimum_charge ?? 0);
-                        $subtotalServices += ($min > 0 && $raw < $min) ? $min : $raw;
-                    }
+        // Server-side calculation of estimated price to prevent fee manipulation
+        $items = $this->input('items', []);
+        $storeId = $this->input('store_id');
+        $subtotalServices = 0;
+        if (is_array($items) && $storeId) {
+            foreach ($items as $it) {
+                $qty = (float) ($it['quantity'] ?? 1);
+                $sp = ServicePrice::where('store_id', $storeId)
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($it) {
+                        if (isset($it['service_id'])) {
+                            $q->where('id', $it['service_id'])->orWhere('service_id', $it['service_id']);
+                        }
+                    })
+                    ->first();
+                if ($sp) {
+                    $raw = $qty * (float) $sp->price_per_unit;
+                    $min = (float) ($sp->minimum_charge ?? 0);
+                    $subtotalServices += ($min > 0 && $raw < $min) ? $min : $raw;
                 }
             }
-            $platformFee = $subtotalServices > 0 ? 1000 : 0;
-            $merge['estimated_price'] = $subtotalServices > 0 ? ($subtotalServices + $platformFee) : 1000;
+        }
+        $platformFee = $subtotalServices > 0 ? 1000 : 0;
+        $calculatedEstimatedPrice = $subtotalServices > 0 ? ($subtotalServices + $platformFee) : 1000;
+
+        if (!$this->has('estimated_price') || (float) $this->input('estimated_price') < $calculatedEstimatedPrice) {
+            $merge['estimated_price'] = $calculatedEstimatedPrice;
         }
 
         if (!empty($merge)) {

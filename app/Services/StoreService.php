@@ -208,6 +208,12 @@ class StoreService
             $missing[] = 'Belum ada tarif layanan aktif dengan harga lebih dari 0';
         }
 
+        // 4. Owner contact verification check (Zero-trust / Anti-abuse)
+        $owner = $store->owner;
+        if (! $owner || (! $owner->email_verified_at && ! $owner->phone_verified_at)) {
+            $missing[] = 'Pemilik toko belum memverifikasi email atau nomor telepon';
+        }
+
         return [
             'is_eligible' => empty($missing),
             'missing_reasons' => $missing,

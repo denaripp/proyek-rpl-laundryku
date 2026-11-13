@@ -34,7 +34,7 @@ class TwoFactorController extends Controller
             'code' => 'required|string|size:6',
         ]);
 
-        $user = Auth::user();
+        $user = $request->user();
 
         if (!$user || !$user->two_factor_enabled) {
             return redirect('/login');
@@ -57,7 +57,7 @@ class TwoFactorController extends Controller
 
     public function showEnableForm()
     {
-        $user = Auth::user();
+        $user = $request->user();
         if ($user->two_factor_enabled) {
             return redirect('/dashboard')->with('error', '2FA sudah aktif.');
         }
@@ -79,7 +79,7 @@ class TwoFactorController extends Controller
             'code' => 'required|string|size:6',
         ]);
 
-        $user = Auth::user();
+        $user = $request->user();
         if (!$user->google2fa_secret) {
             return back()->withErrors(['code' => 'Secret tidak ditemukan.']);
         }
@@ -103,7 +103,11 @@ class TwoFactorController extends Controller
 
     public function disable(Request $request)
     {
-        $user = Auth::user();
+        if ($request->session()->has('pending_2fa')) {
+            return redirect()->route('2fa.verify')->withErrors(['code' => 'Selesaikan verifikasi 2FA terlebih dahulu.']);
+        }
+
+        $user = $request->user();
         if (!$user->two_factor_enabled) {
             return redirect('/dashboard')->with('error', '2FA belum aktif.');
         }

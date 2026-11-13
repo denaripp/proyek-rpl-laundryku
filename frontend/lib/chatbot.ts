@@ -1,4 +1,11 @@
 import apiClient, { ApiSuccessResponse } from './api';
+import { detectCurrentPortal } from './auth';
+
+function chatbotClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers || {});
+  headers.set('x-portal', detectCurrentPortal());
+  return apiClient<T>(endpoint, { ...options, headers });
+}
 
 export interface ChatbotMessageItem {
   id: string;
@@ -58,7 +65,7 @@ export async function getFaqSuggestions(): Promise<FaqSuggestionItem[]> {
  * List authenticated user's chatbot sessions
  */
 export async function getChatbotSessions(): Promise<ChatbotSessionItem[]> {
-  const response = await apiClient<ApiSuccessResponse<ChatbotSessionItem[]>>('/chatbot/sessions');
+  const response = await chatbotClient<ApiSuccessResponse<ChatbotSessionItem[]>>('/chatbot/sessions');
   return response.data;
 }
 
@@ -71,7 +78,7 @@ export async function createChatbotSession(payload?: {
   context_type?: string;
   context_id?: string;
 }): Promise<ChatbotSessionItem> {
-  const response = await apiClient<ApiSuccessResponse<ChatbotSessionItem>>('/chatbot/sessions', {
+  const response = await chatbotClient<ApiSuccessResponse<ChatbotSessionItem>>('/chatbot/sessions', {
     method: 'POST',
     body: JSON.stringify(payload || {}),
   });
@@ -82,7 +89,7 @@ export async function createChatbotSession(payload?: {
  * Get chatbot session detail and message history
  */
 export async function getChatbotSessionDetail(id: string): Promise<ChatbotSessionItem> {
-  const response = await apiClient<ApiSuccessResponse<ChatbotSessionItem>>(`/chatbot/sessions/${id}`);
+  const response = await chatbotClient<ApiSuccessResponse<ChatbotSessionItem>>(`/chatbot/sessions/${id}`);
   return response.data;
 }
 
@@ -93,7 +100,7 @@ export async function sendChatbotMessage(
   sessionId: string,
   message: string
 ): Promise<SendMessageResponse> {
-  const response = await apiClient<ApiSuccessResponse<SendMessageResponse>>(
+  const response = await chatbotClient<ApiSuccessResponse<SendMessageResponse>>(
     `/chatbot/sessions/${sessionId}/messages`,
     {
       method: 'POST',
@@ -107,9 +114,19 @@ export async function sendChatbotMessage(
  * Delete a chatbot session
  */
 export async function deleteChatbotSession(id: string): Promise<void> {
-  await apiClient<ApiSuccessResponse<{ message: string }>>(`/chatbot/sessions/${id}`, {
+  await chatbotClient<ApiSuccessResponse<{ message: string }>>(`/chatbot/sessions/${id}`, {
     method: 'DELETE',
   });
+}
+
+/**
+ * Clear all chatbot sessions owned by the current authenticated user
+ */
+export async function clearAllChatbotSessions(): Promise<{ deleted_count: number }> {
+  const response = await chatbotClient<ApiSuccessResponse<{ deleted_count: number }>>('/chatbot/sessions', {
+    method: 'DELETE',
+  });
+  return response.data;
 }
 
 /**

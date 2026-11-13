@@ -1,0 +1,98 @@
+name: CI/CD Pipeline - Test & Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  backend-tests:
+    name: Backend Test Suite (Laravel 12 / PHP 8.3 / MySQL 8.0)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: laundryku_test
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, bcmath, zip
+          coverage: none
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare Test Environment
+        run: |
+          cp .env.example .env.testing
+          sed -i 's/DB_DATABASE=.*/DB_DATABASE=laundryku_test/g' .env.testing
+          sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=root/g' .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Run Automated Test Suite (631 Tests)
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laundryku_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
+          OPENROUTER_API_KEY: sk-or-v1-ci-dummy-key-testing-only
+        run: php artisan test
+
+  frontend-build:
+    name: Frontend Build & Typecheck (Next.js 16 / Node.js 20)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Node Modules
+        run: npm ci
+
+      - name: Build Next.js Production Bundle
+        env:
+          NEXT_PUBLIC_APP_NAME: "LaundryKu"
+          NEXT_PUBLIC_API_URL: "http://localhost:8000/api/v1"
+          NEXT_PUBLIC_ENABLE_AI_CHATBOT: "true"
+        run: npm run build

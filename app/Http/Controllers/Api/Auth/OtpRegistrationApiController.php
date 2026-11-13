@@ -148,8 +148,13 @@ class OtpRegistrationApiController extends Controller
             })->first();
 
             if ($existingUser) {
-                if ($existingUser->is_active) {
-                    Log::warning('Registration attempt for existing active user', ['user_id' => $existingUser->id]);
+                $isPendingUnverifiedCustomer = ($existingUser->role === User::ROLE_CUSTOMER)
+                    && is_null($existingUser->email_verified_at)
+                    && is_null($existingUser->phone_verified_at)
+                    && ! $existingUser->is_active;
+
+                if (! $isPendingUnverifiedCustomer) {
+                    Log::warning('Registration attempt for existing or non-pending user', ['user_id' => $existingUser->id, 'role' => $existingUser->role]);
                     return response()->json([
                         'success' => false,
                         'message' => $channel === 'email'
@@ -459,9 +464,9 @@ class OtpRegistrationApiController extends Controller
                 ], 400);
             }
 
-            // Generate Sanctum token
+            // Generate Sanctum token strictly with customer role
             $user->tokens()->where('name', 'customer_token')->delete();
-            $token = $user->createToken('customer_token', ['role:' . $user->role])->plainTextToken;
+            $token = $user->createToken('customer_token', ['role:customer'])->plainTextToken;
 
             AuditLog::create([
                 'actor_id' => $user->id,
@@ -564,6 +569,17 @@ class OtpRegistrationApiController extends Controller
                     ->orWhere('phone', $rawDestination);
             })->first();
 
+            if ($user && $user->role !== User::ROLE_CUSTOMER) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
+                    'error' => [
+                        'code' => 'INVALID_PORTAL',
+                        'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
+                    ],
+                ], 403);
+            }
+
             if (!$user || !Hash::check($password, $user->password)) {
                 AuditLog::create([
                     'actor_id' => $user?->id,
@@ -611,7 +627,33 @@ class OtpRegistrationApiController extends Controller
                 ], 403);
             }
 
-            $token = $user->createToken('auth_token', ['role:' . $user->role])->plainTextToken;
+            // Strict portal check: /api/v1/auth/login is for Customer accounts only
+            if ($user->role !== User::ROLE_CUSTOMER) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
+                    'error' => [
+                        'code' => 'INVALID_PORTAL',
+                        'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
+                    ],
+                ], 403);
+            }
+
+            // Two-factor authentication check for customer
+            if ($user->two_factor_enabled || !empty($user->google2fa_secret)) {
+                $user->tokens()->where('name', 'customer_provisional')->delete();
+                $provisionalToken = $user->createToken('customer_provisional', ['2fa-pending'], now()->addMinutes(5))->plainTextToken;
+
+                return response()->json([
+                    'success' => true,
+                    'requires_2fa' => true,
+                    'temp_token' => $provisionalToken,
+                    'message' => 'Kode autentikasi 2FA diperlukan.',
+                ], 200);
+            }
+
+            $user->tokens()->where('name', 'auth_token')->delete();
+            $token = $user->createToken('auth_token', ['role:customer'])->plainTextToken;
 
             AuditLog::create([
                 'actor_id' => $user->id,
@@ -730,20 +772,26 @@ class OtpRegistrationApiController extends Controller
 
     protected function resolveUser(Request $request): ?User
     {
+        $user = null;
         if ($userId = $request->input('user_id')) {
-            return User::find($userId);
+            $user = User::find($userId);
+        } else {
+            $destination = $request->input('destination', $request->input('phone_number', $request->input('phone', $request->input('email'))));
+            if ($destination) {
+                $channel = $request->input('channel', filter_var($destination, FILTER_VALIDATE_EMAIL) ? 'email' : 'whatsapp');
+                $normalized = $this->otpService->normalizeDestination($channel, $destination);
+
+                $user = User::where('email', $normalized)
+                    ->orWhere('phone', $normalized)
+                    ->first();
+            }
         }
 
-        $destination = $request->input('destination', $request->input('phone_number', $request->input('phone', $request->input('email'))));
-        if ($destination) {
-            $channel = $request->input('channel', filter_var($destination, FILTER_VALIDATE_EMAIL) ? 'email' : 'whatsapp');
-            $normalized = $this->otpService->normalizeDestination($channel, $destination);
-
-            return User::where('email', $normalized)
-                ->orWhere('phone', $normalized)
-                ->first();
+        // Strict customer role constraint for registration & OTP endpoints
+        if ($user && $user->role !== User::ROLE_CUSTOMER) {
+            return null;
         }
 
-        return null;
+        return $user;
     }
 }

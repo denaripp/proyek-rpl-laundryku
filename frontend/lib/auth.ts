@@ -121,8 +121,14 @@ export const LOGIN_PATH = '/auth';
 export function getSafeRedirectPath(target: string | null | undefined, defaultPath: string = '/'): string {
   if (!target || typeof target !== 'string') return defaultPath;
   const trimmed = target.trim();
-  // Must start with '/' and not start with '//' or '/\' and not contain protocol '://'
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\') && !trimmed.includes('://')) {
+  // Must start with '/' and not start with '//' or '/\' and not contain protocol '://' or pseudo-protocols
+  if (
+    trimmed.startsWith('/') &&
+    !trimmed.startsWith('//') &&
+    !trimmed.startsWith('/\\') &&
+    !trimmed.includes('://') &&
+    !/^\s*(javascript|data|vbscript):/i.test(trimmed)
+  ) {
     return trimmed;
   }
   return defaultPath;
@@ -147,6 +153,24 @@ export function getStoredToken(): string | null {
   // Tokens are stored strictly in httpOnly cookies (laundryku_customer_token)
   // and are never accessible or stored in client-side JavaScript / localStorage.
   return null;
+}
+
+export type ActivePortalType = 'customer' | 'mitra' | 'courier' | 'admin';
+
+export function detectCurrentPortal(): ActivePortalType {
+  if (typeof window === 'undefined') return 'customer';
+  const pathname = window.location?.pathname || '';
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
+  if (pathname === '/store' || pathname.startsWith('/store/') || pathname === '/mitra' || pathname.startsWith('/mitra/')) {
+    return 'mitra';
+  }
+  if (pathname === '/courier' || pathname.startsWith('/courier/')) return 'courier';
+
+  if (localStorage.getItem(USER_KEY)) return 'customer';
+  if (localStorage.getItem(MITRA_USER_KEY)) return 'mitra';
+  if (localStorage.getItem(COURIER_USER_KEY)) return 'courier';
+  if (localStorage.getItem(ADMIN_USER_KEY)) return 'admin';
+  return 'customer';
 }
 
 export function isAuthenticated(): boolean {
@@ -217,6 +241,13 @@ export function clearAuthSession(): void {
   localStorage.removeItem(MITRA_USER_KEY);
   localStorage.removeItem(COURIER_USER_KEY);
   localStorage.removeItem(ADMIN_USER_KEY);
+  localStorage.removeItem('active_store_id');
+  localStorage.removeItem('selected_store_id');
+  localStorage.removeItem('active_store');
+  localStorage.removeItem('lk_active_store');
+  sessionStorage.removeItem('active_store_id');
+  sessionStorage.removeItem('selected_store_id');
+  sessionStorage.removeItem('active_store');
   window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: null }));
 }
 

@@ -41,7 +41,7 @@ class RefundController extends Controller
 
             // Store staff/owner: also see orders in their stores
             $storeIds = $user->ownedStores()->pluck('id')->merge(
-                $user->storeStaff()->pluck('store_id')
+                $user->storeStaff()->where('is_active', true)->pluck('store_id')
             )->unique();
 
             if ($storeIds->isNotEmpty()) {
@@ -77,6 +77,13 @@ class RefundController extends Controller
 
         $order = Order::findOrFail($validated['order_id']);
         $payment = Payment::findOrFail($validated['payment_id']);
+
+        // IDOR protection: ensure the specified payment belongs to the order
+        if ((int) $payment->order_id !== (int) $order->id) {
+            return response()->json([
+                'error' => 'Payment does not belong to the specified order.',
+            ], 422);
+        }
 
         // Create a temporary refund object for policy check
         $refund = new Refund([

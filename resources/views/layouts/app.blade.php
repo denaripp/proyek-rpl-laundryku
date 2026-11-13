@@ -127,7 +127,7 @@
     <script>
         window.LK = {
             csrf: document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            user: @json(auth()->user()),
+            user: {!! json_encode(auth()->user() ? auth()->user()->only(['id', 'name', 'email', 'phone', 'is_active', 'two_factor_enabled']) : null) !!},
             mapsKey: @json(config('services.google_maps.key') ?? ''),
             apiBase: '/api',
         };

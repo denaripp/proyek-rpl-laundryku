@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
+use App\Models\AiUsageLog;
 use App\Services\Ai\AiAssistantService;
 use App\Services\Ai\AiRateLimitException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ChatbotController extends Controller
@@ -91,6 +93,7 @@ class ChatbotController extends Controller
         $conversations = AiConversation::where('user_id', $user->id)
             ->with(['messages'])
             ->latest('updated_at')
+            ->latest('id')
             ->get();
 
         $data = $conversations->map(fn ($c) => $this->formatSession($c))->values()->all();
@@ -221,17 +224,27 @@ class ChatbotController extends Controller
     }
 
     /**
+     * Delete all chatbot sessions owned by the authenticated user.
+     */
+    public function destroyAll(Request $request): JsonResponse
+    {
+        $deletedCount = $this->deleteConversationsForUser((int) $request->user()->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'deleted_count' => $deletedCount,
+            ],
+            'message' => 'Seluruh riwayat percakapan AI berhasil dihapus.',
+        ]);
+    }
+
+    /**
      * Delete a session
      */
     public function destroy(Request $request, string $id): JsonResponse
     {
-        $user = $request->user();
-
-        $conversation = AiConversation::where('id', $id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$conversation) {
+        if (!ctype_digit($id)) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -241,12 +254,45 @@ class ChatbotController extends Controller
             ], 404);
         }
 
-        $conversation->delete();
+        $deleted = $this->deleteConversationsForUser((int) $request->user()->id, (int) $id);
+
+        if ($deleted === 0) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'SESSION_NOT_FOUND',
+                    'message' => 'Sesi percakapan AI tidak ditemukan atau Anda tidak memiliki akses.',
+                ],
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Sesi percakapan berhasil dihapus.',
         ]);
+    }
+
+    private function deleteConversationsForUser(int $userId, ?int $conversationId = null): int
+    {
+        return DB::transaction(function () use ($userId, $conversationId) {
+            $query = AiConversation::where('user_id', $userId);
+            if ($conversationId !== null) {
+                $query->where('id', $conversationId);
+            }
+
+            $ids = $query->pluck('id');
+            if ($ids->isEmpty()) {
+                return 0;
+            }
+
+            // Preserve telemetry & rate-limit history while releasing FK references safely
+            AiUsageLog::whereIn('conversation_id', $ids)->update(['conversation_id' => null]);
+            AiMessage::whereIn('conversation_id', $ids)->delete();
+
+            return AiConversation::where('user_id', $userId)
+                ->whereIn('id', $ids)
+                ->delete();
+        });
     }
 
     /**
@@ -259,7 +305,7 @@ class ChatbotController extends Controller
         ]);
 
         $message = trim($validated['message']);
-        $result = $this->assistant->replyForGuest($message);
+        $result = $this->assistant->replyForGuest($message, $request->ip());
 
         return response()->json([
             'success' => true,
@@ -279,15 +325,20 @@ class ChatbotController extends Controller
             $isFallback = (bool) $msg->metadata['fallback'];
         }
 
+        $metadata = [
+            'is_fallback' => $isFallback,
+            'provider' => $msg->model ?? 'laundryku_ai',
+        ];
+        if (is_array($msg->metadata) && !empty($msg->metadata['resolved_model'])) {
+            $metadata['resolved_model'] = $msg->metadata['resolved_model'];
+        }
+
         return [
             'id' => (string) $msg->id,
             'session_id' => (string) $msg->conversation_id,
             'role' => $msg->role,
             'content' => $msg->content,
-            'metadata' => [
-                'is_fallback' => $isFallback,
-                'provider' => $msg->model ?? 'laundryku_ai',
-            ],
+            'metadata' => $metadata,
             'created_at' => $msg->created_at?->toIso8601String() ?? now()->toIso8601String(),
         ];
     }

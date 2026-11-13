@@ -4,6 +4,7 @@ namespace App\Services\Store;
 
 use App\Models\Courier;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Store;
 use App\Models\StoreStaff;
 use App\Models\User;
@@ -170,11 +171,10 @@ class StoreDashboardService
             ->selectRaw("
                 COUNT(CASE WHEN status IN ('created', 'pending_pickup') THEN 1 END) as new_orders,
                 COUNT(CASE WHEN status IN ('at_store', 'received', 'weighed', 'awaiting_price_approval', 'price_approved', 'awaiting_payment', 'paid', 'processing') THEN 1 END) as processing_orders,
-                COUNT(CASE WHEN status IN ('ready_for_delivery', 'delivery_assigned', 'out_for_delivery') THEN 1 END) as ready_for_delivery,
+                COUNT(CASE WHEN status IN ('ready_for_delivery', 'courier_assigned_for_delivery', 'delivery_assigned', 'out_for_delivery') THEN 1 END) as ready_for_delivery,
                 COUNT(CASE WHEN status = 'ready_for_delivery' THEN 1 END) as ready_for_delivery_only,
-                COUNT(CASE WHEN status IN ('delivery_assigned', 'out_for_delivery') THEN 1 END) as out_for_delivery_only,
-                COUNT(CASE WHEN status = 'completed' AND DATE(completed_at) = CURDATE() THEN 1 END) as completed_today,
-                COALESCE(SUM(CASE WHEN status = 'completed' AND DATE(completed_at) = CURDATE() THEN total_amount ELSE 0 END), 0) as today_revenue
+                COUNT(CASE WHEN status IN ('courier_assigned_for_delivery', 'delivery_assigned', 'out_for_delivery') THEN 1 END) as out_for_delivery_only,
+                COUNT(CASE WHEN status = 'completed' AND DATE(completed_at) = CURDATE() THEN 1 END) as completed_today
             ")
             ->first();
 
@@ -185,13 +185,22 @@ class StoreDashboardService
             ")
             ->first();
 
+        $startOfToday = Carbon::now('Asia/Jakarta')->startOfDay();
+        $endOfToday = Carbon::now('Asia/Jakarta')->endOfDay();
+
+        $todayRevenue = (float) Payment::where('status', 'paid')
+            ->whereHas('order', function ($q) use ($store) {
+                $q->where('store_id', $store->id);
+            })
+            ->whereBetween('paid_at', [$startOfToday, $endOfToday])
+            ->sum('amount');
+
         $newOrders = (int) ($orderStats->new_orders ?? 0);
         $processingOrders = (int) ($orderStats->processing_orders ?? 0);
         $readyForDelivery = (int) ($orderStats->ready_for_delivery ?? 0);
         $readyOnly = (int) ($orderStats->ready_for_delivery_only ?? 0);
         $outOnly = (int) ($orderStats->out_for_delivery_only ?? 0);
         $completedToday = (int) ($orderStats->completed_today ?? 0);
-        $todayRevenue = (float) ($orderStats->today_revenue ?? 0);
         $totalCouriers = (int) ($courierStats->total_couriers ?? 0);
         $activeCouriers = (int) ($courierStats->active_couriers ?? 0);
 

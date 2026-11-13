@@ -4,12 +4,14 @@ import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, Lock, Mail, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
 import { OTPInput } from '@/components/ui/OTPInput';
+import { getSafeRedirectPath } from '@/lib/auth';
 
 function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawRedirect = searchParams.get('redirect');
-  const redirectTarget = rawRedirect && rawRedirect !== '/admin/login' ? rawRedirect : '/admin';
+  const safeRedirect = getSafeRedirectPath(rawRedirect, '/admin');
+  const redirectTarget = safeRedirect && safeRedirect !== '/admin/login' ? safeRedirect : '/admin';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

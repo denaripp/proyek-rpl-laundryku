@@ -17,7 +17,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/format';
-import { isAuthenticated, clearAuthSession, getStoredUser, AuthUser } from '@/lib/auth';
+import { isAuthenticated, getStoredUser, detectCurrentPortal, AuthUser } from '@/lib/auth';
 import {
   ChatbotMessageItem,
   ChatbotSessionItem,
@@ -25,7 +25,7 @@ import {
   createChatbotSession,
   getChatbotSessionDetail,
   sendChatbotMessage,
-  deleteChatbotSession,
+  clearAllChatbotSessions,
   guestAskChatbot,
 } from '@/lib/chatbot';
 
@@ -71,12 +71,16 @@ export const AiChatWidget = () => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [authEpoch, setAuthEpoch] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeKeyRef = useRef<string | null>(null);
+  const loadedKeyRef = useRef<string | null>(null);
 
   // Auto-scroll to latest message
   const scrollToBottom = () => {
@@ -89,24 +93,26 @@ export const AiChatWidget = () => {
     }
   }, [messages, isLoading, isOpen]);
 
-  const activeUserIdRef = useRef<string | null>(null);
-
   // Check auth status on mount & listen to auth updates
   useEffect(() => {
     const handleAuthChange = (event?: Event) => {
+      const portal = detectCurrentPortal();
       const customEvent = event as CustomEvent<AuthUser | null> | undefined;
-      const user = customEvent?.detail !== undefined ? customEvent.detail : getStoredUser();
+      const user = customEvent?.detail !== undefined ? customEvent.detail : getStoredUser(portal);
       const currentUserId = user?.id ? String(user.id) : null;
       const authed = isAuthenticated() && !!currentUserId;
+      const nextKey = `${portal}:${currentUserId || 'anon'}`;
       setIsAuth(authed);
 
-      // Whenever auth state changes or the active user changes, immediately clear chat state
-      if (!authed || currentUserId !== activeUserIdRef.current) {
-        activeUserIdRef.current = currentUserId;
+      // Whenever auth state or active portal user changes, reset loaded session cache
+      if (!authed || nextKey !== activeKeyRef.current) {
+        activeKeyRef.current = nextKey;
+        loadedKeyRef.current = null;
         setCurrentSession(null);
         setMessages([]);
         setHasError(false);
         setErrorMessage('');
+        setAuthEpoch((prev) => prev + 1);
       }
     };
 
@@ -117,45 +123,59 @@ export const AiChatWidget = () => {
     };
   }, []);
 
-  // Initialize or restore active session when widget is opened
+  // Load latest session once per open/account cycle (never re-fetch immediately after clear)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      loadedKeyRef.current = null;
+      return;
+    }
 
+    const portal = detectCurrentPortal();
+    const user = getStoredUser(portal);
+    const userId = user?.id ? String(user.id) : null;
+    const authed = isAuthenticated() && !!userId;
+    const sessionKey = `${portal}:${userId || 'anon'}`;
+    setIsAuth(authed);
+
+    if (loadedKeyRef.current === sessionKey) {
+      return;
+    }
+    loadedKeyRef.current = sessionKey;
+
+    if (!authed) {
+      setIsInitializing(false);
+      setCurrentSession(null);
+      return;
+    }
+
+    let cancelled = false;
     const initChat = async () => {
-      const loggedIn = isAuthenticated();
-      setIsAuth(loggedIn);
-
-      // Only fetch sessions if user is logged in
-      if (!loggedIn) {
-        setIsInitializing(false);
-        setCurrentSession(null);
-        return;
-      }
-
       setIsInitializing(true);
       setHasError(false);
       try {
         const sessions = await getChatbotSessions();
+        if (cancelled) return;
+
         if (sessions.length > 0) {
-          const latestSession = sessions[0];
-          const detail = await getChatbotSessionDetail(latestSession.id);
+          const targetSession =
+            sessions.find((s) => (s.messages_count ?? s.messages?.length ?? 0) > 0) || sessions[0];
+          const detail = await getChatbotSessionDetail(targetSession.id);
+          if (cancelled) return;
           setCurrentSession(detail);
           setMessages(detail.messages || []);
         } else {
-          const newSession = await createChatbotSession({
-            title: 'Percakapan Asisten AI',
-          });
-          setCurrentSession(newSession);
+          // Wait until user sends first message before persisting a session row
+          setCurrentSession(null);
           setMessages([]);
         }
       } catch (err: unknown) {
+        if (cancelled) return;
         const status = (err as { status?: number })?.status;
         const msg = (err as Error)?.message || '';
         const code = (err as { code?: string })?.code;
         const is401 = status === 401 || code === 'UNAUTHENTICATED' || msg.includes('Unauthenticated');
 
         if (is401) {
-          // Token expired or unauthenticated: reset chat session state
           setIsAuth(false);
           setCurrentSession(null);
           setMessages([]);
@@ -165,14 +185,17 @@ export const AiChatWidget = () => {
           setErrorMessage('Gagal memuat riwayat percakapan. Silakan coba kembali.');
         }
       } finally {
-        setIsInitializing(false);
+        if (!cancelled) {
+          setIsInitializing(false);
+        }
       }
     };
 
-    if (!currentSession && messages.length === 0) {
-      initChat();
-    }
-  }, [isOpen, currentSession, messages.length]);
+    initChat();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, authEpoch]);
 
   // Focus input when opened
   useEffect(() => {
@@ -272,54 +295,51 @@ export const AiChatWidget = () => {
     }
   };
 
-  // Handle clearing chat history
+  // Handle clearing all AI chat history
   const handleClearChat = async () => {
-    if (currentSession && isAuth) {
+    if (isClearing) return;
+
+    if (isAuth) {
+      setIsClearing(true);
       try {
-        await deleteChatbotSession(currentSession.id);
+        await clearAllChatbotSessions();
         setCurrentSession(null);
         setMessages([]);
         toastSuccess(
           'Percakapan Direset',
-          'Riwayat percakapan dengan Asisten AI telah dibersihkan.'
+          'Seluruh riwayat percakapan dengan Asisten AI telah dihapus.'
         );
       } catch (err: unknown) {
         const status = (err as { status?: number })?.status;
-        const code =
-          (err as { code?: string })?.code ||
-          (err as { responseData?: { error?: { code?: string } } })?.responseData?.error?.code;
+        const code = (err as { code?: string })?.code;
         const msg = (err as Error)?.message || '';
+        const is401 = status === 401 || code === 'UNAUTHENTICATED' || msg.includes('Unauthenticated');
 
-        const isSessionNotFound =
-          status === 404 ||
-          code === 'SESSION_NOT_FOUND' ||
-          msg.includes('SESSION_NOT_FOUND') ||
-          msg.includes('Sesi percakapan AI tidak ditemukan');
-
-        if (isSessionNotFound) {
-          // Jika sesi tidak ditemukan di server (404 / SESSION_NOT_FOUND), anggap sukses
+        console.error('Failed to clear AI chat history:', err);
+        if (is401) {
+          setIsAuth(false);
           setCurrentSession(null);
           setMessages([]);
-          toastSuccess(
-            'Percakapan Direset',
-            'Riwayat percakapan dengan Asisten AI telah dibersihkan.'
-          );
+          toastError('Sesi Berakhir', 'Silakan login kembali untuk mengelola riwayat percakapan.');
         } else {
-          console.error('Failed to clear session:', err);
           toastError(
             'Gagal Menghapus',
-            'Terjadi kesalahan saat menghapus sesi percakapan.'
+            'Terjadi kesalahan saat menghapus riwayat percakapan AI.'
           );
         }
+      } finally {
+        setIsClearing(false);
+        setConfirmClearOpen(false);
       }
-    } else {
-      setMessages([]);
-      toastSuccess(
-        'Percakapan Direset',
-        'Riwayat percakapan telah dibersihkan.'
-      );
+      return;
     }
+
+    setMessages([]);
     setConfirmClearOpen(false);
+    toastSuccess(
+      'Percakapan Direset',
+      'Riwayat percakapan telah dibersihkan.'
+    );
   };
 
   // Clean Markdown & text renderer
@@ -421,9 +441,10 @@ export const AiChatWidget = () => {
                 {messages.length > 0 && (
                   <button
                     onClick={() => setConfirmClearOpen(true)}
-                    className="p-1.5 text-navy-200 hover:text-rose-300 hover:bg-navy-800 rounded-lg transition-colors cursor-pointer"
-                    title="Hapus percakapan ini?"
-                    aria-label="Hapus percakapan ini?"
+                    disabled={isClearing}
+                    className="p-1.5 text-navy-200 hover:text-rose-300 hover:bg-navy-800 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                    title="Hapus semua riwayat percakapan"
+                    aria-label="Hapus semua riwayat percakapan"
                   >
                     <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                   </button>
@@ -601,13 +622,14 @@ export const AiChatWidget = () => {
       {/* Confirm Clear History Dialog */}
       <ConfirmDialog
         isOpen={confirmClearOpen}
-        onClose={() => setConfirmClearOpen(false)}
+        onClose={() => !isClearing && setConfirmClearOpen(false)}
         onConfirm={handleClearChat}
-        title="Hapus percakapan ini?"
-        description="Pesan obrolan ini akan dihapus dan Anda bisa memulai obrolan baru."
+        title="Hapus semua riwayat chat AI?"
+        description="Seluruh riwayat percakapan Anda dengan Asisten AI akan dihapus permanen dan obrolan baru akan dimulai."
         confirmText="Hapus"
         cancelText="Batal"
         variant="danger"
+        isLoading={isClearing}
       />
     </>
   );

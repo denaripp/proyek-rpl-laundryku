@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 585" width="1040" height="585" style="background:#FFFFFF;font-family:'Plus Jakarta Sans','Segoe UI',Arial,sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0E7490"/>
+    </marker>
+    <marker id="open-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#0B192C" stroke-width="1.5"/>
+    </marker>
+    <marker id="impl-triangle" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#FFFFFF" stroke="#0E7490" stroke-width="1.6"/>
+    </marker>
+    <marker id="diamond-comp" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#0B192C"/>
+    </marker>
+    <marker id="diamond-agg" viewBox="0 0 14 10" refX="1" refY="5" markerWidth="11" markerHeight="8" orient="auto">
+      <path d="M 1 5 L 7 1 L 13 5 L 7 9 z" fill="#FFFFFF" stroke="#0B192C" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-many" viewBox="0 0 14 12" refX="12" refY="6" markerWidth="11" markerHeight="10" orient="auto">
+      <path d="M 1 6 L 12 1 M 1 6 L 12 6 M 1 6 L 12 11 M 1 2 L 1 10" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-one" viewBox="0 0 10 12" refX="6" refY="6" markerWidth="8" markerHeight="10" orient="auto">
+      <path d="M 4 1 L 4 11 M 8 1 L 8 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    <marker id="cf-zero-one" viewBox="0 0 16 12" refX="12" refY="6" markerWidth="12" markerHeight="10" orient="auto">
+      <circle cx="4" cy="6" r="3" fill="#FFFFFF" stroke="#334155" stroke-width="1.3"/>
+      <path d="M 10 1 L 10 11" fill="none" stroke="#334155" stroke-width="1.4"/>
+    </marker>
+    
+  </defs>
+  <rect x="0" y="0" width="210" height="585" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/><rect x="0" y="0" width="210" height="34" fill="#0B192C"/><text x="105" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">User (4 Portal / Guest)</text><rect x="210" y="0" width="230" height="585" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/><rect x="210" y="0" width="230" height="34" fill="#0B192C"/><text x="325" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Next.js BFF (/api/chat)</text><rect x="440" y="0" width="320" height="585" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/><rect x="440" y="0" width="320" height="34" fill="#0B192C"/><text x="600" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Laravel AI Engine (LANDY)</text><rect x="760" y="0" width="280" height="585" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/><rect x="760" y="0" width="280" height="34" fill="#0B192C"/><text x="900" y="22" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">MySQL DB &amp; OpenRouter API</text><circle cx="105" cy="58" r="9" fill="#0B192C"/><rect x="20" y="83" width="170" height="38" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="105" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">1. Kirim Prompt ke Widget</text>
+     <text x="105" y="113" text-anchor="middle" font-size="9" fill="#475569">Chat bebas bahasa alami</text><path d="M105,67 L105,83" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="232.5" y="81" width="185" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="325" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">2. Validasi Cookie &amp; Origin</text>
+     <text x="325" y="113" text-anchor="middle" font-size="9" fill="#475569">Inject Sanctum Bearer (BFF)</text><path d="M190,102 L232,102" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="470" y="81" width="260" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="600" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">3. AiAssistantService::chat()</text>
+     <text x="600" y="113" text-anchor="middle" font-size="9" fill="#475569">AiTextNormalizer + looksLikeInjection</text><path d="M418,102 L470,102" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><polygon points="600,153 649,178 600,203 551,178" fill="#FFFBEB" stroke="#D97706" stroke-width="1.7"/>
+     <text x="600" y="176" text-anchor="middle" font-size="9" font-weight="700" fill="#92400E">Guardrail /</text>
+     <text x="600" y="188" text-anchor="middle" font-size="8.5" fill="#92400E">Injection?</text><path d="M600,123 L600,153" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="20" y="159" width="170" height="38" rx="10" fill="#FFF1F2" stroke="#DC2626" stroke-width="1.6"/>
+     <text x="105" y="175" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">Tolak Aman + cs@laundryku</text>
+     <text x="105" y="189" text-anchor="middle" font-size="9" fill="#475569">Zero token &amp; zero kebocoran data</text><path d="M546,178 L190,178" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="340" y="159" width="60" height="14" rx="3" fill="#FFFFFF"/><text x="370" y="169" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Blokir</text><rect x="470" y="232" width="260" height="40" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="600" y="249" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">4. Layer 1: AiIntentRouter</text>
+     <text x="600" y="263" text-anchor="middle" font-size="9" fill="#475569">Cocokkan 21 Topik KB &amp; Query Data Lokal</text><path d="M600,203 L600,232" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="595" y="208" width="60" height="14" rx="3" fill="#FFFFFF"/><text x="625" y="218" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Lolos</text><polygon points="600,300 649,325 600,350 551,325" fill="#FFFBEB" stroke="#D97706" stroke-width="1.7"/>
+     <text x="600" y="323" text-anchor="middle" font-size="9" font-weight="700" fill="#92400E">Terjawab</text>
+     <text x="600" y="335" text-anchor="middle" font-size="8.5" fill="#92400E">0-Token?</text><path d="M600,272 L600,300" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="785" y="231" width="230" height="42" rx="10" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.6"/>
+     <text x="900" y="249" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">5a. Query Langsung MySQL</text>
+     <text x="900" y="263" text-anchor="middle" font-size="9" fill="#475569">AiDataQueryService (Role/Tenant Scoped)</text><path d="M654,325 L740,325 L740,252 L785,252" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="670" y="306" width="60" height="14" rx="3" fill="#FFFFFF"/><text x="700" y="316" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Ya (KB/L1)</text><rect x="785" y="323" width="230" height="44" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="900" y="342" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">5b. Panggil OpenRouter API</text>
+     <text x="900" y="356" text-anchor="middle" font-size="9" fill="#475569">OpenAiClient::chat(activeModel, tools)</text><path d="M600,350 L600,380 L760,380 L760,345 L785,345" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="650" y="361" width="60" height="14" rx="3" fill="#FFFFFF"/><text x="680" y="371" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Layer 2/3 LLM</text><rect x="470" y="418" width="260" height="44" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="600" y="437" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">6. AiToolRegistry::execute()</text>
+     <text x="600" y="451" text-anchor="middle" font-size="9" fill="#475569">Loop &lt;= max_tool_rounds + Policy + PII Mask</text><path d="M900,367 L900,440 L730,440" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="785" y="421" width="60" height="14" rx="3" fill="#FFFFFF"/><text x="815" y="431" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0E7490">Tool Calls</text><rect x="785" y="499" width="230" height="42" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="900" y="517" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">7. Persist History &amp; Usage</text>
+     <text x="900" y="531" text-anchor="middle" font-size="9" fill="#475569">Simpan ai_messages + ai_usage_logs</text><path d="M600,462 L600,520 L785,520" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><path d="M1015,252 L1028,252 L1028,520 L1015,520" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><rect x="20" y="500" width="170" height="40" rx="10" fill="#ECFEFF" stroke="#0E7490" stroke-width="1.6"/>
+     <text x="105" y="517" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A">8. Render Jawaban AI</text>
+     <text x="105" y="531" text-anchor="middle" font-size="9" fill="#475569">Jika API gagal -&gt; Fallback CS</text><path d="M785,540 L190,540" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/><circle cx="105" cy="566" r="8" fill="none" stroke="#0B192C" stroke-width="1.8"/><circle cx="105" cy="566" r="4.5" fill="#0B192C"/><path d="M105,540 L105,558" fill="none" stroke="#0B192C" stroke-width="1.4" marker-end="url(#arrow)"/>
+</svg>

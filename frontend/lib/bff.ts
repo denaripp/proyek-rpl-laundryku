@@ -72,8 +72,65 @@ export function validateCsrfOrigin(request: NextRequest): boolean {
     }
   }
 
-  // Same-origin browser fetch without Origin/Referer in local dev can be allowed
-  return true;
+  // Fail-closed: mutation requests without valid Origin or Referer header are rejected
+  return false;
+}
+
+export const ALL_AUTH_COOKIE_NAMES = [
+  PORTAL_COOKIE_NAMES.customer,
+  PORTAL_COOKIE_NAMES.mitra,
+  PORTAL_COOKIE_NAMES.courier,
+  PORTAL_COOKIE_NAMES.admin,
+  TEMP_2FA_COOKIE_NAMES.mitra,
+  TEMP_2FA_COOKIE_NAMES.admin,
+  'auth_token',
+  'active_store_id',
+  'lk_active_store',
+];
+
+export function clearAllPortalCookies(response: NextResponse): void {
+  const expired = getCookieOptions(0);
+  ALL_AUTH_COOKIE_NAMES.forEach((name) => {
+    response.cookies.set(name, '', expired);
+  });
+}
+
+/**
+ * Canonicalizes path segments to prevent directory traversal attacks (.. or /./).
+ * Returns null if traversal beyond root is attempted or illegal characters are detected.
+ */
+export function canonicalizePath(rawPath: string): string | null {
+  if (!rawPath || typeof rawPath !== 'string') return null;
+  if (/[\0\r\n]/.test(rawPath)) return null;
+
+  const segments = rawPath.split('/').filter(Boolean);
+  const resolved: string[] = [];
+
+  for (const segment of segments) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      return null;
+    }
+
+    if (decoded === '.' || decoded === '') {
+      continue;
+    }
+    if (decoded === '..') {
+      if (resolved.length === 0) {
+        return null;
+      }
+      resolved.pop();
+    } else {
+      if (decoded.includes('/') || decoded.includes('\\')) {
+        return null;
+      }
+      resolved.push(encodeURIComponent(decoded));
+    }
+  }
+
+  return '/' + resolved.join('/');
 }
 
 export const ALLOWED_PROXY_PREFIXES = [
@@ -107,9 +164,10 @@ export const ALLOWED_PROXY_PREFIXES = [
 ];
 
 export function isPathAllowedInProxy(path: string): boolean {
-  const normalized = path.startsWith('/') ? path : `/${path}`;
+  const canonical = canonicalizePath(path);
+  if (!canonical) return false;
   return ALLOWED_PROXY_PREFIXES.some(
-    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`) || normalized.startsWith(`${prefix}?`)
+    (prefix) => canonical === prefix || canonical.startsWith(`${prefix}/`) || canonical.startsWith(`${prefix}?`)
   );
 }
 

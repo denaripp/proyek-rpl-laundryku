@@ -189,13 +189,13 @@ export const ORDER_STATUS_META: Record<
   },
   PICKED_UP: {
     label: 'Cucian Dijemput',
-    description: 'Cucian telah diambil oleh kurir dan sedang dibawa menuju outlet.',
+    description: 'Cucian telah diambil oleh kurir dan sedang dibawa menuju gerai.',
     badgeVariant: 'teal',
     stepIndex: 3,
   },
   AT_STORE: {
-    label: 'Tiba di Outlet',
-    description: 'Cucian sudah sampai di outlet dan siap untuk ditimbang.',
+    label: 'Tiba di Gerai',
+    description: 'Cucian sudah sampai di gerai dan siap untuk ditimbang.',
     badgeVariant: 'secondary',
     stepIndex: 4,
   },
@@ -224,13 +224,13 @@ export const ORDER_STATUS_META: Record<
     stepIndex: 8,
   },
   PAID: {
-    label: 'Pembayaran Lunas',
+    label: 'Sudah Dibayar',
     description: 'Pembayaran telah terverifikasi dan siap untuk dicuci.',
     badgeVariant: 'success',
     stepIndex: 9,
   },
   PROCESSING: {
-    label: 'Sedang Dicuci & Diproses',
+    label: 'Sedang Diproses',
     description: 'Cucian sedang dalam tahap pencucian, pengeringan, atau penyetrikaan.',
     badgeVariant: 'teal',
     stepIndex: 10,
@@ -248,7 +248,7 @@ export const ORDER_STATUS_META: Record<
     stepIndex: 12,
   },
   OUT_FOR_DELIVERY: {
-    label: 'Sedang Diantar ke Alamat',
+    label: 'Sedang Diantar',
     description: 'Kurir sedang dalam perjalanan mengantarkan cucian bersih ke alamat Anda.',
     badgeVariant: 'teal',
     stepIndex: 13,

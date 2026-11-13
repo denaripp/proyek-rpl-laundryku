@@ -7,6 +7,10 @@ use App\Models\CourierTask;
 use App\Models\Dispute;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Enums\CourierTaskStatus;
+use App\Models\SettlementPeriod;
+use App\Models\StoreStaff;
+use Illuminate\Support\Facades\DB;
 use App\Models\Review;
 use App\Models\ServicePrice;
 use App\Models\Store;
@@ -60,6 +64,11 @@ class AiToolRegistry
         'courier_get_cod_rules',
 
         // Platform Admin / Super Admin
+        'platform_search_users',
+        'platform_get_orders',
+        'platform_get_courier_activity',
+        'platform_get_settlements',
+        'platform_explain_admin_menu',
         'platform_get_overview',
         'platform_get_user_stats',
         'platform_get_approvals',
@@ -132,6 +141,13 @@ class AiToolRegistry
         }
 
         if ($isAdmin) {
+            $allowedNames = array_merge($allowedNames, [
+                'platform_search_users',
+                'platform_get_orders',
+                'platform_get_courier_activity',
+                'platform_get_settlements',
+                'platform_explain_admin_menu',
+            ]);
             $allowedNames = array_merge($allowedNames, [
                 'platform_get_overview',
                 'platform_get_user_stats',
@@ -476,6 +492,80 @@ class AiToolRegistry
                 ],
             ],
 
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'platform_search_users',
+                    'description' => 'Mencari pengguna/akun terdaftar berdasarkan nama, email, atau nomor telepon, beserta status akun dan keterkaitannya dengan toko atau kurir.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => ['type' => 'string', 'description' => 'Nama, email, atau nomor telepon pengguna'],
+                            'limit' => ['type' => 'integer', 'description' => 'Maksimal jumlah pengguna (default 5, max 15)'],
+                        ],
+                        'required' => ['query'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'platform_get_orders',
+                    'description' => 'Melihat daftar atau agregasi pesanan platform dengan filter status (awaiting_payment, completed, dll.), filter toko, periode, atau pesanan anomali (completed dengan completed_at null).',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string', 'description' => 'Status pesanan'],
+                            'store_id' => ['type' => 'integer', 'description' => 'ID toko mitra (opsional)'],
+                            'period' => ['type' => 'string', 'description' => 'Periode waktu (today, this_week, this_month)'],
+                            'null_completed_at' => ['type' => 'boolean', 'description' => 'Hanya pesanan completed dengan completed_at null'],
+                            'group_by_store' => ['type' => 'boolean', 'description' => 'Kelompokkan jumlah pesanan per toko'],
+                            'limit' => ['type' => 'integer', 'description' => 'Jumlah maksimal pesanan'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'platform_get_courier_activity',
+                    'description' => 'Melihat aktivitas kurir platform, kurir yang sedang memegang tugas aktif (pickup/delivery), dan ketersediaan kurir.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'only_active' => ['type' => 'boolean', 'description' => 'Hanya kurir dengan tugas aktif berjalan'],
+                            'limit' => ['type' => 'integer', 'description' => 'Jumlah maksimal data'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'platform_get_settlements',
+                    'description' => 'Melihat ringkasan pengajuan pencairan dana (settlement) toko mitra berdasarkan status (generated/pending, verified, paid).',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string', 'description' => 'Status settlement (generated/verified/paid)'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'platform_explain_admin_menu',
+                    'description' => 'Mendapatkan penjelasan fungsi menu dan modul operasional pada portal Super Admin LaundryKu.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'menu_key' => ['type' => 'string', 'description' => 'Kunci menu (overview, stores, orders, users, couriers, payments, refunds, disputes, audit, commission, ai)'],
+                        ],
+                    ],
+                ],
+            ],
+
             // ========== LEGACY DEFINITIONS ==========
             [
                 'type' => 'function',
@@ -602,6 +692,16 @@ class AiToolRegistry
                 return $this->courierGetCodRules($arguments, $actor);
 
             // Platform Admin
+            case 'platform_search_users':
+                return $this->platformSearchUsers($arguments, $actor);
+            case 'platform_get_orders':
+                return $this->platformGetOrders($arguments, $actor);
+            case 'platform_get_courier_activity':
+                return $this->platformGetCourierActivity($arguments, $actor);
+            case 'platform_get_settlements':
+                return $this->platformGetSettlements($arguments, $actor);
+            case 'platform_explain_admin_menu':
+                return $this->platformExplainAdminMenu($arguments, $actor);
             case 'platform_get_overview':
                 return $this->platformGetOverview($arguments, $actor);
             case 'platform_get_user_stats':
@@ -1269,6 +1369,273 @@ class AiToolRegistry
         return [
             'total_complaints' => count($complaints),
             'complaints' => $complaints,
+        ];
+    }
+
+    protected function platformSearchUsers(array $args, User $actor): array
+    {
+        $roles = $this->getUserRoles($actor);
+        $isAdmin = in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true) || in_array('platform_admin', $roles, true);
+
+        if (!$isAdmin) {
+            return ['error' => 'Akses ditolak: Hanya super administrator platform yang dapat mengakses data ini.'];
+        }
+
+        $term = trim((string) ($args['query'] ?? ''));
+        if ($term === '') {
+            return ['error' => 'Parameter pencarian pengguna (query) harus diisi.'];
+        }
+
+        // Clean query if wrapped in conversation phrasing
+        if (preg_match('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $term, $em)) {
+            $searchTerm = $em[0];
+        } else {
+            $cleaned = preg_replace('/^(cari\s+(pengguna|user|akun)\s+(bernama\s+|nama\s+)?|bernama\s+|nama\s+|akun\s+|pengguna\s+|user\s+)/iu', '', $term);
+            $cleaned = preg_replace('/(\s+terhubung\s+ke\s+toko\s+mana|\s+terhubung\s+kemana|\?)+$/iu', '', $cleaned);
+            $searchTerm = trim($cleaned) !== '' ? trim($cleaned) : $term;
+        }
+
+        $limit = min(15, max(1, (int) ($args['limit'] ?? 5)));
+        $users = User::where('name', 'like', "%{$searchTerm}%")
+            ->orWhere('email', 'like', "%{$searchTerm}%")
+            ->orWhere('phone', 'like', "%{$searchTerm}%")
+            ->limit($limit)
+            ->get();
+
+        if ($users->isEmpty()) {
+            return [
+                'total' => 0,
+                'users' => [],
+                'message' => "Pengguna dengan kata kunci '{$term}' tidak ditemukan di sistem LaundryKu.",
+            ];
+        }
+
+        $results = [];
+        foreach ($users as $u) {
+            $linkage = 'Tidak ada keterkaitan khusus';
+            $ownedStores = Store::where('owner_user_id', $u->id)->pluck('name')->all();
+            if (!empty($ownedStores)) {
+                $linkage = 'Pemilik Toko: ' . implode(', ', $ownedStores);
+            } else {
+                $staffStores = StoreStaff::where('user_id', $u->id)->with('store:id,name')->get()->pluck('store.name')->filter()->all();
+                if (!empty($staffStores)) {
+                    $linkage = 'Staf Toko: ' . implode(', ', $staffStores);
+                } else {
+                    $courier = Courier::where('user_id', $u->id)->with('store:id,name')->first();
+                    if ($courier) {
+                        $linkage = $courier->store ? "Kurir pada Toko: {$courier->store->name}" : 'Kurir Platform Independen';
+                    } elseif ($u->isCustomer()) {
+                        $linkage = 'Pelanggan Umum LaundryKu';
+                    }
+                }
+            }
+
+            $results[] = [
+                'id' => $u->id,
+                'name' => $u->name,
+                'role' => $u->role ?? 'customer',
+                'status' => $u->is_active ? 'aktif' : 'nonaktif',
+                'masked_email' => $this->maskEmail($u->email),
+                'masked_phone' => $this->maskPhone($u->phone),
+                'linkage' => $linkage,
+                'created_at' => optional($u->created_at)->format('d M Y'),
+            ];
+        }
+
+        return [
+            'total' => count($results),
+            'users' => $results,
+        ];
+    }
+
+    protected function platformGetOrders(array $args, User $actor): array
+    {
+        $roles = $this->getUserRoles($actor);
+        $isAdmin = in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true) || in_array('platform_admin', $roles, true);
+
+        if (!$isAdmin) {
+            return ['error' => 'Akses ditolak: Hanya super administrator platform yang dapat mengakses data ini.'];
+        }
+
+        $status = trim((string) ($args['status'] ?? ''));
+        $storeId = (int) ($args['store_id'] ?? 0);
+        $period = trim((string) ($args['period'] ?? ''));
+        $nullCompletedAt = (bool) ($args['null_completed_at'] ?? false);
+        $groupByStore = (bool) ($args['group_by_store'] ?? false);
+        $limit = min(20, max(1, (int) ($args['limit'] ?? 10)));
+
+        $query = Order::with(['store:id,name', 'customer:id,name']);
+
+        if ($status !== '') {
+            $query->where('status', $status);
+        }
+
+        if ($storeId > 0) {
+            $query->where('store_id', $storeId);
+        }
+
+        if ($nullCompletedAt) {
+            $query->whereNull('completed_at');
+        }
+
+        if ($period === 'today') {
+            $query->where('order_date', '>=', now()->startOfDay());
+        } elseif ($period === 'this_week') {
+            $query->where('order_date', '>=', now()->startOfWeek());
+        } elseif ($period === 'this_month') {
+            $query->where('order_date', '>=', now()->startOfMonth());
+        }
+
+        if ($groupByStore) {
+            $counts = (clone $query)->select('store_id', DB::raw('count(*) as total'))
+                ->groupBy('store_id')
+                ->with('store:id,name')
+                ->get()
+                ->map(fn ($r) => [
+                    'store_name' => $r->store?->name ?? 'Toko #' . $r->store_id,
+                    'count' => (int) $r->total,
+                ])
+                ->all();
+
+            return [
+                'total_groups' => count($counts),
+                'breakdown' => $counts,
+            ];
+        }
+
+        $orders = $query->latest('id')->limit($limit)->get()->map(fn ($o) => [
+            'order_number' => $o->order_number,
+            'store_name' => $o->store?->name ?? 'Toko',
+            'customer_name' => $this->maskCustomerName($o->customer?->name),
+            'status' => $o->status,
+            'payment_status' => $o->payment_status,
+            'total_amount' => (float) ($o->total_amount ?: $o->total_price ?: 0),
+            'order_date' => optional($o->order_date)->format('d M Y H:i'),
+            'completed_at' => optional($o->completed_at)->format('d M Y H:i'),
+        ])->all();
+
+        return [
+            'total' => count($orders),
+            'orders' => $orders,
+        ];
+    }
+
+    protected function platformGetCourierActivity(array $args, User $actor): array
+    {
+        $roles = $this->getUserRoles($actor);
+        $isAdmin = in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true) || in_array('platform_admin', $roles, true);
+
+        if (!$isAdmin) {
+            return ['error' => 'Akses ditolak: Hanya super administrator platform yang dapat mengakses data ini.'];
+        }
+
+        $onlyActive = (bool) ($args['only_active'] ?? true);
+        $limit = min(20, max(1, (int) ($args['limit'] ?? 10)));
+
+        $activeTaskStatuses = [CourierTaskStatus::ASSIGNED->value, CourierTaskStatus::ACCEPTED->value, CourierTaskStatus::ARRIVED->value, CourierTaskStatus::PICKED_UP->value];
+
+        if ($onlyActive) {
+            $activeTasks = CourierTask::with(['courier.user:id,name', 'courier.store:id,name', 'order:id,order_number,status'])
+                ->whereIn('status', $activeTaskStatuses)
+                ->latest('assigned_at')
+                ->limit($limit)
+                ->get()
+                ->map(fn ($t) => [
+                    'courier_name' => $t->courier?->user?->name ?? 'Kurir',
+                    'store_name' => $t->courier?->store?->name ?? 'Independen',
+                    'task_type' => $t->task_type,
+                    'status' => $t->status,
+                    'order_number' => $t->order?->order_number ?? '-',
+                    'assigned_at' => optional($t->assigned_at)->format('d M Y H:i'),
+                ])
+                ->all();
+
+            return [
+                'total_active_tasks' => count($activeTasks),
+                'active_tasks' => $activeTasks,
+            ];
+        }
+
+        $totalCouriers = Courier::count();
+        $availableCouriers = Courier::where('is_available', true)->count();
+        $busyCouriers = Courier::whereHas('tasks', fn ($q) => $q->whereIn('status', $activeTaskStatuses))->count();
+
+        return [
+            'total_couriers' => $totalCouriers,
+            'available_couriers' => $availableCouriers,
+            'busy_couriers' => $busyCouriers,
+        ];
+    }
+
+    protected function platformGetSettlements(array $args, User $actor): array
+    {
+        $roles = $this->getUserRoles($actor);
+        $isAdmin = in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true) || in_array('platform_admin', $roles, true);
+
+        if (!$isAdmin) {
+            return ['error' => 'Akses ditolak: Hanya super administrator platform yang dapat mengakses data ini.'];
+        }
+
+        $status = trim((string) ($args['status'] ?? 'generated'));
+        $periods = SettlementPeriod::with('store:id,name')
+            ->where('status', $status)
+            ->latest()
+            ->limit(15)
+            ->get();
+
+        $totalAmount = (float) $periods->sum('net_amount');
+        $items = $periods->map(fn ($p) => [
+            'reference' => $p->reference,
+            'store_name' => $p->store?->name ?? 'Toko',
+            'net_amount' => (float) $p->net_amount,
+            'order_count' => (int) $p->order_count,
+            'period' => optional($p->period_start)->format('d/m/Y') . ' - ' . optional($p->period_end)->format('d/m/Y'),
+            'status' => $p->status,
+        ])->all();
+
+        return [
+            'status' => $status,
+            'total_settlements' => count($items),
+            'total_nominal' => $totalAmount,
+            'formatted_nominal' => 'Rp ' . number_format($totalAmount, 0, ',', '.'),
+            'items' => $items,
+        ];
+    }
+
+    protected function platformExplainAdminMenu(array $args, User $actor): array
+    {
+        $roles = $this->getUserRoles($actor);
+        $isAdmin = in_array('super_admin', $roles, true) || in_array('platform_owner', $roles, true) || in_array('platform_admin', $roles, true);
+
+        if (!$isAdmin) {
+            return ['error' => 'Akses ditolak: Hanya super administrator platform yang dapat mengakses data ini.'];
+        }
+
+        $menus = [
+            'overview' => 'Menu Overview menyajikan ringkasan ekosistem LaundryKu: Gross Merchandise Value (GMV), jumlah transaksi hari ini, toko aktif, pelanggan aktif, kurir siap tugas, dan monitoring keamanan/audit log.',
+            'stores' => 'Menu Toko & Approval digunakan untuk memverifikasi pendaftaran toko baru, menyetujui (approve), menolak (reject), menonaktifkan (suspend), atau mengaktifkan kembali mitra toko.',
+            'orders' => 'Menu Pesanan memantau seluruh transaksi di platform secara lintas toko mitra, status pencucian, riwayat status, kurir yang bertugas, dan detail pembayaran.',
+            'users' => 'Menu Manajemen Pengguna / Pelanggan digunakan untuk melihat daftar pengguna, memantau status aktif/nonaktif akun, memeriksa role (customer, kurir, mitra), dan riwayat pendaftaran.',
+            'couriers' => 'Menu Kurir memantau daftar mitra kurir, verifikasi dokumen SIM/KTP/kendaraan, memantau ketersediaan kurir, serta keterkaitan kurir dengan toko tertentu.',
+            'payments' => 'Menu Pembayaran menampilkan riwayat transaksi pembayaran online (QRIS/VA via Xendit) dan transaksi COD (Cash on Delivery) secara real-time.',
+            'refunds' => 'Menu Refund digunakan untuk memproses pengembalian dana kepada pelanggan untuk pesanan yang dibatalkan sesuai kebijakan garansi dan persetujuan admin.',
+            'disputes' => 'Menu Penyelesaian Sengketa (Disputes) adalah wadah mediasi keluhan cucian rusak/hilang antara pelanggan dan toko mitra dalam batas waktu garansi 1x24 jam.',
+            'audit' => 'Menu Audit Log mencatat seluruh rekam jejak aktivitas keamanan, login gagal, dan perubahan data penting di platform untuk akuntabilitas operasional.',
+            'commission' => 'Menu Pengaturan Komisi mengatur persentase pembagian komisi platform per layanan laundry.',
+            'ai' => 'Menu Monitoring AI menyajikan transparansi biaya, konsumsi token, dan riwayat panggilan OpenAI Assistant untuk evaluasi operasional asisten.',
+        ];
+
+        $key = trim((string) ($args['menu_key'] ?? ''));
+        if ($key !== '' && isset($menus[$key])) {
+            return [
+                'menu' => $key,
+                'explanation' => $menus[$key],
+            ];
+        }
+
+        return [
+            'overview' => 'Daftar menu utama di Portal Super Admin LaundryKu:',
+            'menus' => $menus,
         ];
     }
 

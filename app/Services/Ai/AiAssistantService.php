@@ -5,6 +5,7 @@ namespace App\Services\Ai;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiUsageLog;
+use App\Models\Setting;
 use App\Models\SystemConfiguration;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -118,7 +119,15 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
      */
     public function chat(User $user, ?int $conversationId, string $message): array
     {
-        // 0. Bot Identity check: answer immediately before rate limit, guardrail, and LLM!
+        // Enforce rate limit & abuse limit first before executing any queries or early returns
+        $this->enforceRateLimit($user);
+
+        // Pre-call Topic Classification via Guardrail
+        $classification = $this->guardrail->classify($message, $user);
+        $isAbusive = (!$classification['allowed'] && $classification['type'] === 'jailbreak') || $this->looksLikeInjection($message);
+        $this->enforceAbuseLimit($user, $isAbusive);
+
+        // 0. Bot Identity check: answer immediately for bot identity queries
         // (If query contains multiple intents like "siapa kamu dan pesanan saya sampai mana", let compound handler answer both parts)
         $normalizedMessage = $this->normalizer->normalize($message);
         $multiIntents = $this->router->detectMultiIntents($normalizedMessage);
@@ -151,7 +160,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
                 'conversation_id' => $conversation->id,
                 'role' => 'assistant',
                 'content' => $reply,
-                'model' => config('ai.model', 'liquid/lfm-2.5-2.6b:free'),
+                'model' => $this->getActiveModel(),
                 'metadata' => [
                     'fallback' => false,
                     'bot_identity' => true,
@@ -163,7 +172,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             AiUsageLog::create([
                 'user_id' => $user->id,
                 'conversation_id' => $conversation->id,
-                'model' => config('ai.model', 'liquid/lfm-2.5-2.6b:free'),
+                'model' => $this->getActiveModel(),
                 'prompt_tokens' => 0,
                 'completion_tokens' => 0,
                 'total_tokens' => 0,
@@ -179,13 +188,6 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
                 'fallback' => false,
             ];
         }
-
-        $this->enforceRateLimit($user);
-
-        // Pre-call Topic Classification via Guardrail
-        $classification = $this->guardrail->classify($message, $user);
-        $isAbusive = (!$classification['allowed'] && $classification['type'] === 'jailbreak') || $this->looksLikeInjection($message);
-        $this->enforceAbuseLimit($user, $isAbusive);
 
         $conversation = $conversationId !== null
             ? AiConversation::where('id', $conversationId)->where('user_id', $user->id)->first()
@@ -217,7 +219,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
                     'conversation_id' => $conversation->id,
                     'role' => 'assistant',
                     'content' => $reply,
-                    'model' => config('ai.model', 'liquid/lfm-2.5-2.6b:free'),
+                    'model' => $this->getActiveModel(),
                     'metadata' => [
                         'fallback' => false,
                         'guardrail_blocked' => true,
@@ -230,7 +232,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
                 AiUsageLog::create([
                     'user_id' => $user->id,
                     'conversation_id' => $conversation->id,
-                    'model' => config('ai.model', 'liquid/lfm-2.5-2.6b:free'),
+                    'model' => $this->getActiveModel(),
                     'prompt_tokens' => 0,
                     'completion_tokens' => 0,
                     'total_tokens' => 0,
@@ -380,12 +382,18 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         $reply = null;
         $fallback = false;
         $toolTrace = [];
+        $resolvedModel = null;
+        $providerError = null;
 
         try {
-            $maxRounds = (int) config('ai.max_tool_rounds', 5);
+            $maxRounds = $this->getMaxToolRounds();
 
             for ($round = 0; $round < $maxRounds; $round++) {
                 $result = $this->client->chat($messages, $roleTools);
+
+                if (!empty($result['model']) && is_string($result['model'])) {
+                    $resolvedModel = $result['model'];
+                }
 
                 $promptTokens += $result['usage']['prompt_tokens'] ?? 0;
                 $completionTokens += $result['usage']['completion_tokens'] ?? 0;
@@ -430,6 +438,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
                 'user_id' => $user->id,
                 'conversation_id' => $conversation->id,
             ]);
+            $providerError = Str::limit($e->getMessage(), 200);
             $fallback = true;
         }
 
@@ -458,22 +467,34 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         // Never allow the system prompt to leak through the reply.
         $reply = $this->scrubSystemPrompt((string) $reply);
 
+        $messageMeta = [
+            'fallback' => $fallback,
+            'tool_rounds' => $toolRounds,
+            'tools' => $toolTrace,
+        ];
+        if ($resolvedModel !== null) {
+            $messageMeta['resolved_model'] = $resolvedModel;
+        }
+
         AiMessage::create([
             'conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => $reply,
-            'model' => config('ai.model', 'liquid/lfm-2.5-2.6b:free'),
-            'metadata' => [
-                'fallback' => $fallback,
-                'tool_rounds' => $toolRounds,
-                'tools' => $toolTrace,
-            ],
+            'model' => $this->getActiveModel(),
+            'metadata' => $messageMeta,
         ]);
 
         $primaryRole = $this->dataQueryService->getPrimaryRole($user);
         $isAdminRole = in_array($primaryRole, ['store_admin', 'store_owner', 'super_admin', 'platform_owner', 'platform_admin'], true);
 
         $flags = $isAbusive ? ['abuse_flag' => true] : [];
+
+        if ($resolvedModel !== null) {
+            $flags['resolved_model'] = $resolvedModel;
+        }
+        if ($providerError !== null) {
+            $flags['provider_error'] = $providerError;
+        }
 
         if ($isAdminRole && ($fallback || ($routing['intent'] ?? null) === AiIntentRouter::INTENT_UNKNOWN)) {
             $flags['unknown_query'] = $routing['unknown_query'] ?? [
@@ -494,7 +515,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         AiUsageLog::create([
             'user_id' => $user->id,
             'conversation_id' => $conversation->id,
-            'model' => config('ai.model', 'liquid/lfm-2.5-2.6b:free'),
+            'model' => $this->getActiveModel(),
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
             'total_tokens' => $promptTokens + $completionTokens,
@@ -761,7 +782,13 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         preg_match('/ord-[a-z0-9-]+/i', $normalized . ' ' . $rawMessage, $ordMatches);
         $orderNumber = !empty($ordMatches[0]) ? strtoupper($ordMatches[0]) : ($routing['order_number'] ?? null);
 
-        // Super Admin query handling
+        if ($isSuperAdmin && !str_starts_with($intent, 'guide_') && $intent !== AiIntentRouter::INTENT_PROCEDURAL_GUIDE) {
+            $adminRes = $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
+            if ($adminRes !== null) {
+                return $adminRes;
+            }
+        }
+        // Super Admin query handling (legacy)
         if ($isSuperAdmin) {
             if ($orderNumber !== null) {
                 return $this->dataQueryService->handleSuperAdminQuery($user, $normalized);
@@ -998,8 +1025,8 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
         }
 
         // Super admin mutations (approve store, reject store, block user, delete store)
-        if (str_contains($lowerMsg, 'setujui toko') || str_contains($lowerMsg, 'approve toko') || str_contains($lowerMsg, 'tolak toko') || str_contains($lowerMsg, 'blokir user') || str_contains($lowerMsg, 'blokir pengguna') || str_contains($lowerMsg, 'hapus toko') || str_contains($lowerMsg, 'reset password')) {
-            return "Demi keamanan sistem dan audit kepatuhan platform, tindakan administratif seperti persetujuan toko, pemblokiran akun, atau pengaturan kredensial tidak dapat dilakukan melalui chat. Silakan gunakan menu aksi pada Admin Panel (/admin).";
+        if (str_contains($lowerMsg, 'setujui toko') || str_contains($lowerMsg, 'approve toko') || str_contains($lowerMsg, 'tolak toko') || str_contains($lowerMsg, 'blokir user') || str_contains($lowerMsg, 'blokir pengguna') || str_contains($lowerMsg, 'hapus user') || str_contains($lowerMsg, 'hapus pengguna') || str_contains($lowerMsg, 'delete user') || str_contains($lowerMsg, 'hapus akun') || str_contains($lowerMsg, 'hapus toko') || str_contains($lowerMsg, 'reset password') || str_contains($lowerMsg, 'ganti role') || str_contains($lowerMsg, 'ubah role') || str_contains($lowerMsg, 'cairkan dana') || str_contains($lowerMsg, 'cairkan settlement')) {
+            return "Demi keamanan sistem dan audit kepatuhan platform, tindakan administratif seperti persetujuan toko, penghapusan/pemblokiran akun, perubahan role, pencairan dana settlement, atau pengaturan kredensial tidak dapat dilakukan melalui chat. Asisten AI ini bersifat read-only. Silakan gunakan menu aksi pada Admin Panel (/admin).";
         }
 
         // Delete order or historical data mutation
@@ -1157,8 +1184,18 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
      *
      * @return array{answer: string, is_fallback: bool, provider: string}
      */
-    public function replyForGuest(string $message): array
+    public function replyForGuest(string $message, ?string $ip = null): array
     {
+        if ($ip) {
+            $guestKey = 'ai_guest_rate:' . md5($ip) . ':' . now()->format('YmdH');
+            $guestCount = (int) \Illuminate\Support\Facades\Cache::get($guestKey, 0);
+            $limit = (int) config('ai.rate_limit_per_hour', 30);
+            if ($guestCount >= $limit) {
+                throw new AiRateLimitException('Batas penggunaan AI chat tamu per jam tercapai. Silakan masuk atau coba lagi nanti.');
+            }
+            \Illuminate\Support\Facades\Cache::put($guestKey, $guestCount + 1, now()->addHours(2));
+        }
+
         $isBotIdentity = $this->guardrail->isBotIdentityQuery($message);
         $isOrderStats = $this->guardrail->isOrderStatsQuery($message);
 
@@ -1279,20 +1316,33 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
     protected function enforceRateLimit(User $user): void
     {
-        $limit = $this->configValue('AI_RATE_LIMIT_PER_HOUR', (int) config('ai.rate_limit_per_hour', 30));
+        $lockKey = "ai_rate_limit:user:{$user->id}";
+        $lock = \Illuminate\Support\Facades\Cache::lock($lockKey, 10);
 
-        $count = AiMessage::whereHas('conversation', fn ($q) => $q->where('user_id', $user->id))
-            ->where('role', 'user')
-            ->where('created_at', '>=', now()->subHour())
-            ->count();
+        try {
+            $lock->block(3);
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException) {
+            throw new AiRateLimitException('Permintaan AI chat sedang diproses. Silakan tunggu beberapa detik.');
+        }
 
-        if ($count >= $limit) {
-            AiUsageLog::create([
-                'user_id' => $user->id,
-                'status' => 'rate_limited',
-            ]);
+        try {
+            $limit = $this->configValue('AI_RATE_LIMIT_PER_HOUR', (int) config('ai.rate_limit_per_hour', 30));
 
-            throw new AiRateLimitException('Batas penggunaan AI chat per jam tercapai. Coba lagi nanti.');
+            $count = AiMessage::whereHas('conversation', fn ($q) => $q->where('user_id', $user->id))
+                ->where('role', 'user')
+                ->where('created_at', '>=', now()->subHour())
+                ->count();
+
+            if ($count >= $limit) {
+                AiUsageLog::create([
+                    'user_id' => $user->id,
+                    'status' => 'rate_limited',
+                ]);
+
+                throw new AiRateLimitException('Batas penggunaan AI chat per jam tercapai. Coba lagi nanti.');
+            }
+        } finally {
+            $lock->release();
         }
     }
 
@@ -1304,13 +1354,17 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
         $threshold = $this->configValue('AI_ABUSE_THRESHOLD', 3);
 
+        $cacheKey = "ai_abuse_count:user_{$user->id}";
+        $abuseCount = (int) \Illuminate\Support\Facades\Cache::get($cacheKey, 0) + 1;
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $abuseCount, now()->addHour());
+
         $recentFlags = AiMessage::whereHas('conversation', fn ($q) => $q->where('user_id', $user->id))
             ->where('role', 'user')
             ->whereJsonContains('metadata', ['abuse_flag' => true])
             ->where('created_at', '>=', now()->subHour())
             ->count();
 
-        if ($recentFlags + 1 > $threshold) {
+        if ($abuseCount > $threshold || ($recentFlags + 1) > $threshold) {
             AiUsageLog::create([
                 'user_id' => $user->id,
                 'status' => 'abuse_blocked',
@@ -1346,7 +1400,7 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
 
     protected function estimateCost(int $promptTokens, int $completionTokens): float
     {
-        $model = config('ai.model', 'gpt-4o-mini');
+        $model = $this->getActiveModel();
         $pricing = config('ai.pricing', [])[$model] ?? ['input' => 0.15, 'output' => 0.60]; // USD per 1M tokens
 
         return round(
@@ -1354,5 +1408,36 @@ BASIS PENGETAHUAN RESMI (SUMBER DOKUMEN SISTEM):
             + ($completionTokens / 1_000_000) * $pricing['output'],
             6
         );
+    }
+
+    public function getActiveModel(): string
+    {
+        return Setting::get('AI_MODEL') ?: config('ai.model', 'liquid/lfm-2.5-2.6b:free');
+    }
+
+    public function getTemperature(): float
+    {
+        $val = Setting::get('AI_TEMPERATURE');
+        return is_numeric($val) ? (float) $val : (float) config('ai.temperature', 0.2);
+    }
+
+    public function getMaxToolRounds(): int
+    {
+        $val = Setting::get('AI_MAX_TOOL_ROUNDS');
+        return is_numeric($val) ? (int) $val : (int) config('ai.max_tool_rounds', 5);
+    }
+
+    public function testModelConnection(string $model): array
+    {
+        if ($this->client instanceof OpenAiClient) {
+            return $this->client->testConnection($model);
+        }
+
+        return [
+            'success' => true,
+            'latency_ms' => 45,
+            'message' => "Simulasi koneksi model {$model} berhasil.",
+            'model' => $model,
+        ];
     }
 }

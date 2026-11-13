@@ -12,6 +12,7 @@ use App\Models\OrderItem;
 use App\Models\Review;
 use App\Models\Role;
 use App\Models\ServicePrice;
+use App\Models\Setting;
 use App\Models\Store;
 use App\Models\StorePayoutAccount;
 use App\Models\StoreStaff;
@@ -447,6 +448,13 @@ class MitraPortalController extends Controller
                 'success' => false,
                 'message' => 'Toko tidak ditemukan untuk akun ini.',
             ], 404);
+        }
+
+        if ($store->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Toko belum disetujui atau sedang ditangguhkan.',
+            ], 422);
         }
 
         $newStatus = $request->input('operational_status');
@@ -1007,10 +1015,10 @@ class MitraPortalController extends Controller
 
         $courier = Courier::findOrFail($courierProfileId);
 
-        if ($courier->store_id && (int) $courier->store_id !== (int) $store->id && $courier->is_verified) {
+        if ($courier->store_id && (int) $courier->store_id !== (int) $store->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Kurir sudah terikat dan bertugas pada toko lain.',
+                'message' => 'Kurir sudah terikat atau sedang dalam proses rekrutmen di toko lain.',
             ], 422);
         }
 
@@ -1351,18 +1359,24 @@ class MitraPortalController extends Controller
         ];
 
         $targetStatus = $statusMapping[$statusInput] ?? Dispute::STATUS_COMPLAINT_SUBMITTED;
-        $dispute->status = $targetStatus;
-
-        if ($request->has('resolution_note')) {
-            $dispute->resolution_note = $request->input('resolution_note');
-        }
 
         if (in_array($targetStatus, [Dispute::STATUS_RESOLVED, Dispute::STATUS_REJECTED], true)) {
-            $dispute->resolved_at = now();
-            $dispute->resolved_by = $user->id;
+            \Illuminate\Support\Facades\Gate::forUser($user)->authorize('resolve', $dispute);
+            $disputeService = app(\App\Services\Dispute\DisputeService::class);
+            $note = $request->input('resolution_note', 'Dispute resolution updated by store admin');
+            if ($targetStatus === Dispute::STATUS_RESOLVED) {
+                $disputeService->resolve($dispute, $user, 'replacement', $note);
+            } else {
+                $disputeService->reject($dispute, $user, $note);
+            }
+            $dispute->refresh();
+        } else {
+            $dispute->status = $targetStatus;
+            if ($request->has('resolution_note')) {
+                $dispute->resolution_note = $request->input('resolution_note');
+            }
+            $dispute->save();
         }
-
-        $dispute->save();
 
         AuditLog::create([
             'actor_id' => $user->id,
@@ -1650,6 +1664,13 @@ class MitraPortalController extends Controller
             ], 422);
         }
 
+        if (in_array(strtolower((string) $order->status), ['cancelled', 'created', 'waiting_pickup', 'courier_assigned', 'pickup_assigned', 'waiting_for_courier'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Status pesanan tidak valid untuk konfirmasi pembayaran COD.',
+            ], 422);
+        }
+
         if ($order->payment_status === 'paid') {
             return response()->json([
                 'success' => false,
@@ -1688,6 +1709,123 @@ class MitraPortalController extends Controller
                 'payment_status' => 'PAID',
                 'collected_amount' => (float) ($order->total_amount ?? $order->final_price ?? 0),
                 'collected_by' => $user->name,
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/store/pricing-rules
+     */
+    public function getPricingRules(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user, $request->header('x-store-id'));
+
+        if (! $store) {
+            return response()->json(['success' => false, 'message' => 'Store not found.'], 404);
+        }
+
+        $rules = [
+            'min_weight_discount_kg' => (float) Setting::get("store_{$store->id}_min_weight_discount_kg", 5),
+            'min_weight_discount_percent' => (float) Setting::get("store_{$store->id}_min_weight_discount_percent", 10),
+            'minimum_order_amount' => (float) Setting::get("store_{$store->id}_minimum_order_amount", $store->minimum_order_amount ?? 15000),
+            'express_surcharge_amount' => (float) Setting::get("store_{$store->id}_express_surcharge_amount", 10000),
+            'is_promo_active' => (bool) Setting::get("store_{$store->id}_is_promo_active", false),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $rules,
+        ]);
+    }
+
+    /**
+     * PUT /api/v1/store/pricing-rules
+     */
+    public function updatePricingRules(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user, $request->header('x-store-id'));
+
+        if (! $store) {
+            return response()->json(['success' => false, 'message' => 'Store not found.'], 404);
+        }
+
+        $validated = $request->validate([
+            'min_weight_discount_kg' => 'required|numeric|min:0',
+            'min_weight_discount_percent' => 'required|numeric|min:0|max:100',
+            'minimum_order_amount' => 'required|numeric|min:0',
+            'express_surcharge_amount' => 'required|numeric|min:0',
+            'is_promo_active' => 'required|boolean',
+        ]);
+
+        Setting::set("store_{$store->id}_min_weight_discount_kg", $validated['min_weight_discount_kg'], 'number', 'pricing');
+        Setting::set("store_{$store->id}_min_weight_discount_percent", $validated['min_weight_discount_percent'], 'number', 'pricing');
+        Setting::set("store_{$store->id}_minimum_order_amount", $validated['minimum_order_amount'], 'number', 'pricing');
+        Setting::set("store_{$store->id}_express_surcharge_amount", $validated['express_surcharge_amount'], 'number', 'pricing');
+        Setting::set("store_{$store->id}_is_promo_active", $validated['is_promo_active'], 'boolean', 'pricing');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Aturan harga berhasil diperbarui.',
+            'data' => $validated,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/store/reports
+     */
+    public function reports(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user, $request->header('x-store-id'));
+
+        if (! $store) {
+            return response()->json(['success' => false, 'message' => 'Store not found.'], 404);
+        }
+
+        $from = $request->query('from') ? Carbon::parse($request->query('from'))->startOfDay() : now()->subDays(30)->startOfDay();
+        $to = $request->query('to') ? Carbon::parse($request->query('to'))->endOfDay() : now()->endOfDay();
+
+        $orders = Order::where('store_id', $store->id)
+            ->whereBetween('created_at', [$from, $to])
+            ->with(['payment', 'customer'])
+            ->get();
+
+        $completedOrders = $orders->where('status', 'completed');
+        $paidOrders = $orders->filter(fn ($o) => $o->payment?->status === 'paid');
+
+        $revenueTotal = (float) $paidOrders->sum(fn ($o) => (float) ($o->final_price ?? $o->total_amount ?? 0));
+        $revenueOnline = (float) $paidOrders->filter(fn ($o) => strtolower((string)$o->payment_method) !== 'cod')
+            ->sum(fn ($o) => (float) ($o->final_price ?? $o->total_amount ?? 0));
+        $revenueCod = (float) $paidOrders->filter(fn ($o) => strtolower((string)$o->payment_method) === 'cod')
+            ->sum(fn ($o) => (float) ($o->final_price ?? $o->total_amount ?? 0));
+
+        $recentOrders = $orders->sortByDesc('created_at')->take(50)->map(function ($o) {
+            return [
+                'id' => $o->id,
+                'order_number' => $o->order_number ?? 'ORD-' . $o->id,
+                'created_at' => $o->created_at?->format('d/m/Y H:i') ?? '',
+                'customer_name' => $o->customer?->name ?? 'Pelanggan',
+                'payment_method' => strtoupper((string) ($o->payment_method ?? 'QRIS')),
+                'final_price' => (float) ($o->final_price ?? $o->total_amount ?? 0),
+                'status' => $o->status,
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'window' => [
+                    'from' => $from->toDateString(),
+                    'to' => $to->toDateString(),
+                ],
+                'revenue_total' => $revenueTotal,
+                'revenue_online' => $revenueOnline,
+                'revenue_cod' => $revenueCod,
+                'order_count' => $orders->count(),
+                'completed_count' => $completedOrders->count(),
+                'recent_orders' => $recentOrders,
             ],
         ]);
     }
