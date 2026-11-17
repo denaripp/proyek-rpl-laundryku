@@ -6,6 +6,7 @@ import { DataTable, Column } from '@/components/admin/DataTable';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { StatusText } from '@/components/admin/StatusText';
 import { Search, Eye, X, ReceiptText, Store, User, Bike, Coins } from 'lucide-react';
+import { usePolling } from '@/hooks/usePolling';
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
@@ -66,6 +67,8 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  usePolling(() => fetchOrders(true), 15000, { enabled: true, refetchOnFocus: true });
 
   const formatRupiah = (val: number | null | undefined) => {
     return new Intl.NumberFormat('id-ID', {

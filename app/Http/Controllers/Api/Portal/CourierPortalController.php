@@ -13,6 +13,7 @@ use App\Models\OrderStatusHistory;
 use App\Models\Store;
 use App\Models\User;
 use App\Notifications\NotificationTrigger;
+use App\Traits\FormatsTimestamps;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\DB;
 
 class CourierPortalController extends Controller
 {
+    use FormatsTimestamps;
+
     /**
      * Resolve courier record for authenticated user.
      */
@@ -29,24 +32,20 @@ class CourierPortalController extends Controller
     }
 
     /**
-     * Format timestamp with Asia/Jakarta timezone.
-     */
-    protected function formatTimestamp(?string $raw, $fallback = null): ?string
-    {
-        if ($raw) {
-            return Carbon::parse($raw, 'Asia/Jakarta')->toIso8601String();
-        }
-        return $fallback ? Carbon::parse($fallback)->setTimezone('Asia/Jakarta')->toIso8601String() : null;
-    }
-
-    /**
      * Format an order/task as canonical CourierTaskItem.
      */
     protected function formatCourierTask(Order $order, ?CourierTask $task, Courier $courier): array
     {
         $isPickup = in_array(strtolower($order->status), [
-            'created', 'waiting_pickup', 'pending_pickup', 'waiting_for_courier',
-            'courier_assigned', 'pickup_assigned', 'courier_to_customer', 'picked_up', 'in_transit_to_store',
+            OrderStatus::CREATED->value,
+            OrderStatus::WAITING_PICKUP->value,
+            'pending_pickup',
+            'waiting_for_courier',
+            OrderStatus::COURIER_ASSIGNED->value,
+            'pickup_assigned',
+            OrderStatus::COURIER_TO_CUSTOMER->value,
+            OrderStatus::PICKED_UP->value,
+            OrderStatus::IN_TRANSIT_TO_STORE->value,
         ], true);
 
         $currentPhaseType = $isPickup ? 'pickup' : 'delivery';
@@ -90,49 +89,13 @@ class CourierPortalController extends Controller
         $rawCreated = $order->getRawOriginal('created_at');
         $rawUpdated = $order->getRawOriginal('updated_at');
 
-        $statusMap = [
-            OrderStatus::CREATED->value => 'PENDING_PICKUP',
-            OrderStatus::WAITING_PICKUP->value => 'PENDING_PICKUP',
-            'pending_pickup' => 'PENDING_PICKUP',
-            'waiting_for_courier' => 'PENDING_PICKUP',
-            OrderStatus::COURIER_ASSIGNED->value => 'PICKUP_ASSIGNED',
-            'pickup_assigned' => 'PICKUP_ASSIGNED',
-            OrderStatus::COURIER_TO_CUSTOMER->value => 'PICKUP_ASSIGNED',
-            OrderStatus::PICKED_UP->value => 'PICKED_UP',
-            OrderStatus::IN_TRANSIT_TO_STORE->value => 'PICKED_UP',
-            'at_store' => 'AT_STORE',
-            'received' => 'AT_STORE',
-            OrderStatus::RECEIVED_BY_STORE->value => 'AT_STORE',
-            OrderStatus::WEIGHED->value => 'WEIGHED',
-            'awaiting_price_approval' => 'AWAITING_PRICE_APPROVAL',
-            'price_approved' => 'PRICE_APPROVED',
-            'awaiting_payment' => 'AWAITING_PAYMENT',
-            OrderStatus::PAID->value => 'PAID',
-            OrderStatus::PROCESSING->value => 'PROCESSING',
-            OrderStatus::READY_FOR_DELIVERY->value => 'READY_FOR_DELIVERY',
-            OrderStatus::COURIER_ASSIGNED_FOR_DELIVERY->value => 'DELIVERY_ASSIGNED',
-            'delivery_assigned' => 'DELIVERY_ASSIGNED',
-            OrderStatus::OUT_FOR_DELIVERY->value => 'OUT_FOR_DELIVERY',
-            OrderStatus::COMPLETED->value => 'COMPLETED',
-            OrderStatus::DELIVERED->value => 'COMPLETED',
-            OrderStatus::CANCELLED->value => 'CANCELLED',
-        ];
-
-        $paymentStatusMap = [
-            'unpaid' => 'UNPAID',
-            'pending' => 'UNPAID',
-            'paid' => 'PAID',
-            'failed' => 'PAYMENT_FAILED',
-            'expired' => 'PAYMENT_EXPIRED',
-        ];
-
         return [
             'id' => (string) ($task?->id ?? $order->id),
             'order_id' => (string) $order->id,
             'order_number' => $order->order_number,
             'task_type' => $taskType,
-            'status' => $statusMap[strtolower($order->status)] ?? strtoupper($order->status),
-            'payment_status' => $paymentStatusMap[strtolower($order->payment_status ?? 'unpaid')] ?? strtoupper($order->payment_status ?? 'UNPAID'),
+            'status' => OrderStatus::toFrontendStatus($order->status),
+            'payment_status' => OrderStatus::toFrontendPaymentStatus($order->payment_status),
             'is_assigned_to_me' => $isAssignedToMe,
             'courier_id' => $effectiveCourierId ? (string) $effectiveCourierId : null,
             'courier_name' => $order->courier?->name,
@@ -351,6 +314,22 @@ class CourierPortalController extends Controller
         $availableDeliveryStatuses = [OrderStatus::READY_FOR_DELIVERY->value];
         $completedStatuses = [OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value];
 
+        $applyAvailableFilter = function ($availQuery) use ($availablePickupStatuses, $availableDeliveryStatuses) {
+            $availQuery->where(function ($pq) use ($availablePickupStatuses) {
+                $pq->whereIn('status', $availablePickupStatuses)
+                    ->whereNull('courier_id')
+                    ->whereDoesntHave('courierTasks', function ($t) {
+                        $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
+                    });
+            })->orWhere(function ($dq) use ($availableDeliveryStatuses) {
+                $dq->whereIn('status', $availableDeliveryStatuses)
+                    ->whereDoesntHave('courierTasks', function ($t) {
+                        $t->where('task_type', 'delivery')
+                            ->whereIn('status', CourierTask::ACTIVE_STATUSES);
+                    });
+            });
+        };
+
         $query = Order::with(['store:id,name,address', 'customer:id,name,phone', 'items', 'courierTasks']);
 
         if ($tab === 'available') {
@@ -358,21 +337,7 @@ class CourierPortalController extends Controller
                 return response()->json(['success' => true, 'data' => []]);
             }
             $query->where('store_id', $courier->store_id)
-                ->where(function ($availQuery) use ($availablePickupStatuses, $availableDeliveryStatuses) {
-                    $availQuery->where(function ($pq) use ($availablePickupStatuses) {
-                        $pq->whereIn('status', $availablePickupStatuses)
-                            ->whereNull('courier_id')
-                            ->whereDoesntHave('courierTasks', function ($t) {
-                                $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
-                            });
-                    })->orWhere(function ($dq) use ($availableDeliveryStatuses) {
-                        $dq->whereIn('status', $availableDeliveryStatuses)
-                            ->whereDoesntHave('courierTasks', function ($t) {
-                                $t->where('task_type', 'delivery')
-                                    ->whereIn('status', CourierTask::ACTIVE_STATUSES);
-                            });
-                    });
-                });
+                ->where($applyAvailableFilter);
         } elseif ($tab === 'active') {
             $query->where($assignedToCourier)
                 ->whereIn('status', $activeStatuses);
@@ -381,26 +346,12 @@ class CourierPortalController extends Controller
                 ->whereIn('status', $completedStatuses);
         } else {
             // 'all': active + completed for this courier, plus available tasks for courier's store
-            $query->where(function ($q) use ($assignedToCourier, $courier, $availablePickupStatuses, $availableDeliveryStatuses) {
+            $query->where(function ($q) use ($assignedToCourier, $courier, $applyAvailableFilter) {
                 $q->where($assignedToCourier);
                 if ($courier->store_id) {
-                    $q->orWhere(function ($sub) use ($courier, $availablePickupStatuses, $availableDeliveryStatuses) {
+                    $q->orWhere(function ($sub) use ($courier, $applyAvailableFilter) {
                         $sub->where('store_id', $courier->store_id)
-                            ->where(function ($availQuery) use ($availablePickupStatuses, $availableDeliveryStatuses) {
-                                $availQuery->where(function ($pq) use ($availablePickupStatuses) {
-                                    $pq->whereIn('status', $availablePickupStatuses)
-                                        ->whereNull('courier_id')
-                                        ->whereDoesntHave('courierTasks', function ($t) {
-                                            $t->whereIn('status', CourierTask::ACTIVE_STATUSES);
-                                        });
-                                })->orWhere(function ($dq) use ($availableDeliveryStatuses) {
-                                    $dq->whereIn('status', $availableDeliveryStatuses)
-                                        ->whereDoesntHave('courierTasks', function ($t) {
-                                            $t->where('task_type', 'delivery')
-                                                ->whereIn('status', CourierTask::ACTIVE_STATUSES);
-                                        });
-                                });
-                            });
+                            ->where($applyAvailableFilter);
                     });
                 }
             });
@@ -862,7 +813,13 @@ class CourierPortalController extends Controller
         }
 
         $order = Order::find($orderId);
-        if (! $order || (int) $order->courier_id !== (int) $courier->user_id) {
+        $isAssigned = $order && (
+            (int) $order->courier_id === (int) $courier->user_id
+            || (int) $order->courier_id === (int) $courier->id
+            || CourierTask::where('order_id', $order->id)->where('courier_id', $courier->id)->exists()
+        );
+
+        if (! $order || ! $isAssigned) {
             return response()->json([
                 'success' => false,
                 'message' => 'Pesanan tidak ditemukan atau tidak ditugaskan kepada Anda.',
@@ -892,6 +849,37 @@ class CourierPortalController extends Controller
 
         $order->payment_status = 'paid';
         $order->paid_at = now();
+
+        $deliveryStatuses = [
+            'out_for_delivery',
+            'delivery_assigned',
+            'courier_assigned_for_delivery',
+            'ready_for_delivery',
+            OrderStatus::OUT_FOR_DELIVERY->value,
+            OrderStatus::DELIVERED->value,
+        ];
+        if (in_array(strtolower((string) $order->status), $deliveryStatuses, true)) {
+            $prevStatus = $order->status;
+            $order->status = OrderStatus::COMPLETED->value;
+            $order->completed_at = now();
+
+            $order->statusHistories()->create([
+                'status' => OrderStatus::COMPLETED->value,
+                'previous_status' => $prevStatus,
+                'actor_id' => $user->id,
+                'actor_role' => User::ROLE_COURIER,
+                'reason' => 'Kurir telah menerima pembayaran tunai COD dan menyelesaikan pengantaran cucian.',
+            ]);
+
+            CourierTask::where('order_id', $order->id)
+                ->where('task_type', 'delivery')
+                ->whereNotIn('status', [CourierTaskStatus::CANCELLED->value, CourierTaskStatus::FAILED->value])
+                ->update([
+                    'status' => CourierTaskStatus::DELIVERED->value,
+                    'completed_at' => now(),
+                ]);
+        }
+
         $order->save();
 
         \App\Models\Payment::where('order_id', $order->id)->update([

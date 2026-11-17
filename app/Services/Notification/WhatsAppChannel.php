@@ -51,7 +51,7 @@ class WhatsAppChannel implements NotificationChannel
 
             $message = WhatsAppService::buildMessage($notification);
 
-            SendWhatsAppJob::dispatch(
+            SendWhatsAppJob::dispatchAfterResponse(
                 $normalizedPhone,
                 $message,
                 $notification->type,

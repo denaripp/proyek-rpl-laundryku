@@ -68,6 +68,7 @@ function AuthContent() {
   // Status
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [portalRedirect, setPortalRedirect] = useState<{ name: string; url: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [otpSent, setOtpSent] = useState<boolean>(false);
   const [deliveryStatus, setDeliveryStatus] = useState<'sent' | 'simulated' | 'failed'>('simulated');
@@ -196,6 +197,12 @@ function AuthContent() {
         } else if (err.status === 401 || err.code === 'INVALID_CREDENTIALS') {
           setErrorMsg('Kontak atau password salah.');
           toastError('Login Gagal', 'Kontak atau password salah.');
+        } else if (err.code === 'INVALID_PORTAL') {
+          const redirectUrl = err.portalUrl || (err.message.toLowerCase().includes('kurir') ? '/courier/login' : (err.message.toLowerCase().includes('mitra') ? '/store/login' : '/admin/login'));
+          const redirectName = err.portalName || (err.message.toLowerCase().includes('kurir') ? 'Portal Kurir' : (err.message.toLowerCase().includes('mitra') ? 'Portal Mitra' : 'Portal Admin'));
+          setPortalRedirect({ name: redirectName, url: redirectUrl });
+          setErrorMsg(err.message);
+          toastError('Portal Berbeda', err.message);
         } else {
           setErrorMsg(err.message);
           setFieldErrors(err.fieldErrors || {});
@@ -478,8 +485,19 @@ function AuthContent() {
       <div className="space-y-6">
         {/* Error Alert Box */}
         {errorMsg && (
-          <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs font-medium leading-relaxed">
-            {errorMsg}
+          <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs font-medium leading-relaxed space-y-2">
+            <div>{errorMsg}</div>
+            {portalRedirect && (
+              <div className="pt-1">
+                <Link
+                  href={portalRedirect.url}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy-900 hover:bg-navy-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
+                >
+                  <span>Buka {portalRedirect.name}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -491,6 +509,7 @@ function AuthContent() {
               onClick={() => {
                 setActiveTab('login');
                 setErrorMsg(null);
+                setPortalRedirect(null);
                 setFieldErrors({});
               }}
               className={`py-2.5 rounded-lg transition-all min-h-[40px] ${
@@ -506,6 +525,7 @@ function AuthContent() {
               onClick={() => {
                 setActiveTab('register');
                 setErrorMsg(null);
+                setPortalRedirect(null);
                 setFieldErrors({});
               }}
               className={`py-2.5 rounded-lg transition-all min-h-[40px] ${
@@ -626,14 +646,24 @@ function AuthContent() {
               </button>
             </div>
 
-            <div className="pt-2 text-center border-t border-slate-100">
-              <Link
-                href="/mitra/login"
-                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-navy-700 font-medium transition-colors"
-              >
-                <span>Punya usaha laundry?</span>
-                <span className="text-navy-700 font-semibold underline">Masuk sebagai mitra &rarr;</span>
-              </Link>
+            <div className="pt-3 text-center border-t border-slate-100 space-y-2">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs">
+                <Link
+                  href="/courier/login"
+                  className="inline-flex items-center gap-1 text-slate-600 hover:text-emerald-700 font-medium transition-colors"
+                >
+                  <span>Kurir LaundryKu?</span>
+                  <span className="text-emerald-700 font-semibold underline">Portal Kurir &rarr;</span>
+                </Link>
+                <span className="text-slate-300 hidden sm:inline">&bull;</span>
+                <Link
+                  href="/store/login"
+                  className="inline-flex items-center gap-1 text-slate-600 hover:text-navy-700 font-medium transition-colors"
+                >
+                  <span>Punya usaha laundry?</span>
+                  <span className="text-navy-700 font-semibold underline">Portal Mitra &rarr;</span>
+                </Link>
+              </div>
             </div>
           </form>
         )}

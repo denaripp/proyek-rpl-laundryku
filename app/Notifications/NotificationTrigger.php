@@ -21,7 +21,7 @@ class NotificationTrigger
         }
 
         try {
-            SendUserNotificationJob::dispatch($user->id, $type, $title, $content, $data);
+            SendUserNotificationJob::dispatchAfterResponse($user->id, $type, $title, $content, $data);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Notification dispatch failed: ' . $e->getMessage(), [
                 'user_id' => $user->id,

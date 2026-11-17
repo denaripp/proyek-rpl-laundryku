@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Store;
 use App\Models\StoreApplication;
+use App\Models\StoreStaff;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Notifications\NotificationTrigger;
@@ -503,5 +504,35 @@ class StoreService
             })
             ->whereNotNull('service_radius_km')
             ->get();
+    }
+
+    /**
+     * Resolve active store for user (owner or active staff).
+     * If explicit storeId given, verifies user has authorized access to it.
+     */
+    public function resolveForUser(User $user, int|string|null $storeId = null): ?Store
+    {
+        if ($storeId) {
+            return Store::where('id', $storeId)
+                ->where(function ($q) use ($user) {
+                    $q->where('owner_user_id', $user->id)
+                      ->orWhereHas('staff', fn ($s) => $s->where('user_id', $user->id)->where('is_active', true));
+                })
+                ->first();
+        }
+
+        // 1. Check if user is the store owner
+        $owned = Store::where('owner_user_id', $user->id)->first();
+        if ($owned) {
+            return $owned;
+        }
+
+        // 2. Check if user is active staff of a store
+        $staff = StoreStaff::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->with('store')
+            ->first();
+
+        return $staff?->store;
     }
 }

@@ -197,6 +197,15 @@ class OrderService
         $this->validateTransition($order, $newStatus, $reason);
 
         return DB::transaction(function () use ($order, $newStatus, $actor, $reason, $metadata, $oldStatus) {
+            // Handle metadata weight updates
+            if (isset($metadata['weight']) && is_numeric($metadata['weight']) && $newStatus === 'weighed') {
+                $order->actual_weight = (float) $metadata['weight'];
+                $order->weight = (float) $metadata['weight'];
+            }
+            if (isset($metadata['note'])) {
+                $order->store_notes = $metadata['note'];
+            }
+            
             $order->status = $newStatus;
             if ($newStatus === OrderStatus::COMPLETED->value && empty($order->completed_at)) {
                 $order->completed_at = now();

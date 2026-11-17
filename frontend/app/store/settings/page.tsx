@@ -362,7 +362,7 @@ export default function StoreSettingsPage() {
                 </h1>
               </div>
               <p className="text-xs text-navy-200 leading-relaxed">
-                Atur identitas gerai laundry, titik lokasi di peta, radius layanan kurir, dan jadwal jam operasional.
+                Atur identitas toko laundry, titik lokasi di peta, radius layanan kurir, dan jadwal jam operasional.
               </p>
             </div>
 
@@ -433,10 +433,10 @@ export default function StoreSettingsPage() {
                   </div>
                   <div>
                     <h2 className="font-heading font-bold text-base text-navy-900 leading-tight">
-                      Profil &amp; lokasi gerai
+                      Profil &amp; lokasi toko
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Informasi gerai yang tampil di katalog pencarian bagi pelanggan
+                      Informasi toko yang tampil di katalog pencarian bagi pelanggan
                     </p>
                   </div>
                 </div>
@@ -456,7 +456,7 @@ export default function StoreSettingsPage() {
                 <div className="p-3.5 bg-amber-50 border border-amber-200/90 rounded-2xl text-amber-800 text-xs flex items-center gap-2.5 shadow-2xs">
                   <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" strokeWidth={2} />
                   <span>
-                    Hanya pemilik toko yang memiliki wewenang untuk mengubah informasi profil dan pengaturan gerai.
+                    Hanya pemilik toko yang memiliki wewenang untuk mengubah informasi profil dan pengaturan toko.
                   </span>
                 </div>
               )}
@@ -464,7 +464,7 @@ export default function StoreSettingsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Nama gerai
+                    Nama toko
                   </label>
                   <Input
                     value={name}
@@ -498,7 +498,7 @@ export default function StoreSettingsPage() {
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Ceritakan layanan unggulan, fasilitas, dan kebersihan gerai Anda..."
+                  placeholder="Ceritakan layanan unggulan, fasilitas, dan kebersihan toko Anda..."
                   rows={2}
                   disabled={saving || !isOwner}
                   className="rounded-xl border-slate-200 focus:border-navy-700 text-xs sm:text-sm resize-none"
@@ -507,7 +507,7 @@ export default function StoreSettingsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Alamat lengkap gerai
+                  Alamat lengkap toko
                 </label>
                 <Textarea
                   value={address}
@@ -549,7 +549,7 @@ export default function StoreSettingsPage() {
                 </div>
               </div>
 
-              {/* Peta Penentuan Titik Gerai */}
+              {/* Peta Penentuan Titik Toko */}
               <div className="pt-2">
                 <div className="rounded-2xl border border-slate-200/90 overflow-hidden bg-slate-50/50 p-3 sm:p-4 space-y-2">
                   <StoreLocationPicker
@@ -565,7 +565,7 @@ export default function StoreSettingsPage() {
                       if (info.formatted_address && !address) setAddress(info.formatted_address);
                     }}
                     serviceRadiusKm={parseFloat(serviceRadius) || 5}
-                    label="Titik lokasi gerai di peta"
+                    label="Titik lokasi toko di peta"
                   />
                 </div>
               </div>
@@ -573,7 +573,7 @@ export default function StoreSettingsPage() {
               {store && (
                 <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-6 gap-y-2 pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-1.5">
-                    <span>Status gerai:</span>
+                    <span>Status toko:</span>
                     <strong className="capitalize text-navy-800 font-bold bg-navy-50 px-2.5 py-0.5 rounded-lg border border-navy-100">
                       {store.status || '-'}
                     </strong>
@@ -730,7 +730,7 @@ export default function StoreSettingsPage() {
                           </div>
                         ) : (
                           <span className="text-xs text-rose-500 italic px-2">
-                            Gerai tidak melayani penerimaan cucian pada hari ini
+                            Toko tidak melayani penerimaan cucian pada hari ini
                           </span>
                         )}
                       </div>

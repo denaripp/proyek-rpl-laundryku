@@ -120,7 +120,8 @@ class AdminPortalController extends Controller
         if ($totalGmv === 0.0) {
             $totalGmv = (float) Order::where('status', 'completed')->sum('total_amount');
         }
-        $totalRevenue = round($totalGmv * 0.10, 2);
+        $commissionRate = (float) Setting::get('platform_commission_rate', 10) / 100;
+        $totalRevenue = round($totalGmv * $commissionRate, 2);
 
         // Users by Role
         $usersByRole = [
@@ -224,7 +225,7 @@ class AdminPortalController extends Controller
 
     public function orders(Request $request): JsonResponse
     {
-        $query = Order::with(['customer:id,name,email,phone', 'store:id,name', 'courier:id,name,phone']);
+        $query = Order::with(['customer:id,name,email,phone', 'store:id,name', 'courier:id,name,phone', 'payment:id,order_id,status']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -322,7 +323,8 @@ class AdminPortalController extends Controller
     {
         $finalAmount = (float) ($order->final_price ?? $order->total_amount ?? 0);
         $estimatedAmount = (float) ($order->estimated_price ?? $order->total_amount ?? 0);
-        $commissionAmount = (float) ($order->commission_amount ?? ($finalAmount * 0.10));
+        $commissionRate = (float) Setting::get('platform_commission_rate', 10) / 100;
+        $commissionAmount = (float) ($order->commission_amount ?? ($finalAmount * $commissionRate));
 
         $data = [
             'id' => (string) $order->id,
@@ -1125,7 +1127,24 @@ class AdminPortalController extends Controller
         $maxToolRounds = $aiService->getMaxToolRounds();
 
         $setting = Setting::with('updatedByUser:id,name,email')->where('key', 'AI_MODEL')->first();
-        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+        
+        $dbApiKey = Setting::get('AI_API_KEY');
+        if (!empty($dbApiKey)) {
+            $apiKey = $dbApiKey;
+            $apiKeySource = 'database';
+        } elseif (!empty(config('ai.api_key', config('ai.openai_api_key')))) {
+            $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+            $apiKeySource = 'env';
+        } else {
+            $apiKey = null;
+            $apiKeySource = 'none';
+        }
+
+        $maskedApiKey = null;
+        if (!empty($apiKey)) {
+            $len = strlen($apiKey);
+            $maskedApiKey = $len > 12 ? substr($apiKey, 0, 8) . str_repeat('•', max(4, $len - 12)) . substr($apiKey, -4) : str_repeat('•', $len);
+        }
 
         $presets = [
             // --- Kategori Gratis (Free Tier OpenRouter - Saldo $0) ---
@@ -1259,6 +1278,9 @@ class AdminPortalController extends Controller
                 'live_free_models' => $liveFreeModels,
                 'recent_usage' => $recentUsage,
                 'provider' => 'OpenRouter (OpenAI-compatible)',
+                'api_key' => $apiKey,
+                'api_key_masked' => $maskedApiKey,
+                'api_key_source' => $apiKeySource,
                 'api_key_configured' => !empty($apiKey),
                 'updated_at' => $setting?->updated_at?->toIso8601String(),
                 'updated_by' => $setting?->updatedByUser ? [
@@ -1333,12 +1355,15 @@ class AdminPortalController extends Controller
             'model' => 'required|string|min:3|max:120',
             'temperature' => 'nullable|numeric|min:0|max:1',
             'max_tool_rounds' => 'nullable|integer|min:1|max:10',
+            'api_key' => 'nullable|string|max:255',
         ]);
 
         $aiService = app(AiAssistantService::class);
         $oldModel = $aiService->getActiveModel();
         $oldTemp = $aiService->getTemperature();
         $oldRounds = $aiService->getMaxToolRounds();
+        $oldDbApiKey = Setting::get('AI_API_KEY');
+        $effectiveOldApiKey = $oldDbApiKey ?: config('ai.api_key', config('ai.openai_api_key'));
 
         $newModel = trim($request->input('model'));
         $newTemp = $request->has('temperature') ? (float) $request->input('temperature') : $oldTemp;
@@ -1352,6 +1377,20 @@ class AdminPortalController extends Controller
         }
         if ($request->has('max_tool_rounds')) {
             Setting::set('AI_MAX_TOOL_ROUNDS', $newRounds, 'integer', 'ai', 'Batas maksimal putaran tool calling AI', $userId);
+        }
+
+        $apiKeyAuditAfter = null;
+        if ($request->has('api_key')) {
+            $inputKey = $request->input('api_key');
+            $trimmedKey = $inputKey !== null ? trim((string) $inputKey) : '';
+            if ($trimmedKey === '') {
+                Setting::whereIn('key', ['AI_API_KEY', 'ai_api_key'])->delete();
+                Setting::forget('AI_API_KEY');
+                $apiKeyAuditAfter = '(reset to default env)';
+            } else {
+                Setting::set('AI_API_KEY', $trimmedKey, 'string', 'ai', 'API Key OpenRouter / OpenAI', $userId);
+                $apiKeyAuditAfter = strlen($trimmedKey) > 12 ? substr($trimmedKey, 0, 8) . '***' . substr($trimmedKey, -4) : '***';
+            }
         }
 
         $settingRecord = Setting::where('key', 'AI_MODEL')->first();
@@ -1368,13 +1407,24 @@ class AdminPortalController extends Controller
                 'model' => $oldModel,
                 'temperature' => $oldTemp,
                 'max_tool_rounds' => $oldRounds,
+                'api_key' => $effectiveOldApiKey ? (strlen($effectiveOldApiKey) > 12 ? substr($effectiveOldApiKey, 0, 8) . '***' . substr($effectiveOldApiKey, -4) : '***') : null,
             ], JSON_UNESCAPED_SLASHES),
             'after_value' => json_encode([
                 'model' => $newModel,
                 'temperature' => $newTemp,
                 'max_tool_rounds' => $newRounds,
+                'api_key' => $apiKeyAuditAfter ?? ($effectiveOldApiKey ? (strlen($effectiveOldApiKey) > 12 ? substr($effectiveOldApiKey, 0, 8) . '***' . substr($effectiveOldApiKey, -4) : '***') : null),
             ], JSON_UNESCAPED_SLASHES),
         ]);
+
+        $latestDbApiKey = Setting::get('AI_API_KEY');
+        $activeApiKey = $latestDbApiKey ?: config('ai.api_key', config('ai.openai_api_key'));
+        $activeSource = !empty($latestDbApiKey) ? 'database' : (!empty(config('ai.api_key')) ? 'env' : 'none');
+        $maskedActiveKey = null;
+        if (!empty($activeApiKey)) {
+            $len = strlen($activeApiKey);
+            $maskedActiveKey = $len > 12 ? substr($activeApiKey, 0, 8) . str_repeat('•', max(4, $len - 12)) . substr($activeApiKey, -4) : str_repeat('•', $len);
+        }
 
         return response()->json([
             'success' => true,
@@ -1383,6 +1433,10 @@ class AdminPortalController extends Controller
                 'active_model' => $newModel,
                 'temperature' => $newTemp,
                 'max_tool_rounds' => $newRounds,
+                'api_key' => $activeApiKey,
+                'api_key_masked' => $maskedActiveKey,
+                'api_key_source' => $activeSource,
+                'api_key_configured' => !empty($activeApiKey),
                 'updated_at' => now()->toIso8601String(),
                 'updated_by' => $request->user() ? [
                     'id' => (string) $request->user()->id,

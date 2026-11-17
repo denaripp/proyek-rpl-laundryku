@@ -9,13 +9,17 @@ export class AuthApiError extends Error {
   status: number;
   code?: string;
   fieldErrors?: Record<string, string[]>;
+  portalUrl?: string;
+  portalName?: string;
 
-  constructor(message: string, status: number, code?: string, fieldErrors?: Record<string, string[]>) {
+  constructor(message: string, status: number, code?: string, fieldErrors?: Record<string, string[]>, portalUrl?: string, portalName?: string) {
     super(message);
     this.name = 'AuthApiError';
     this.status = status;
     this.code = code;
     this.fieldErrors = fieldErrors;
+    this.portalUrl = portalUrl;
+    this.portalName = portalName;
   }
 }
 
@@ -279,7 +283,9 @@ export async function register(data: {
       json?.error?.message ||
       (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
       (res.status === 429 ? 'Terlalu banyak percobaan. Silakan tunggu sebentar.' : 'Registrasi gagal.');
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+    const portalUrl = json?.error?.portal_url || json?.portal_url;
+    const portalName = json?.error?.portal_name || json?.portal_name;
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details, portalUrl, portalName);
   }
 
   return json.data;
@@ -311,7 +317,9 @@ export async function login(data: {
       json?.error?.message ||
       (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
       (res.status === 401 ? 'Kontak atau password salah.' : (res.status === 429 ? 'Terlalu banyak percobaan. Silakan tunggu sebentar.' : 'Login gagal.'));
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+    const portalUrl = json?.error?.portal_url || json?.portal_url;
+    const portalName = json?.error?.portal_name || json?.portal_name;
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details, portalUrl, portalName);
   }
 
   setAuthSession(null, json.data.user);
@@ -349,7 +357,9 @@ export async function verifyOtp(data: {
       json?.error?.message ||
       (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
       'Verifikasi OTP gagal.';
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+    const portalUrl = json?.error?.portal_url || json?.portal_url;
+    const portalName = json?.error?.portal_name || json?.portal_name;
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details, portalUrl, portalName);
   }
 
   setAuthSession(null, json.data.user);
@@ -386,7 +396,9 @@ export async function sendOtp(data: {
       json?.error?.message ||
       (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
       'Gagal mengirim OTP.';
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+    const portalUrl = json?.error?.portal_url || json?.portal_url;
+    const portalName = json?.error?.portal_name || json?.portal_name;
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details, portalUrl, portalName);
   }
 
   return json.data;
@@ -417,7 +429,9 @@ export async function requestPasswordSetup(data: {
       json?.error?.message ||
       (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
       'Permintaan OTP atur kata sandi gagal.';
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+    const portalUrl = json?.error?.portal_url || json?.portal_url;
+    const portalName = json?.error?.portal_name || json?.portal_name;
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details, portalUrl, portalName);
   }
 
   return json.data;
@@ -451,7 +465,9 @@ export async function setupPassword(data: {
       json?.error?.message ||
       (json?.errors ? Object.values(json.errors).flat().join(', ') : null) ||
       'Pengaturan kata sandi gagal.';
-    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details);
+    const portalUrl = json?.error?.portal_url || json?.portal_url;
+    const portalName = json?.error?.portal_name || json?.portal_name;
+    throw new AuthApiError(errorMsg, res.status, json?.error?.code || json?.code, json?.errors || json?.error?.details, portalUrl, portalName);
   }
 
   setAuthSession(json.data.token, json.data.user);

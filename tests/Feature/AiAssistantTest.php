@@ -228,7 +228,7 @@ class AiAssistantTest extends TestCase
     {
         $assistant = $this->makeAssistant([
             [
-                'content' => 'Halo! Ada yang bisa dibantu?',
+                'content' => 'Halo! Selamat datang di LaundryKu.',
                 'tool_calls' => [],
                 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
             ],
@@ -244,7 +244,7 @@ class AiAssistantTest extends TestCase
         $this->assertDatabaseHas('ai_messages', [
             'conversation_id' => $result['conversation_id'],
             'role' => 'assistant',
-            'content' => 'Halo! Ada yang bisa dibantu?',
+            'content' => 'Halo! Selamat datang di LaundryKu.',
         ]);
         $this->assertDatabaseHas('ai_usage_logs', [
             'user_id' => $this->customer->id,

@@ -8,11 +8,14 @@ use App\Models\Payment;
 use App\Models\Store;
 use App\Models\StoreStaff;
 use App\Models\User;
+use App\Traits\FormatsTimestamps;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class StoreDashboardService
 {
+    use FormatsTimestamps;
+
     public const STATUS_LABELS = [
         'created' => 'Menunggu Penjemputan',
         'pending_pickup' => 'Menunggu Penjemputan',
@@ -23,8 +26,8 @@ class StoreDashboardService
         'picked_up' => 'Cucian Dijemput',
         'in_transit_to_store' => 'Dalam Perjalanan ke Toko',
         'received_by_store' => 'Diterima di Outlet Toko',
-        'at_store' => 'Tiba di Gerai',
-        'received' => 'Tiba di Gerai',
+        'at_store' => 'Tiba di Toko',
+        'received' => 'Tiba di Toko',
         'weighed' => 'Selesai Ditimbang',
         'awaiting_price_approval' => 'Menunggu Konfirmasi Harga',
         'price_approved' => 'Harga Disetujui',
@@ -57,7 +60,7 @@ class StoreDashboardService
         [
             'title' => 'Layanan',
             'path' => '/store/services',
-            'desc' => 'Tambah layanan baru gerai, kelola nama, deskripsi, dan status aktif/nonaktif layanan.',
+            'desc' => 'Tambah layanan baru toko, kelola nama, deskripsi, dan status aktif/nonaktif layanan.',
         ],
         [
             'title' => 'Harga',
@@ -77,10 +80,10 @@ class StoreDashboardService
         [
             'title' => 'Pengaturan',
             'path' => '/store/settings',
-            'desc' => 'Pengaturan jadwal jam operasional, radius jangkauan layanan (km), lokasi/alamat gerai, dan status buka/tutup toko.',
+            'desc' => 'Pengaturan jadwal jam operasional, radius jangkauan layanan (km), lokasi/alamat toko, dan status buka/tutup toko.',
         ],
         [
-            'title' => 'Profil Gerai',
+            'title' => 'Profil Toko',
             'path' => '/store/profile',
             'desc' => 'Informasi profil toko, kontak telepon, dan data kepemilikan akun mitra.',
         ],
@@ -97,7 +100,7 @@ class StoreDashboardService
         [
             'title' => 'Buku Kas',
             'path' => '/store/ledger',
-            'desc' => 'Pencatatan mutasi keuangan gerai, bagi hasil platform, dan upah kurir.',
+            'desc' => 'Pencatatan mutasi keuangan toko, bagi hasil platform, dan upah kurir.',
         ],
     ];
 
@@ -141,17 +144,6 @@ class StoreDashboardService
     {
         $name = trim($store->name ?? 'Toko Anda');
         return preg_match('/^toko\b/i', $name) ? $name : "Toko {$name}";
-    }
-
-    /**
-     * Format timestamp with Asia/Jakarta timezone.
-     */
-    public function formatTimestamp(?string $raw, $fallback = null): ?string
-    {
-        if ($raw) {
-            return Carbon::parse($raw, 'Asia/Jakarta')->toIso8601String();
-        }
-        return $fallback ? Carbon::parse($fallback)->setTimezone('Asia/Jakarta')->toIso8601String() : null;
     }
 
     /**
@@ -295,9 +287,24 @@ class StoreDashboardService
     {
         $data = $this->getDashboardData($store);
         $count = $data['metrics']['ready_for_delivery'];
+        $readyOnly = $data['metrics']['ready_for_delivery_only'];
+        $outOnly = $data['metrics']['out_for_delivery_only'];
         $storeName = $this->getStoreDisplayName($store);
 
-        return "{$storeName} memiliki {$count} pesanan yang siap diantar ke pelanggan (menunggu kurir / siap ambil).";
+        return "{$storeName} memiliki total {$count} pesanan dalam tahap pengantaran: {$readyOnly} pesanan siap diantar (menunggu kurir / siap ambil), dan {$outOnly} pesanan sedang dalam perjalanan diantar kurir.";
+    }
+
+    /**
+     * Chatbot Response: Pertanyaan pesanan yang menunggu kurir (jemput atau antar).
+     */
+    public function getCourierOrdersResponse(Store $store): string
+    {
+        $data = $this->getDashboardData($store);
+        $storeName = $this->getStoreDisplayName($store);
+        $newOrders = $data['metrics']['new_orders'];
+        $readyDelivery = $data['metrics']['ready_for_delivery'];
+
+        return "{$storeName} memiliki {$newOrders} pesanan baru yang menunggu penugasan kurir jemput, dan {$readyDelivery} pesanan siap diantar (menunggu kurir antar / sedang diantar).";
     }
 
     /**
@@ -451,14 +458,14 @@ class StoreDashboardService
         }
 
         if (str_contains($norm, 'jam operasional') || str_contains($norm, 'radius') || str_contains($norm, 'buka tutup')) {
-            return "Pengaturan jam operasional, radius layanan gerai, dan status buka/tutup toko dapat diakses melalui menu **Pengaturan** di `/store/settings`.";
+            return "Pengaturan jam operasional, radius layanan toko, dan status buka/tutup toko dapat diakses melalui menu **Pengaturan** di `/store/settings`.";
         }
 
         if (str_contains($norm, 'rekrut kurir') || str_contains($norm, 'pelamar')) {
             return "Daftar pelamar kurir terverifikasi yang siap direkrut dapat dilihat melalui menu **Kurir** di `/store/couriers`.";
         }
 
-        $lines = ["Daftar menu navigasi pada Portal Admin Toko LaundryKu:"];
+        $lines = ["Daftar menu navigasi pada halaman Toko LaundryKu:"];
         foreach (self::MENU_ITEMS as $item) {
             $lines[] = "- **{$item['title']}** (`{$item['path']}`): {$item['desc']}";
         }

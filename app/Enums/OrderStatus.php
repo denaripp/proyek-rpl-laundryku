@@ -115,4 +115,67 @@ enum OrderStatus: string
     {
         return $this === self::WEIGHED;
     }
+
+    /**
+     * Map database/backend order status to frontend display status token.
+     */
+    public static function toFrontendStatus(string|self|null $status): string
+    {
+        if ($status instanceof self) {
+            $status = $status->value;
+        }
+
+        $raw = strtolower((string) $status);
+
+        $map = [
+            'created' => 'PENDING_PICKUP',
+            'pending_pickup' => 'PENDING_PICKUP',
+            'waiting_pickup' => 'PENDING_PICKUP',
+            'waiting_for_courier' => 'PENDING_PICKUP',
+            'pickup_assigned' => 'PICKUP_ASSIGNED',
+            'courier_assigned' => 'PICKUP_ASSIGNED',
+            'courier_to_customer' => 'PICKUP_ASSIGNED',
+            'picked_up' => 'PICKED_UP',
+            'in_transit_to_store' => 'PICKED_UP',
+            'at_store' => 'AT_STORE',
+            'received' => 'AT_STORE',
+            'received_by_store' => 'AT_STORE',
+            'weighed' => 'WEIGHED',
+            'awaiting_price_approval' => 'AWAITING_PRICE_APPROVAL',
+            'price_approved' => 'PRICE_APPROVED',
+            'awaiting_payment' => 'AWAITING_PAYMENT',
+            'payment_required' => 'AWAITING_PAYMENT',
+            'paid' => 'PAID',
+            'processing' => 'PROCESSING',
+            'ready_for_delivery' => 'READY_FOR_DELIVERY',
+            'courier_assigned_for_delivery' => 'DELIVERY_ASSIGNED',
+            'delivery_assigned' => 'DELIVERY_ASSIGNED',
+            'out_for_delivery' => 'OUT_FOR_DELIVERY',
+            'delivered' => 'COMPLETED',
+            'completed' => 'COMPLETED',
+            'cancelled' => 'CANCELLED',
+            'payment_failed' => 'PAYMENT_FAILED',
+            'payment_expired' => 'PAYMENT_EXPIRED',
+        ];
+
+        return $map[$raw] ?? strtoupper($raw);
+    }
+
+    /**
+     * Map database/backend payment status to frontend display token.
+     */
+    public static function toFrontendPaymentStatus(?string $paymentStatus): string
+    {
+        $raw = strtolower((string) ($paymentStatus ?? 'unpaid'));
+
+        $map = [
+            'unpaid' => 'UNPAID',
+            'pending' => 'UNPAID',
+            'paid' => 'PAID',
+            'failed' => 'PAYMENT_FAILED',
+            'expired' => 'PAYMENT_EXPIRED',
+        ];
+
+        return $map[$raw] ?? strtoupper($raw);
+    }
 }

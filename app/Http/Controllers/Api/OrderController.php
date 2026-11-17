@@ -9,8 +9,10 @@ use App\Http\Requests\Order\SetActualWeightRequest;
 use App\Http\Requests\Order\UpdateOrderStatusRequest;
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\Courier\CourierAssignmentService;
 use App\Services\Order\OrderService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -30,38 +32,8 @@ class OrderController extends Controller
      */
     public function formatOrder(Order $order): array
     {
-        $statusMap = [
-            'created' => 'PENDING_PICKUP',
-            'pending_pickup' => 'PENDING_PICKUP',
-            'pickup_assigned' => 'PICKUP_ASSIGNED',
-            'picked_up' => 'PICKED_UP',
-            'at_store' => 'AT_STORE',
-            'received' => 'AT_STORE',
-            'weighed' => 'WEIGHED',
-            'awaiting_price_approval' => 'AWAITING_PRICE_APPROVAL',
-            'price_approved' => 'PRICE_APPROVED',
-            'awaiting_payment' => 'AWAITING_PAYMENT',
-            'paid' => 'PAID',
-            'processing' => 'PROCESSING',
-            'ready_for_delivery' => 'READY_FOR_DELIVERY',
-            'delivery_assigned' => 'DELIVERY_ASSIGNED',
-            'out_for_delivery' => 'OUT_FOR_DELIVERY',
-            'completed' => 'COMPLETED',
-            'cancelled' => 'CANCELLED',
-            'payment_failed' => 'PAYMENT_FAILED',
-            'payment_expired' => 'PAYMENT_EXPIRED',
-        ];
-
-        $paymentStatusMap = [
-            'unpaid' => 'UNPAID',
-            'pending' => 'UNPAID',
-            'paid' => 'PAID',
-            'failed' => 'PAYMENT_FAILED',
-            'expired' => 'PAYMENT_EXPIRED',
-        ];
-
-        $frontendStatus = $statusMap[strtolower($order->status)] ?? strtoupper($order->status);
-        $frontendPaymentStatus = $paymentStatusMap[strtolower($order->payment_status ?? 'unpaid')] ?? strtoupper($order->payment_status ?? 'UNPAID');
+        $frontendStatus = OrderStatus::toFrontendStatus($order->status);
+        $frontendPaymentStatus = OrderStatus::toFrontendPaymentStatus($order->payment_status);
 
         $pickupDetail = $order->pickup_address_detail;
         if (!is_array($pickupDetail) && is_string($pickupDetail)) {
@@ -138,6 +110,7 @@ class OrderController extends Controller
             'status' => $frontendStatus,
             'raw_status' => $order->status,
             'payment_status' => $frontendPaymentStatus,
+            'payment_method' => $order->payment_method,
             'estimated_weight_kg' => $order->estimated_weight !== null ? (float) $order->estimated_weight : null,
             'actual_weight_kg' => $order->actual_weight !== null ? (float) $order->actual_weight : null,
             'estimated_amount' => (float) ($order->estimated_price ?? $order->total_amount ?? 0),
@@ -180,12 +153,14 @@ class OrderController extends Controller
 
         $query = Order::with(['store:id,name', 'items', 'customer:id,name,phone', 'courier:id,name']);
 
+        $storeIds = collect();
         if ($user->hasPermissionTo('view_any_order')) {
             if ($request->filled('status')) {
                 $query->where('status', $request->input('status'));
             }
             if ($request->filled('store_id')) {
                 $query->where('store_id', $request->input('store_id'));
+                $storeIds = collect([$request->input('store_id')]);
             }
         } elseif ($user->hasPermissionTo('view_order')) {
             $storeIds = $user->ownedStores()->pluck('id')
@@ -213,6 +188,30 @@ class OrderController extends Controller
 
         $formattedItems = collect($paginator->items())->map(fn($o) => $this->formatOrder($o))->values();
 
+        $tabCounts = null;
+        $targetStoreId = $request->input('store_id') ?: ($storeIds->isNotEmpty() ? $storeIds->first() : null);
+        if ($targetStoreId) {
+            $stats = Order::where('store_id', $targetStoreId)
+                ->selectRaw("
+                    COUNT(*) as all_count,
+                    COUNT(CASE WHEN status IN ('created', 'pending_pickup') THEN 1 END) as pending_pickup_count,
+                    COUNT(CASE WHEN status IN ('pickup_assigned', 'courier_assigned', 'courier_to_customer', 'picked_up', 'in_transit_to_store', 'at_store', 'received', 'received_by_store', 'weighed', 'awaiting_price_approval', 'price_approved') THEN 1 END) as need_weigh_count,
+                    COUNT(CASE WHEN status IN ('awaiting_payment', 'payment_required', 'paid', 'processing') THEN 1 END) as processing_count,
+                    COUNT(CASE WHEN status IN ('ready_for_delivery', 'courier_assigned_for_delivery', 'delivery_assigned', 'out_for_delivery') THEN 1 END) as delivery_count,
+                    COUNT(CASE WHEN status IN ('completed', 'delivered') THEN 1 END) as completed_count
+                ")
+                ->first();
+
+            $tabCounts = [
+                'all' => (int) ($stats->all_count ?? 0),
+                'pending_pickup' => (int) ($stats->pending_pickup_count ?? 0),
+                'need_weigh' => (int) ($stats->need_weigh_count ?? 0),
+                'processing' => (int) ($stats->processing_count ?? 0),
+                'delivery' => (int) ($stats->delivery_count ?? 0),
+                'completed' => (int) ($stats->completed_count ?? 0),
+            ];
+        }
+
         return response()->json([
             'success' => true,
             'data' => $formattedItems,
@@ -220,6 +219,7 @@ class OrderController extends Controller
             'last_page' => $paginator->lastPage(),
             'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
+            'tab_counts' => $tabCounts,
         ]);
     }
 
@@ -323,62 +323,9 @@ class OrderController extends Controller
         $normalizedToStatus = strtolower((string) $toStatus);
         $user = $request->user();
 
-        // 1. Mitra tidak diizinkan mengubah status menjadi price_approved atau paid
-        $isMitra = $user->hasRole('store_owner')
-            || $user->hasRole('store_staff')
-            || $user->hasRole('store_admin');
-
-        $isPlatformAdmin = $user->hasRole('platform_admin')
-            || $user->hasRole('platform_owner')
-            || $user->hasRole('admin');
-
-        if ($isMitra && !$isPlatformAdmin && in_array($normalizedToStatus, ['price_approved', 'paid'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Mitra tidak diizinkan mengubah status menjadi price_approved atau paid.',
-                'error' => [
-                    'code' => 'FORBIDDEN_TRANSITION',
-                    'message' => 'Status price_approved hanya dapat disetujui oleh pelanggan pemilik pesanan, dan status paid hanya dapat diubah melalui alur pembayaran.',
-                ],
-            ], 403);
-        }
-
-        // 2. Status 'paid' tidak boleh di-trigger langsung lewat endpoint transition publik selain platform admin
-        if ($normalizedToStatus === OrderStatus::PAID->value && !$isPlatformAdmin) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Status paid hanya dapat diubah melalui alur pembayaran.',
-                'error' => [
-                    'code' => 'FORBIDDEN_TRANSITION',
-                    'message' => 'Status paid hanya dapat diubah melalui alur pembayaran resmi.',
-                ],
-            ], 403);
-        }
-
-        // 3. Pelanggan pemilik order HANYA boleh melakukan transisi ke price_approved atau cancelled
-        $isCustomer = $user->hasRole('customer') && !$isMitra && !$isPlatformAdmin;
-        if ($isCustomer) {
-            if ($user->id !== $order->customer_id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda tidak memiliki akses ke pesanan ini.',
-                    'error' => [
-                        'code' => 'FORBIDDEN_ORDER_ACCESS',
-                        'message' => 'Anda tidak memiliki izin untuk mengubah pesanan milik pengguna lain.',
-                    ],
-                ], 403);
-            }
-
-            if (!in_array($normalizedToStatus, ['price_approved', OrderStatus::CANCELLED->value])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Pelanggan hanya dapat menyetujui harga atau membatalkan pesanan.',
-                    'error' => [
-                        'code' => 'FORBIDDEN_TRANSITION',
-                        'message' => 'Pelanggan tidak memiliki izin untuk mengubah status pesanan selain persetujuan harga atau pembatalan.',
-                    ],
-                ], 403);
-            }
+        $authError = $this->validateRoleTransitionAuthorization($user, $order, $normalizedToStatus);
+        if ($authError !== null) {
+            return $authError;
         }
 
         if ($normalizedToStatus === OrderStatus::CANCELLED->value) {
@@ -388,31 +335,17 @@ class OrderController extends Controller
         }
 
         try {
-            // Jika order berada di status weighed dan request menyertakan berat aktual sebelum transisi ke status berikutnya
-            $weightInput = $request->input('actual_weight_kg', $request->input('weight', $request->input('actual_weight')));
-            if ($weightInput !== null && is_numeric($weightInput) && $order->status === 'weighed') {
-                if ($request->filled('note') || $request->filled('store_notes')) {
-                    $order->store_notes = $request->input('store_notes', $request->input('note'));
-                    $order->save();
-                }
-                $this->orderService->setActualWeight($order, (float) $weightInput, $request->user());
-            }
-
+            // Transition status
             $updated = $this->orderService->transition(
                 $order,
                 $toStatus,
                 $request->user(),
-                $request->input('note', $request->input('reason'))
+                $request->input('note', $request->input('reason')),
+                [
+                    'weight' => $request->input('actual_weight_kg', $request->input('weight', $request->input('actual_weight'))),
+                    'note' => $request->input('note', $request->input('store_notes')),
+                ]
             );
-
-            // Simpan berat aktual dan hitung ulang total jika transisi menghasilkan status weighed
-            if ($weightInput !== null && is_numeric($weightInput) && $updated->status === 'weighed') {
-                if ($request->filled('note') || $request->filled('store_notes')) {
-                    $updated->store_notes = $request->input('store_notes', $request->input('note'));
-                    $updated->save();
-                }
-                $this->orderService->setActualWeight($updated, (float) $weightInput, $request->user());
-            }
 
             // Jika status menjadi price_approved, transisi kedua ke awaiting_payment
             // dilakukan langsung di backend tanpa permintaan kedua dari pelanggan
@@ -532,5 +465,71 @@ class OrderController extends Controller
         }
 
         return response()->json($task, 201);
+    }
+
+    /**
+     * Validate role-specific transition restrictions before authorizing with policy.
+     */
+    protected function validateRoleTransitionAuthorization(User $user, Order $order, string $normalizedToStatus): ?JsonResponse
+    {
+        $isMitra = $user->hasRole('store_owner')
+            || $user->hasRole('store_staff')
+            || $user->hasRole('store_admin');
+
+        $isPlatformAdmin = $user->hasRole('platform_admin')
+            || $user->hasRole('platform_owner')
+            || $user->hasRole('admin');
+
+        // 1. Mitra tidak diizinkan mengubah status menjadi price_approved atau paid
+        if ($isMitra && !$isPlatformAdmin && in_array($normalizedToStatus, ['price_approved', 'paid'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mitra tidak diizinkan mengubah status menjadi price_approved atau paid.',
+                'error' => [
+                    'code' => 'FORBIDDEN_TRANSITION',
+                    'message' => 'Status price_approved hanya dapat disetujui oleh pelanggan pemilik pesanan, dan status paid hanya dapat diubah melalui alur pembayaran.',
+                ],
+            ], 403);
+        }
+
+        // 2. Status 'paid' tidak boleh di-trigger langsung lewat endpoint transition publik selain platform admin
+        if ($normalizedToStatus === OrderStatus::PAID->value && !$isPlatformAdmin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Status paid hanya dapat diubah melalui alur pembayaran.',
+                'error' => [
+                    'code' => 'FORBIDDEN_TRANSITION',
+                    'message' => 'Status paid hanya dapat diubah melalui alur pembayaran resmi.',
+                ],
+            ], 403);
+        }
+
+        // 3. Pelanggan pemilik order HANYA boleh melakukan transisi ke price_approved atau cancelled
+        $isCustomer = $user->hasRole('customer') && !$isMitra && !$isPlatformAdmin;
+        if ($isCustomer) {
+            if ($user->id !== $order->customer_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki akses ke pesanan ini.',
+                    'error' => [
+                        'code' => 'FORBIDDEN_ORDER_ACCESS',
+                        'message' => 'Anda tidak memiliki izin untuk mengubah pesanan milik pengguna lain.',
+                    ],
+                ], 403);
+            }
+
+            if (!in_array($normalizedToStatus, ['price_approved', OrderStatus::CANCELLED->value])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pelanggan hanya dapat menyetujui harga atau membatalkan pesanan.',
+                    'error' => [
+                        'code' => 'FORBIDDEN_TRANSITION',
+                        'message' => 'Pelanggan tidak memiliki izin untuk mengubah status pesanan selain persetujuan harga atau pembatalan.',
+                    ],
+                ], 403);
+            }
+        }
+
+        return null;
     }
 }

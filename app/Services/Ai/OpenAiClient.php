@@ -15,9 +15,14 @@ use Illuminate\Support\Facades\Log;
  */
 class OpenAiClient implements AiClientInterface
 {
+    protected function getApiKey(): ?string
+    {
+        return Setting::get('AI_API_KEY') ?: config('ai.api_key', config('ai.openai_api_key'));
+    }
+
     public function chat(array $messages, array $tools): array
     {
-        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+        $apiKey = $this->getApiKey();
 
         if (empty($apiKey)) {
             if ((app()->isLocal() || app()->runningUnitTests()) && config('ai.mock_in_local', false)) {
@@ -126,7 +131,7 @@ class OpenAiClient implements AiClientInterface
      */
     public function testConnection(string $model): array
     {
-        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+        $apiKey = $this->getApiKey();
 
         if (empty($apiKey) || str_contains($apiKey, 'dummy') || str_contains($apiKey, 'placeholder')) {
             if ((app()->isLocal() || app()->runningUnitTests()) && config('ai.mock_in_local', false)) {

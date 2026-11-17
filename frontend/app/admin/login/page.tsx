@@ -84,7 +84,9 @@ function AdminLoginForm() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.success) {
-        const msg = json.message || 'Kode 2FA tidak valid atau telah kedaluwarsa.';
+        const msg = res.status === 429
+          ? 'Terlalu banyak percobaan (Too Many Attempts). Silakan tunggu 1 menit lalu coba lagi.'
+          : (json.message || 'Kode 2FA tidak valid atau telah kedaluwarsa.');
         setErrorMessage(msg);
         return;
       }

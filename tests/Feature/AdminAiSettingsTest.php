@@ -336,4 +336,50 @@ class AdminAiSettingsTest extends TestCase
         $this->assertSame('provider_error', $errLog->status);
         $this->assertStringContainsString('HTTP 404', (string) ($errLog->flags['provider_error'] ?? ''));
     }
+
+    public function test_super_admin_can_view_and_update_ai_api_key_setting(): void
+    {
+        config(['ai.api_key' => 'sk-or-v1-env-default-key-testing-12345']);
+        Setting::forget('AI_API_KEY');
+
+        Sanctum::actingAs($this->superAdmin, ['role:super_admin']);
+
+        // 1. Initial GET -> Source from env
+        $getRes = $this->getJson('/api/v1/admin/ai-settings');
+        $getRes->assertStatus(200);
+        $getRes->assertJsonPath('data.api_key', 'sk-or-v1-env-default-key-testing-12345');
+        $getRes->assertJsonPath('data.api_key_source', 'env');
+        $getRes->assertJsonPath('data.api_key_configured', true);
+        $this->assertStringContainsString('••••', (string) $getRes->json('data.api_key_masked'));
+
+        // 2. PUT with custom API key -> Saved to database setting
+        $customKey = 'sk-or-v1-custom-secret-key-67890';
+        $putRes = $this->putJson('/api/v1/admin/ai-settings', [
+            'model' => 'google/gemini-2.5-flash',
+            'api_key' => $customKey,
+        ]);
+        $putRes->assertStatus(200);
+        $putRes->assertJsonPath('data.api_key', $customKey);
+        $putRes->assertJsonPath('data.api_key_source', 'database');
+
+        $this->assertSame($customKey, Setting::get('AI_API_KEY'));
+        $this->assertSame($customKey, app(AiAssistantService::class)->getApiKey());
+
+        // Verify audit log masked the secret key
+        $auditLog = AuditLog::where('action', 'UPDATE_AI_MODEL')->latest('id')->first();
+        $this->assertNotNull($auditLog);
+        $this->assertStringContainsString('***', (string) $auditLog->after_value);
+        $this->assertStringNotContainsString('67890', (string) $auditLog->after_value);
+
+        // 3. PUT with empty string -> Reset database setting back to env
+        $resetRes = $this->putJson('/api/v1/admin/ai-settings', [
+            'model' => 'google/gemini-2.5-flash',
+            'api_key' => '',
+        ]);
+        $resetRes->assertStatus(200);
+        $resetRes->assertJsonPath('data.api_key', 'sk-or-v1-env-default-key-testing-12345');
+        $resetRes->assertJsonPath('data.api_key_source', 'env');
+        $this->assertNull(Setting::get('AI_API_KEY'));
+        $this->assertSame('sk-or-v1-env-default-key-testing-12345', app(AiAssistantService::class)->getApiKey());
+    }
 }

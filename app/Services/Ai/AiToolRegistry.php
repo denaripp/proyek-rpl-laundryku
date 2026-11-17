@@ -51,6 +51,7 @@ class AiToolRegistry
         // Store Admin / Owner
         'store_get_summary',
         'store_list_orders',
+        'store_get_orders',
         'store_get_order_detail',
         'store_get_services',
         'store_get_couriers',
@@ -200,7 +201,7 @@ class AiToolRegistry
                 'type' => 'function',
                 'function' => [
                     'name' => 'get_store_information',
-                    'description' => 'Mendapatkan informasi publik gerai laundry aktif (nama, alamat, kota, rating, jam buka).',
+                    'description' => 'Mendapatkan informasi publik toko laundry aktif (nama, alamat, kota, rating, jam buka).',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -311,7 +312,7 @@ class AiToolRegistry
                 'type' => 'function',
                 'function' => [
                     'name' => 'store_get_summary',
-                    'description' => 'Mendapatkan ringkasan dashboard toko mitra yang dikelola (metrik pesanan baru, sedang diproses, siap antar, omzet hari ini, kurir aktif, dan status operasional).',
+                    'description' => 'Mendapatkan ringkasan dashboard toko mitra yang dikelola (metrik pesanan baru, sedang diproses, siap antar / siap diantar, selesai hari ini, omzet hari ini, kurir aktif, dan status operasional). Wajib gunakan tool ini jika pengguna menanyakan jumlah atau status pesanan siap diantar, pesanan baru, atau ringkasan dashboard toko.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => new \stdClass(),
@@ -336,7 +337,7 @@ class AiToolRegistry
                 'type' => 'function',
                 'function' => [
                     'name' => 'store_get_order_detail',
-                    'description' => 'Melihat rincian pesanan tertentu yang berada di gerai toko yang dikelola mitra.',
+                    'description' => 'Melihat rincian pesanan tertentu yang berada di toko yang dikelola mitra.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -556,7 +557,7 @@ class AiToolRegistry
                 'type' => 'function',
                 'function' => [
                     'name' => 'platform_explain_admin_menu',
-                    'description' => 'Mendapatkan penjelasan fungsi menu dan modul operasional pada portal Super Admin LaundryKu.',
+                    'description' => 'Mendapatkan penjelasan fungsi menu dan modul operasional pada halaman Admin LaundryKu.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -668,6 +669,7 @@ class AiToolRegistry
             // Store Admin / Owner
             case 'store_get_summary':
                 return $this->storeGetSummary($arguments, $actor);
+            case 'store_get_orders':
             case 'store_list_orders':
                 return $this->storeListOrders($arguments, $actor);
             case 'store_get_order_detail':
@@ -753,7 +755,7 @@ class AiToolRegistry
                     'city' => $store->city,
                 ];
             } else {
-                $data['managed_store'] = 'Belum terhubung ke gerai';
+                $data['managed_store'] = 'Belum terhubung ke toko';
             }
         }
 
@@ -998,7 +1000,7 @@ class AiToolRegistry
         } elseif ($status === 'processing') {
             $query->whereIn('status', ['at_store', 'received', 'weighed', 'awaiting_price_approval', 'price_approved', 'awaiting_payment', 'paid', 'processing']);
         } elseif ($status === 'ready') {
-            $query->whereIn('status', ['ready_for_delivery', 'delivery_assigned', 'out_for_delivery']);
+            $query->whereIn('status', ['ready_for_delivery', 'courier_assigned_for_delivery', 'delivery_assigned', 'out_for_delivery']);
         } elseif ($status !== '') {
             $query->where('status', $status);
         }
@@ -1634,7 +1636,7 @@ class AiToolRegistry
         }
 
         return [
-            'overview' => 'Daftar menu utama di Portal Super Admin LaundryKu:',
+            'overview' => 'Daftar menu utama di halaman Admin LaundryKu:',
             'menus' => $menus,
         ];
     }

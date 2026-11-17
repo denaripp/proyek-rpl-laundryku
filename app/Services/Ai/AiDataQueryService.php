@@ -827,8 +827,9 @@ class AiDataQueryService
             return $this->storeDashboardService->getOrderByNumberResponse($store, $orderNumber);
         }
 
-        // 4. Ringkasan / Rekap / Dashboard / Kondisi Toko
-        if (str_contains($norm, 'dashboard') || str_contains($norm, 'rekap') || str_contains($norm, 'ringkasan') || str_contains($norm, 'kondisi toko') || str_contains($norm, 'performa toko') || str_contains($norm, 'kondisi gerai') || str_contains($norm, 'status toko') || str_contains($norm, 'gimana toko') || str_contains($norm, 'bagaimana toko')) {
+        // 4. Ringkasan / Rekap / Dashboard / Kondisi Toko (hanya jika bukan menanyakan kartu spesifik seperti siap diantar)
+        if (!str_contains($norm, 'siap diantar') && !str_contains($norm, 'siap antar') && !str_contains($norm, 'siap dianter') && !str_contains($norm, 'siap anter')
+            && (str_contains($norm, 'dashboard') || str_contains($norm, 'rekap') || str_contains($norm, 'ringkasan') || str_contains($norm, 'kondisi toko') || str_contains($norm, 'performa toko') || str_contains($norm, 'kondisi gerai') || str_contains($norm, 'status toko') || str_contains($norm, 'gimana toko') || str_contains($norm, 'bagaimana toko'))) {
             return $this->storeDashboardService->getSummaryResponse($store);
         }
 
@@ -858,8 +859,10 @@ class AiDataQueryService
             return $this->storeDashboardService->getOutForDeliveryResponse($store);
         }
 
-        // 10. Siap Diantar (Kartu 3)
-        if (str_contains($norm, 'siap diantar') || str_contains($norm, 'siap antar') || str_contains($norm, 'siap dianter') || str_contains($norm, 'siap anter')) {
+        // 10. Siap Diantar (Kartu 3) / Klarifikasi Angka Siap Diantar
+        if (str_contains($norm, 'siap diantar') || str_contains($norm, 'siap antar') || str_contains($norm, 'siap dianter') || str_contains($norm, 'siap anter')
+            || ((str_contains($norm, '18') || str_contains($norm, 'delapan belas') || str_contains($norm, '7') || str_contains($norm, 'tujuh'))
+                && (str_contains($norm, 'bukan') || str_contains($norm, 'kok') || str_contains($norm, 'kenapa') || str_contains($norm, 'apa') || str_contains($norm, 'benar') || str_contains($norm, 'why')))) {
             return $this->storeDashboardService->getReadyForDeliveryResponse($store);
         }
 
@@ -873,7 +876,14 @@ class AiDataQueryService
             return $this->storeDashboardService->getTodayRevenueResponse($store);
         }
 
-        // 13. Kurir Aktif & Total Kurir
+        // 12b. Pesanan Menunggu Kurir (Jemput & Antar)
+        if (str_contains($norm, 'pesanan') && (str_contains($norm, 'kurir') || str_contains($norm, 'jemput') || str_contains($norm, 'antar'))) {
+            if (str_contains($norm, 'menunggu kurir') || str_contains($norm, 'nunggu kurir') || str_contains($norm, 'perlu kurir') || str_contains($norm, 'butuh kurir')) {
+                return $this->storeDashboardService->getCourierOrdersResponse($store);
+            }
+        }
+
+        // 13. Kurir Aktif & Total Kurir (Staf Toko)
         if (str_contains($norm, 'kurir') && !str_contains($norm, 'pelamar') && !str_contains($norm, 'kandidat')) {
             return $this->storeDashboardService->getActiveCouriersResponse($store);
         }
@@ -1273,7 +1283,7 @@ class AiDataQueryService
         $cityProv = array_filter([$store->city, $store->province]);
         $cityProvStr = !empty($cityProv) ? ' (' . implode(', ', $cityProv) . ')' : '';
 
-        return "Pengaturan gerai {$storeName}:\n- Alamat: {$store->address}{$cityProvStr}\n- Radius layanan: {$radius} km\n- Status toko: {$statusLabel} (Operasional: " . ($store->is_active ? 'Aktif' : 'Nonaktif') . ")\nPengaturan dapat dikelola di /store/settings dan profil akun di /store/profile.";
+        return "Pengaturan toko {$storeName}:\n- Alamat: {$store->address}{$cityProvStr}\n- Radius layanan: {$radius} km\n- Status toko: {$statusLabel} (Operasional: " . ($store->is_active ? 'Aktif' : 'Nonaktif') . ")\nPengaturan dapat dikelola di /store/settings dan profil akun di /store/profile.";
     }
 
     public function getStoreCouriersResponse(User $user): string
@@ -1559,6 +1569,11 @@ class AiDataQueryService
             return 'Maaf, permintaan tersebut melanggar kebijakan keamanan data dan tidak dapat diproses.';
         }
 
+        // 0. GMV inquiries (Gross Merchandise Value)
+        if (str_contains($normalizedMessage, 'gmv') || str_contains($normalizedMessage, 'gross merchandise value')) {
+            return $this->getSuperAdminGmvResponse($user, $normalizedMessage);
+        }
+
         // 1. Look up any order if order number is explicitly stated
         preg_match('/ord-[a-z0-9-]+/i', $normalizedMessage, $matches);
         $orderNumber = !empty($matches[0]) ? strtoupper($matches[0]) : null;
@@ -1734,6 +1749,44 @@ class AiDataQueryService
         }
 
         return null;
+    }
+
+    /**
+     * Capability J: Super Admin GMV (Gross Merchandise Value) metric.
+     */
+    public function getSuperAdminGmvResponse(User $user, string $message = ''): string
+    {
+        $metricsService = app(\App\Services\Dashboard\DashboardMetricsService::class);
+        $gmvToday = (float) $metricsService->get('platform', 'gmv_today');
+        $gmvMonth = (float) $metricsService->get('platform', 'gmv_month');
+        $gmvTotal = (float) $metricsService->get('platform', 'gmv_total');
+
+        if ($gmvTotal === 0.0) {
+            $gmvTotal = (float) Payment::where('status', 'paid')->sum('amount');
+            if ($gmvTotal === 0.0) {
+                $gmvTotal = (float) Order::where('status', 'completed')->sum(DB::raw('COALESCE(total_amount, total_price, 0)'));
+            }
+        }
+        if ($gmvToday === 0.0) {
+            $today = Carbon::today();
+            $gmvToday = (float) Payment::where('status', 'paid')->whereDate('paid_at', $today)->sum('amount');
+        }
+        if ($gmvMonth === 0.0) {
+            $monthStart = Carbon::now()->startOfMonth();
+            $gmvMonth = (float) Payment::where('status', 'paid')->where('paid_at', '>=', $monthStart)->sum('amount');
+        }
+
+        $gmvTodayFmt = 'Rp ' . number_format($gmvToday, 0, ',', '.');
+        $gmvMonthFmt = 'Rp ' . number_format($gmvMonth, 0, ',', '.');
+        $gmvTotalFmt = 'Rp ' . number_format($gmvTotal, 0, ',', '.');
+
+        $norm = mb_strtolower(trim($message));
+
+        if (str_contains($norm, 'apa itu') || str_contains($norm, 'apa yg dimaksud') || str_contains($norm, 'maksud') || str_contains($norm, 'definisi') || str_contains($norm, 'artinya') || str_contains($norm, 'singkatan')) {
+            return "Total GMV (Gross Merchandise Value) adalah akumulasi nilai transaksi bruto dari seluruh pesanan yang berhasil dibayar di platform LaundryKu. Nilai GMV saat ini: Total {$gmvTotalFmt} (Hari ini: {$gmvTodayFmt}, Bulan ini: {$gmvMonthFmt}).";
+        }
+
+        return "Total GMV platform saat ini adalah {$gmvTotalFmt} (Hari ini: {$gmvTodayFmt}, Bulan ini: {$gmvMonthFmt}).";
     }
 
     public function getSuperAdminAccountLinkageResponse(User $actor, string $normalizedMessage): string
@@ -1929,7 +1982,7 @@ class AiDataQueryService
             $nom = 'Rp ' . number_format((float) $s->net_amount, 0, ',', '.');
             $lines[] = "- {$s->reference} (Toko: {$storeName}, Periode: {$period}, Nominal: {$nom}, Orders: {$s->order_count})";
         }
-        $lines[] = 'Verifikasi pencairan dana dapat disetujui melalui menu Keuangan & Settlement di Admin Portal.';
+        $lines[] = 'Verifikasi pencairan dana dapat disetujui melalui menu Keuangan & Settlement di halaman Admin (/admin).';
 
         return implode("\n", $lines);
     }
@@ -1976,7 +2029,7 @@ class AiDataQueryService
             return 'Menu Monitoring AI menyajikan transparansi biaya, konsumsi token, dan riwayat panggilan OpenAI Assistant untuk evaluasi operasional asisten.';
         }
 
-        return "Menu utama di Portal Super Admin LaundryKu meliputi:\n"
+        return "Menu utama di halaman Admin LaundryKu meliputi:\n"
             . "- Overview: Ringkasan performa platform (GMV, order, toko, pengguna, security snapshot)\n"
             . "- Toko & Approval: Verifikasi pendaftaran toko baru & manajemen mitra\n"
             . "- Pesanan: Monitoring seluruh pesanan di ekosistem platform lintas toko mitra\n"
@@ -1996,7 +2049,7 @@ class AiDataQueryService
         return "Pendaftaran dan verifikasi yang menunggu persetujuan:\n"
             . "- Toko Mitra Baru: {$pendingStores} pendaftaran menunggu persetujuan (status: pending).\n"
             . "- Kurir Baru: {$pendingCouriers} kurir menunggu verifikasi.\n"
-            . "Anda dapat memproses verifikasi dan persetujuan melalui menu Verifikasi & Persetujuan di Admin Portal (/admin).";
+            . "Anda dapat memproses verifikasi dan persetujuan melalui menu Verifikasi & Persetujuan di halaman Admin (/admin).";
     }
 
     public function getSuperAdminUsersResponse(User $user, string $message = ''): string
@@ -2024,12 +2077,18 @@ class AiDataQueryService
         $totalUsers = User::count();
         $activeUsers = User::where('is_active', true)->count();
 
+        $norm = mb_strtolower(trim($message));
+        $isRoleSpecific = str_contains($norm, 'per peran') || str_contains($norm, 'per role') || str_contains($norm, 'rincian') || str_contains($norm, 'komposisi') || (str_contains($norm, 'customer') && (str_contains($norm, 'kurir') || str_contains($norm, 'admin')));
+
+        if (!$isRoleSpecific && (str_contains($norm, 'berapa user') || str_contains($norm, 'berapa pengguna') || str_contains($norm, 'total user') || str_contains($norm, 'total pengguna') || str_contains($norm, 'jumlah user') || str_contains($norm, 'jumlah pengguna'))) {
+            return "Terdapat {$totalUsers} pengguna terdaftar di platform LaundryKu ({$activeUsers} aktif).";
+        }
+
         return "Jumlah pengguna terdaftar di platform LaundryKu (total: {$totalUsers} pengguna, {$activeUsers} aktif):\n"
             . "- Pelanggan (Customer): {$customerCount} pengguna\n"
             . "- Kurir: {$courierCount} pengguna\n"
             . "- Pengelola Toko (Mitra/Admin Toko): {$mitraCount} pengguna\n"
-            . "- Administrator Platform: {$adminCount} pengguna\n"
-            . "(Catatan: Data sensitif dan PII pelanggan tidak ditampilkan demi kepatuhan privasi).";
+            . "- Administrator Platform: {$adminCount} pengguna";
     }
 
     public function getSuperAdminComplaintsResponse(User $user, string $message = ''): string
@@ -2048,7 +2107,7 @@ class AiDataQueryService
             . "- Komplain selesai/teratasi: {$resolvedDisputes} kasus.\n"
             . "- Komplain ditolak: {$rejectedDisputes} kasus.\n"
             . "- Total komplain: {$totalDisputes} kasus.\n"
-            . "Mediasi komplain dapat ditangani melalui menu Manajemen Komplain di Admin Portal (/admin).";
+            . "Mediasi komplain dapat ditangani melalui menu Manajemen Komplain di halaman Admin (/admin).";
     }
 
     /**

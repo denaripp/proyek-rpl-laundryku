@@ -792,6 +792,9 @@ class AiIntentRouter
             if (str_contains($text, 'omset platform') || str_contains($text, 'omzet platform') || str_contains($text, 'total omzet platform') || str_contains($text, 'volume pesanan')) {
                 $adminScore += 50;
             }
+            if (str_contains($text, 'gmv') || str_contains($text, 'gross merchandise value')) {
+                $adminScore += 95;
+            }
         }
         $scores[self::INTENT_SUPER_ADMIN_PLATFORM] = max(0, $adminScore);
 
@@ -1074,7 +1077,7 @@ class AiIntentRouter
     {
         $defaultModel = Setting::get('AI_MODEL') ?: config('ai.model', 'liquid/lfm-2.5-2.6b:free');
         $routerModel = $modelOverride ?? config('ai.router_model', $defaultModel);
-        $apiKey = config('ai.api_key', config('ai.openai_api_key'));
+        $apiKey = \App\Models\Setting::get('AI_API_KEY') ?: config('ai.api_key', config('ai.openai_api_key'));
 
         if (empty($apiKey) || !$this->client || $this->client instanceof \Tests\Feature\FakeAiClient || $this->client instanceof \Tests\Feature\FakeTrackingAiClient) {
             return ['intent' => self::INTENT_UNKNOWN, 'order_number' => $orderNumber, 'confidence' => 0.0, 'router_model' => $routerModel];

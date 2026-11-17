@@ -217,6 +217,9 @@ export interface AiSettingsData {
   recent_usage?: AiUsageLogItem[];
   provider: string;
   api_key_configured: boolean;
+  api_key?: string | null;
+  api_key_masked?: string | null;
+  api_key_source?: 'database' | 'env' | 'none';
   updated_at?: string | null;
   updated_by?: {
     id: string;
@@ -453,7 +456,7 @@ export const adminApi = {
     return res.data;
   },
 
-  async updateAiSettings(data: { model: string; temperature?: number; max_tool_rounds?: number }) {
+  async updateAiSettings(data: { model: string; temperature?: number; max_tool_rounds?: number; api_key?: string | null }) {
     return apiClient<ApiSuccessResponse<any>>('/admin/ai-settings', {
       method: 'PUT',
       body: JSON.stringify(data),

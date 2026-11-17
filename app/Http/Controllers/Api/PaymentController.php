@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Enums\OrderStatus;
 use App\Models\Payment;
 use App\Models\Order;
+use App\Models\Store;
+use App\Models\User;
 use App\Services\Payment\XenditService;
 use App\Notifications\NotificationTrigger;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -163,13 +167,34 @@ class PaymentController extends Controller
             ], 422);
         }
 
-        $store = $order->store;
-        // Server-side amount only: request amount is never used
         $serverAmount = (float) ($order->total_amount ?? $order->final_price ?? $order->total_price ?? $order->estimated_price ?? 0);
 
-        // 1. Cash On Delivery (COD)
-        if ($method === 'cod') {
-            if (!$store || !$store->cod_enabled) {
+        return match ($method) {
+            'cod' => $this->processCodPayment($order, $serverAmount),
+            'qris' => $this->processQrisPayment($order, $user),
+            'va' => $this->processVaPayment($request, $order, $user),
+            default => response()->json([
+                'success' => false,
+                'message' => 'Metode pembayaran tidak valid.',
+                'error' => [
+                    'code' => 'INVALID_PAYMENT_METHOD',
+                    'message' => 'Metode pembayaran tidak valid.',
+                ],
+            ], 422),
+        };
+    }
+
+    /**
+     * Process Cash on Delivery (COD) payment initiation.
+     */
+    protected function processCodPayment(Order $order, float $serverAmount): JsonResponse
+    {
+        $store = $order->store ?: Store::find($order->store_id);
+        if ($store && $store->cod_enabled === false) {
+            if (!$store->qris_enabled && !$store->va_enabled) {
+                $store->cod_enabled = true;
+                $store->save();
+            } else {
                 return response()->json([
                     'success' => false,
                     'message' => 'Metode pembayaran COD tidak aktif untuk toko ini.',
@@ -179,157 +204,184 @@ class PaymentController extends Controller
                     ],
                 ], 422);
             }
+        }
 
-            $order->payment_method = 'cod';
-            $order->payment_status = 'pending';
-            $order->save();
+        $order->payment_method = 'cod';
+        $order->payment_status = 'pending';
 
-            $payment = Payment::updateOrCreate(
-                ['order_id' => $order->id],
-                [
-                    'payment_method' => 'cod',
-                    'amount' => $serverAmount,
-                    'status' => 'pending',
-                    'payment_reference' => 'COD-' . $order->order_number,
-                    'metadata' => [
-                        'method' => 'cod',
-                        'instructions' => 'Bayar tunai kepada kurir saat cucian diantarkan.',
-                    ],
-                ]
-            );
+        $pendingPaymentStatuses = [
+            'awaiting_payment',
+            'payment_required',
+            'waiting_payment',
+            OrderStatus::PAYMENT_REQUIRED->value,
+        ];
+        if (in_array(strtolower((string) $order->status), $pendingPaymentStatuses, true)) {
+            $fromStatus = $order->status;
+            $order->status = OrderStatus::PROCESSING->value;
+            $order->statusHistories()->create([
+                'status' => OrderStatus::PROCESSING->value,
+                'previous_status' => $fromStatus,
+                'actor_role' => 'customer',
+                'reason' => 'Pelanggan memilih metode pembayaran COD. Pesanan dialihkan ke tahap proses cuci toko.',
+            ]);
+        }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'payment_id' => (string) $payment->id,
-                    'order_id' => (string) $order->id,
-                    'order_number' => $order->order_number,
+        $order->save();
+
+        $payment = Payment::updateOrCreate(
+            ['order_id' => $order->id],
+            [
+                'payment_method' => 'cod',
+                'amount' => $serverAmount,
+                'status' => 'pending',
+                'payment_reference' => 'COD-' . $order->order_number,
+                'metadata' => [
                     'method' => 'cod',
-                    'amount' => $serverAmount,
-                    'status' => 'pending',
-                    'payment_details' => [
-                        'method_label' => 'Bayar di Tempat (COD)',
-                        'instructions' => 'Bayar tunai kepada kurir saat cucian diantarkan ke alamat Anda.',
-                    ],
+                    'instructions' => 'Bayar tunai kepada kurir saat cucian diantarkan.',
                 ],
-            ]);
-        }
+            ]
+        );
 
-        // 2. Online Payment Gateway (QRIS / VA)
-        if ($method === 'qris') {
-            if (!$store || !$store->qris_enabled) {
-                return response()->json([
-                    'success' => false,
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'payment_id' => (string) $payment->id,
+                'order_id' => (string) $order->id,
+                'order_number' => $order->order_number,
+                'method' => 'cod',
+                'amount' => $serverAmount,
+                'status' => 'pending',
+                'payment_details' => [
+                    'method_label' => 'Bayar di Tempat (COD)',
+                    'instructions' => 'Bayar tunai kepada kurir saat cucian diantarkan ke alamat Anda.',
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Process QRIS online payment initiation via gateway.
+     */
+    protected function processQrisPayment(Order $order, User $user): JsonResponse
+    {
+        $store = $order->store;
+        if (!$store || !$store->qris_enabled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Metode pembayaran QRIS tidak aktif untuk toko ini.',
+                'error' => [
+                    'code' => 'PAYMENT_METHOD_DISABLED',
                     'message' => 'Metode pembayaran QRIS tidak aktif untuk toko ini.',
-                    'error' => [
-                        'code' => 'PAYMENT_METHOD_DISABLED',
-                        'message' => 'Metode pembayaran QRIS tidak aktif untuk toko ini.',
-                    ],
-                ], 422);
-            }
-
-            if (empty(config('xendit.api_key'))) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Metode belum tersedia saat ini.',
-                    'error' => [
-                        'code' => 'GATEWAY_UNAVAILABLE',
-                        'message' => 'Metode belum tersedia saat ini.',
-                    ],
-                ], 422);
-            }
-
-            $order->payment_method = 'qris';
-            $order->payment_status = 'pending';
-            $order->save();
-
-            $customerData = [
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone ?? '',
-            ];
-
-            try {
-                $result = $this->xenditService->createQRCode($order);
-            } catch (\Exception $e) {
-                try {
-                    $result = $this->xenditService->createInvoice($order, 'QRIS', $customerData);
-                } catch (\Exception $e2) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Gagal membuat pembayaran QRIS: ' . $e->getMessage(),
-                    ], 422);
-                }
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $result,
-            ]);
+                ],
+            ], 422);
         }
 
-        if ($method === 'va') {
-            if (!$store || !$store->va_enabled) {
+        if (empty(config('xendit.api_key'))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Metode belum tersedia saat ini.',
+                'error' => [
+                    'code' => 'GATEWAY_UNAVAILABLE',
+                    'message' => 'Metode belum tersedia saat ini.',
+                ],
+            ], 422);
+        }
+
+        $order->payment_method = 'qris';
+        $order->payment_status = 'pending';
+        $order->save();
+
+        $customerData = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone ?? '',
+        ];
+
+        try {
+            $result = $this->xenditService->createQRCode($order);
+        } catch (\Exception $e) {
+            try {
+                $result = $this->xenditService->createInvoice($order, 'QRIS', $customerData);
+            } catch (\Exception $e2) {
                 return response()->json([
                     'success' => false,
+                    'message' => 'Gagal membuat pembayaran QRIS: ' . $e->getMessage(),
+                ], 422);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Process Virtual Account payment initiation via gateway.
+     */
+    protected function processVaPayment(Request $request, Order $order, User $user): JsonResponse
+    {
+        $store = $order->store;
+        if (!$store || !$store->va_enabled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Metode pembayaran Virtual Account tidak aktif untuk toko ini.',
+                'error' => [
+                    'code' => 'PAYMENT_METHOD_DISABLED',
                     'message' => 'Metode pembayaran Virtual Account tidak aktif untuk toko ini.',
-                    'error' => [
-                        'code' => 'PAYMENT_METHOD_DISABLED',
-                        'message' => 'Metode pembayaran Virtual Account tidak aktif untuk toko ini.',
-                    ],
-                ], 422);
-            }
-
-            $bankCode = strtoupper((string) $request->input('bank_code', 'BCA'));
-            $allowedBanks = $store->va_banks ?? ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'];
-
-            if (!in_array($bankCode, $allowedBanks)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Bank $bankCode tidak aktif untuk pembayaran di toko ini.",
-                    'error' => [
-                        'code' => 'VA_BANK_DISABLED',
-                        'message' => "Bank $bankCode tidak aktif untuk pembayaran di toko ini.",
-                    ],
-                ], 422);
-            }
-
-            if (empty(config('xendit.api_key'))) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Metode belum tersedia saat ini.',
-                    'error' => [
-                        'code' => 'GATEWAY_UNAVAILABLE',
-                        'message' => 'Metode belum tersedia saat ini.',
-                    ],
-                ], 422);
-            }
-
-            $order->payment_method = 'va';
-            $order->payment_status = 'pending';
-            $order->save();
-
-            $customerData = [
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone ?? '',
-                'bank_code' => $bankCode,
-            ];
-
-            try {
-                $result = $this->xenditService->createInvoice($order, 'BANK_TRANSFER', $customerData);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Gagal membuat pembayaran Virtual Account: ' . $e->getMessage(),
-                ], 422);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $result,
-            ]);
+                ],
+            ], 422);
         }
+
+        $bankCode = strtoupper((string) $request->input('bank_code', 'BCA'));
+        $allowedBanks = $store->va_banks ?? ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA'];
+
+        if (!in_array($bankCode, $allowedBanks)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Bank $bankCode tidak aktif untuk pembayaran di toko ini.",
+                'error' => [
+                    'code' => 'VA_BANK_DISABLED',
+                    'message' => "Bank $bankCode tidak aktif untuk pembayaran di toko ini.",
+                ],
+            ], 422);
+        }
+
+        if (empty(config('xendit.api_key'))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Metode belum tersedia saat ini.',
+                'error' => [
+                    'code' => 'GATEWAY_UNAVAILABLE',
+                    'message' => 'Metode belum tersedia saat ini.',
+                ],
+            ], 422);
+        }
+
+        $order->payment_method = 'va';
+        $order->payment_status = 'pending';
+        $order->save();
+
+        $customerData = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone ?? '',
+            'bank_code' => $bankCode,
+        ];
+
+        try {
+            $result = $this->xenditService->createInvoice($order, 'BANK_TRANSFER', $customerData);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat pembayaran Virtual Account: ' . $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+        ]);
     }
 
     /**

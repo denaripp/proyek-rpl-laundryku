@@ -14,6 +14,7 @@ use App\Models\OrderStatusHistory;
 use App\Models\Payment;
 use App\Models\Refund;
 use App\Models\Review;
+use App\Models\Setting;
 use App\Models\Store;
 use App\Models\StoreStaff;
 use App\Models\User;
@@ -225,10 +226,11 @@ class DashboardController extends Controller
         $commissionTotal = $isOwner
             ? (float) CommissionSetting::where('is_active', true)->sum(DB::raw('commission_rate'))
             : null;
+        $commissionRate = (float) Setting::get('platform_commission_rate', 10) / 100;
         $platformCommission = $isOwner
             ? (float) Payment::where('status', 'paid')
                 ->where('paid_at', '>=', Carbon::now()->subDays(30))
-                ->sum(DB::raw('amount * 0.10'))
+                ->sum(DB::raw('amount * ' . (float) $commissionRate))
             : null;
 
         // Dynamic Tab Queries

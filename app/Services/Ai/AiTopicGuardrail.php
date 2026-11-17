@@ -163,6 +163,7 @@ class AiTopicGuardrail
         'selesai', 'kelar', 'hari ini', 'selesai hari ini', 'selesai hr ini',
         // Super admin keywords
         'pengguna', 'user', 'pelanggan', 'cari user', 'cari pengguna', 'cari toko', 'ringkasan platform', 'overview platform', 'monitoring platform', 'persetujuan mitra', 'approval mitra', 'approval toko', 'approval kurir', 'verifikasi mitra', 'ekosistem', 'sistem',
+        'gmv', 'total gmv', 'gross merchandise value', 'nilai transaksi',
     ];
 
     protected ?AiTextNormalizer $normalizer = null;
@@ -392,6 +393,29 @@ class AiTopicGuardrail
 
         // 5. Remove leading/trailing internal prompt markers if leaked
         $clean = str_replace('LANDURYKU_AI_SYSTEM_V1', '', $clean);
+
+        // 6. Remove trailing conversational pleasantries / closers / unsolicited sign-offs
+        $closingPatterns = [
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:semoga\s+(?:informasi\s+(?:ini\s+)?)?(?:membantu|bermanfaat)[^.\n]*[.!]*)\s*$/iu',
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:(?:apakah\s+)?ada\s+(?:(?:hal\s+lain|lagi)\s+)?(?:yang\s+)?(?:bisa|ingin|perlu)\s+(?:saya\s+)?(?:bantu|dibantu|ditanyakan)[^?\n]*\??)\s*$/iu',
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:apakah\s+ada\s+(?:pertanyaan\s+lain|yang\s+bisa\s+saya\s+bantu)[^?\n]*\??)\s*$/iu',
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:(?:jika\s+(?:ada\s+)?(?:pertanyaan|butuh\s+bantuan|membutuhkan\s+bantuan)[^,\n]*,?\s*)?jangan\s+ragu\s+untuk\s+(?:bertanya|menghubungi)[^.\n]*[.!]*)\s*$/iu',
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:silakan\s+(?:tanyakan|hubungi)(?:\s+kami)?\s+(?:kembali|jika)[^.\n]*[.!]*)\s*$/iu',
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:jika\s+(?:anda\s+)?(?:butuh|membutuhkan)\s+bantuan[^,\n]*,?\s*(?:silakan\s+)?beri\s+tahu\s+saya[^.\n]*[.!]*)\s*$/iu',
+            '/(?:(?:\r?\n)+|(?<=[.!?])\s+)\s*(?:semoga\s+hari(?:mu)?\s+menyenangkan[^.\n]*[.!]*)\s*$/iu',
+        ];
+
+        $prev = '';
+        while ($prev !== $clean) {
+            $prev = $clean;
+            foreach ($closingPatterns as $pattern) {
+                $candidate = preg_replace($pattern, '', $clean);
+                if (trim((string) $candidate) !== '') {
+                    $clean = $candidate;
+                }
+            }
+            $clean = trim((string) $clean);
+        }
 
         return trim((string) $clean);
     }

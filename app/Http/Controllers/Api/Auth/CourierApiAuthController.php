@@ -17,9 +17,32 @@ class CourierApiAuthController extends Controller
      */
     public function login(LoginApiRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->input('email'))->first();
+        $identifier = strtolower(trim((string) $request->input('email')));
+        $cleanPhone = preg_replace('/[^0-9]/', '', $identifier);
 
-        if (! $user || $user->role !== User::ROLE_COURIER || ! Hash::check($request->input('password'), $user->password)) {
+        $user = User::where(function ($query) use ($identifier, $cleanPhone) {
+            $query->whereRaw('LOWER(TRIM(email)) = ?', [$identifier]);
+            if (!empty($cleanPhone)) {
+                $variants = [$cleanPhone];
+                if (str_starts_with($cleanPhone, '62')) {
+                    $variants[] = '0' . substr($cleanPhone, 2);
+                    $variants[] = '+' . $cleanPhone;
+                } elseif (str_starts_with($cleanPhone, '0')) {
+                    $variants[] = '62' . substr($cleanPhone, 1);
+                    $variants[] = '+62' . substr($cleanPhone, 1);
+                }
+                $query->orWhereIn('phone', $variants);
+            }
+        })->first();
+
+        $isCourier = $user && (
+            $user->role === User::ROLE_COURIER ||
+            (method_exists($user, 'hasRole') && $user->hasRole('courier')) ||
+            $user->roles()->where('name', 'courier')->exists() ||
+            $user->courier()->exists()
+        );
+
+        if (! $user || ! $isCourier || ! Hash::check($request->input('password'), $user->password)) {
             AuditLog::create([
                 'actor_id' => $user?->id,
                 'actor_role' => User::ROLE_COURIER,
@@ -28,7 +51,7 @@ class CourierApiAuthController extends Controller
                 'resource_id' => null,
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'after_value' => json_encode(['email' => $request->input('email')]),
+                'after_value' => json_encode(['identifier' => $identifier]),
             ]);
 
             return response()->json([
@@ -40,6 +63,12 @@ class CourierApiAuthController extends Controller
             return response()->json([
                 'message' => 'Akun Anda dinonaktifkan.',
             ], 403);
+        }
+
+        // Sync role to courier if necessary for session consistency
+        if ($user->role !== User::ROLE_COURIER) {
+            $user->role = User::ROLE_COURIER;
+            $user->save();
         }
 
         // Revoke old courier tokens

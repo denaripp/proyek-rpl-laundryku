@@ -633,7 +633,7 @@ export const DashboardLayout = ({
             ) : (
               <div className="flex items-center gap-3">
                 <h1 className="font-heading font-bold text-base text-navy-900 hidden sm:block">
-                  Portal LaundryKu
+                  {userRole === 'store_admin' ? 'Toko LaundryKu' : 'LaundryKu'}
                 </h1>
               </div>
             )}

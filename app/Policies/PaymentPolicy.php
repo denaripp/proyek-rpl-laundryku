@@ -57,21 +57,22 @@ class PaymentPolicy
 
     /**
      * Determine whether the user can create a payment.
-     * Only customer of the order or platform admin.
+     * Only customer of the order, store owner/staff, or platform admin.
      */
     public function create(User $user, Order $order): bool
     {
+        // 1. Platform admin with permission
         if ($user->hasPermissionTo('create_payment')) {
             return true;
         }
 
-        // Customer can create payment for their own order
+        // 2. Strict ownership check for Customer
         if ($user->id === $order->customer_id) {
             return true;
         }
 
-        // Store staff/owner with access to the order's store
-        if ($order->store && $this->userHasStoreAccess($user, $order->store)) {
+        // 3. Store staff/owner check (ensure store_id is present for IDOR protection)
+        if ($order->store_id && $this->userHasStoreAccess($user, $order->store)) {
             return true;
         }
 

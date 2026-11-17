@@ -23,7 +23,7 @@ Jangan menebak di luar dokumen ini; kalau tidak ada, tanya.
 - Contoh: C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test
 - Kalau test gagal dengan SQLSTATE[2002], MySQL belum jalan — start mysqld dulu:
   C:/laragon/bin/mysql/mysql-8.0.30-winx64/bin/mysqld.exe --defaults-file=C:/laragon/bin/mysql/mysql-8.0.30-winx64/my.ini --console
-- Server dev: http://laundryku.test (Laragon) atau php artisan serve
+- Server dev: http://laundryku.test (Laragon automatic virtual host)
 
 ## Aturan keras (JANGAN dilanggar)
 - JANGAN upgrade PHP ke 8.4 (keputusan sadar, lihat technical-notes T005/T006)

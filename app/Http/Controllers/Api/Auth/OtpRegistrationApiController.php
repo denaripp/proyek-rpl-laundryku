@@ -570,14 +570,7 @@ class OtpRegistrationApiController extends Controller
             })->first();
 
             if ($user && $user->role !== User::ROLE_CUSTOMER) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
-                    'error' => [
-                        'code' => 'INVALID_PORTAL',
-                        'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
-                    ],
-                ], 403);
+                return $this->makeInvalidPortalResponse($user);
             }
 
             if (!$user || !Hash::check($password, $user->password)) {
@@ -629,14 +622,7 @@ class OtpRegistrationApiController extends Controller
 
             // Strict portal check: /api/v1/auth/login is for Customer accounts only
             if ($user->role !== User::ROLE_CUSTOMER) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
-                    'error' => [
-                        'code' => 'INVALID_PORTAL',
-                        'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
-                    ],
-                ], 403);
+                return $this->makeInvalidPortalResponse($user);
             }
 
             // Two-factor authentication check for customer
@@ -793,5 +779,47 @@ class OtpRegistrationApiController extends Controller
         }
 
         return $user;
+    }
+
+    protected function makeInvalidPortalResponse(User $user): JsonResponse
+    {
+        $portalInfo = match ($user->role) {
+            User::ROLE_COURIER => [
+                'portal' => 'courier',
+                'portal_name' => 'Portal Kurir',
+                'portal_url' => '/courier/login',
+                'message' => 'Akun Anda terdaftar sebagai Kurir. Silakan masuk melalui Portal Kurir.',
+            ],
+            User::ROLE_STORE_OWNER, User::ROLE_STORE_ADMIN => [
+                'portal' => 'mitra',
+                'portal_name' => 'Portal Mitra',
+                'portal_url' => '/store/login',
+                'message' => 'Akun Anda terdaftar sebagai Mitra Toko. Silakan masuk melalui Portal Mitra.',
+            ],
+            User::ROLE_PLATFORM_ADMIN, User::ROLE_PLATFORM_OWNER => [
+                'portal' => 'admin',
+                'portal_name' => 'Portal Administrator',
+                'portal_url' => '/admin/login',
+                'message' => 'Akun Anda terdaftar sebagai Administrator. Silakan masuk melalui Portal Admin.',
+            ],
+            default => [
+                'portal' => 'custom',
+                'portal_name' => 'Portal Khusus',
+                'portal_url' => '/auth',
+                'message' => 'Akun mitra, kurir, dan administrator wajib masuk melalui portal masing-masing.',
+            ],
+        };
+
+        return response()->json([
+            'success' => false,
+            'message' => $portalInfo['message'],
+            'error' => [
+                'code' => 'INVALID_PORTAL',
+                'message' => $portalInfo['message'],
+                'portal' => $portalInfo['portal'],
+                'portal_name' => $portalInfo['portal_name'],
+                'portal_url' => $portalInfo['portal_url'],
+            ],
+        ], 403);
     }
 }

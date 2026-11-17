@@ -70,6 +70,7 @@ export interface OrderDetail {
   courier_name?: string;
   status: OrderStatus;
   payment_status: PaymentStatus;
+  payment_method?: string | null;
   estimated_weight_kg: number | null;
   actual_weight_kg: number | null;
   actual_weight?: number | null;
@@ -323,6 +324,47 @@ export async function createOrder(payload: CreateOrderPayload): Promise<OrderDet
   return response.data;
 }
 
+export interface StoreOrdersTabCounts {
+  all: number;
+  pending_pickup: number;
+  need_weigh: number;
+  processing: number;
+  delivery: number;
+  completed: number;
+}
+
+export interface StoreOrdersResult {
+  orders: OrderDetail[];
+  total: number;
+  tab_counts?: StoreOrdersTabCounts;
+}
+
+export async function getStoreOrdersWithCounts(params?: {
+  page?: number;
+  per_page?: number;
+  store_id?: string;
+}): Promise<StoreOrdersResult> {
+  const query = new URLSearchParams();
+  query.set('role', 'store_admin');
+  query.set('per_page', (params?.per_page || 100).toString());
+  if (params?.page) query.set('page', params.page.toString());
+  if (params?.store_id) query.set('store_id', params.store_id);
+
+  const endpoint = `/orders?${query.toString()}`;
+  const response = await apiClient<
+    ApiSuccessResponse<OrderDetail[]> & {
+      total?: number;
+      tab_counts?: StoreOrdersTabCounts;
+    }
+  >(endpoint);
+
+  return {
+    orders: response.data || [],
+    total: response.total ?? (response.data?.length || 0),
+    tab_counts: response.tab_counts,
+  };
+}
+
 export async function getOrders(params?: {
   status?: string;
   role?: string;
@@ -476,6 +518,7 @@ export async function getOrderPayment(orderId: string): Promise<{
   order_number: string;
   status: OrderStatus;
   payment_status: PaymentStatus;
+  payment_method?: string | null;
   amount: number;
   latest_payment: PaymentInfo | null;
 }> {

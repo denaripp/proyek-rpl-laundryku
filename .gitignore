@@ -37,6 +37,7 @@ scratch/
 .vscode/
 .DS_Store
 Thumbs.db
+.hermes/
 
 # Test artefacts
 /.phpunit.result.cache

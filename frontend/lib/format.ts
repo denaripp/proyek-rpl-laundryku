@@ -55,6 +55,29 @@ export function formatTanggalWaktu(
 }
 
 /**
+ * Format relative time in Indonesian (e.g. "Baru saja", "5 menit lalu", "2 jam lalu").
+ */
+export function formatWaktuRelatif(
+  dateInput: string | Date | null | undefined
+): string {
+  if (!dateInput) return '-';
+  try {
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(date.getTime())) return '-';
+
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return 'Baru saja';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} menit lalu`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    return formatTanggal(date, false);
+  } catch {
+    return '-';
+  }
+}
+
+/**
  * Format date alias
  */
 export function formatDate(

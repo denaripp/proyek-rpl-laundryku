@@ -144,11 +144,9 @@ Sesuai ketentuan Panduan Proyek Akhir Mandiri RPL OBE:
    php artisan migrate --seed
    ```
 
-6. Jalankan server development Laravel:
-   ```bash
-   php artisan serve --port=8000
-   ```
-   *Backend REST API aktif pada: `http://127.0.0.1:8000`*
+6. Jalankan aplikasi via Laragon:
+   - Pastikan Apache/Nginx di Laragon dalam status `Running`.
+   - Backend API otomatis aktif di: `http://laundryku.test`
 
 ---
 

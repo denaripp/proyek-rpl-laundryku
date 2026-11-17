@@ -20,7 +20,7 @@ function CourierLoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
-      setErrorMessage('Silakan isi alamat email dan kata sandi.');
+      setErrorMessage('Silakan isi email atau nomor WhatsApp dan kata sandi.');
       return;
     }
 
@@ -64,7 +64,7 @@ function CourierLoginForm() {
           </div>
         </div>
         <h1 className="mt-4 text-center text-2xl font-bold tracking-tight text-white">
-          Portal Kurir LaundryKu
+          Login Kurir LaundryKu
         </h1>
         <p className="mt-1.5 text-center text-xs text-slate-400">
           Masuk untuk melihat dan menjalankan tugas penjemputan & pengantaran cucian
@@ -83,7 +83,7 @@ function CourierLoginForm() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="block text-xs font-medium text-slate-300">
-                Email Terdaftar Kurir
+                Email atau No. WhatsApp Kurir
               </label>
               <div className="mt-1.5 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -92,12 +92,12 @@ function CourierLoginForm() {
                 <input
                   id="email"
                   name="email"
-                  type="email"
-                  autoComplete="email"
+                  type="text"
+                  autoComplete="username"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="kurir@laundryku.test"
+                  placeholder="kurir@laundryku.test atau 08xxxxxxxxxx"
                   className="block w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
                 />
               </div>

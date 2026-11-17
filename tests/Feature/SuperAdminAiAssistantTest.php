@@ -317,4 +317,41 @@ class SuperAdminAiAssistantTest extends TestCase
         $response->assertJsonStructure(['conversation_id', 'reply', 'fallback']);
         $this->assertStringContainsString('Super Administrator', $response->json('reply'));
     }
+
+    public function test_super_admin_can_query_total_gmv(): void
+    {
+        Payment::create([
+            'order_id' => Order::factory()->create([
+                'customer_id' => $this->customer->id,
+                'store_id' => $this->store->id,
+            ])->id,
+            'amount' => 150000,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'payment_method' => 'qris',
+        ]);
+
+        $res = $this->service->chat($this->superAdmin, null, 'Berapa total GMV platform?');
+        $this->assertFalse($res['fallback']);
+        $this->assertStringContainsString('Total GMV platform saat ini adalah Rp', $res['reply']);
+        $this->assertStringContainsString('150.000', $res['reply']);
+    }
+
+    public function test_super_admin_can_ask_what_is_gmv(): void
+    {
+        $res = $this->service->chat($this->superAdmin, null, 'Apa itu total GMV?');
+        $this->assertFalse($res['fallback']);
+        $this->assertStringContainsString('Total GMV (Gross Merchandise Value) adalah', $res['reply']);
+    }
+
+    public function test_super_admin_querying_total_registered_users_returns_concise_number_without_pii_disclaimer(): void
+    {
+        $res = $this->service->chat($this->superAdmin, null, 'Berapa user yang sudah terdaftar?');
+        $this->assertFalse($res['fallback']);
+        $this->assertStringContainsString('Terdapat 4 pengguna terdaftar di platform LaundryKu (4 aktif).', $res['reply']);
+        // Must NOT contain verbose disclaimer note
+        $this->assertStringNotContainsString('Catatan: Data sensitif', $res['reply']);
+        // Must NOT contain per-role breakdown bullets
+        $this->assertStringNotContainsString('- Pelanggan (Customer):', $res['reply']);
+    }
 }

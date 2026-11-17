@@ -15,6 +15,9 @@ import {
   Info,
   Copy,
   ArrowRight,
+  Key,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function AdminAiSettingsPage() {
@@ -29,6 +32,9 @@ export default function AdminAiSettingsPage() {
   const [temperature, setTemperature] = useState<number>(0.2);
   const [maxToolRounds, setMaxToolRounds] = useState<number>(5);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'free' | 'paid'>('all');
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [copiedApiKey, setCopiedApiKey] = useState<boolean>(false);
 
   // Actions
   const [testLoading, setTestLoading] = useState<boolean>(false);
@@ -60,6 +66,7 @@ export default function AdminAiSettingsPage() {
 
       setTemperature(res.temperature ?? 0.2);
       setMaxToolRounds(res.max_tool_rounds ?? 5);
+      setApiKeyInput(res.api_key ?? '');
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -77,6 +84,8 @@ export default function AdminAiSettingsPage() {
 
   const effectiveModel = isCustomMode ? customModelInput.trim() : selectedModel;
   const isModelChanged = Boolean(data?.active_model && effectiveModel !== data.active_model);
+  const isApiKeyChanged = Boolean(data && apiKeyInput !== (data.api_key ?? ''));
+  const isAnySettingChanged = isModelChanged || isApiKeyChanged || Boolean(data && (temperature !== data.temperature || maxToolRounds !== data.max_tool_rounds));
 
   const totalPresets = data?.presets.length ?? 0;
   const freeCount = data?.presets.filter((p) => p.category === 'free' || p.is_free).length ?? 0;
@@ -127,6 +136,14 @@ export default function AdminAiSettingsPage() {
     }
   };
 
+  const handleCopyApiKey = (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedApiKey(true);
+      setTimeout(() => setCopiedApiKey(false), 2000);
+    }
+  };
+
   const handleConfirmSave = async () => {
     if (!effectiveModel) {
       setFeedback({
@@ -144,12 +161,15 @@ export default function AdminAiSettingsPage() {
         model: effectiveModel,
         temperature,
         max_tool_rounds: maxToolRounds,
+        api_key: apiKeyInput,
       });
 
       setShowConfirmModal(false);
       setFeedback({
         type: 'success',
-        message: `Model AI berhasil dialihkan ke "${effectiveModel}". Perubahan langsung aktif ke seluruh chatbot.`,
+        message: isApiKeyChanged
+          ? `Model AI dan Kredensial API Key berhasil diperbarui. Perubahan langsung aktif ke seluruh chatbot.`
+          : `Model AI berhasil dialihkan ke "${effectiveModel}". Perubahan langsung aktif ke seluruh chatbot.`,
       });
       fetchSettings(true);
     } catch (err: any) {
@@ -571,6 +591,94 @@ export default function AdminAiSettingsPage() {
 
         {/* RIGHT COLUMN (5 COLS): Runtime Parameters, Diagnostics, and Execution */}
         <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-6">
+          {/* Card: API Key Credentials */}
+          <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-3.5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-cyan-700" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Kredensial API Key
+                </h3>
+              </div>
+              {data?.api_key_source === 'database' ? (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  Database (Kustom)
+                </span>
+              ) : data?.api_key_source === 'env' ? (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  Default .env
+                </span>
+              ) : (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                  Belum Ada Key
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700">OpenRouter API Key</label>
+                {data?.api_key_source === 'database' && (
+                  <button
+                    type="button"
+                    onClick={() => setApiKeyInput('')}
+                    className="text-[10px] text-slate-400 hover:text-cyan-700 font-medium cursor-pointer underline underline-offset-2"
+                    title="Kosongkan untuk kembali menggunakan default file .env"
+                  >
+                    Reset ke .env
+                  </button>
+                )}
+              </div>
+
+              {/* Password / Text Input with Eye and Copy Buttons */}
+              <div className="relative flex items-center">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder="sk-or-v1-..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full pl-3 pr-20 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-cyan-700 focus:ring-1 focus:ring-cyan-700 transition-all placeholder:text-slate-400"
+                />
+
+                <div className="absolute right-1.5 flex items-center gap-1">
+                  {/* Copy Button */}
+                  {apiKeyInput && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyApiKey(apiKeyInput)}
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Salin API Key"
+                      aria-label="Salin API Key"
+                    >
+                      {copiedApiKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+
+                  {/* Toggle Show/Hide Eye Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title={showApiKey ? 'Tutup / Sembunyikan API Key' : 'Lihat API Key'}
+                    aria-label={showApiKey ? 'Sembunyikan API Key' : 'Lihat API Key'}
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="w-4 h-4 text-cyan-700" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-500" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Kunci API digunakan asisten LANDY memanggil model OpenRouter. Klik ikon mata untuk melihat atau menutup kode rahasia.
+              </p>
+            </div>
+          </div>
+
           {/* Card 1: Runtime Parameters */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -776,14 +884,14 @@ export default function AdminAiSettingsPage() {
             </div>
 
             {/* Change state notice */}
-            {isModelChanged ? (
+            {isAnySettingChanged ? (
               <div className="flex items-center gap-1.5 text-[11px] text-cyan-800 bg-cyan-50/70 border border-cyan-200/80 p-2.5 rounded-lg">
                 <Info className="w-3.5 h-3.5 shrink-0 text-cyan-700" />
-                <span>Model ini akan menggantikan model aktif di database setelah disimpan.</span>
+                <span>Pengaturan yang diubah akan disimpan dan langsung aktif di sistem.</span>
               </div>
             ) : (
               <div className="text-[11px] text-slate-500">
-                Model ini saat ini merupakan model aktif sistem.
+                Konfigurasi saat ini sesuai dengan data aktif sistem.
               </div>
             )}
 
@@ -927,6 +1035,14 @@ export default function AdminAiSettingsPage() {
                 <span>Max tool rounds:</span>
                 <span className="font-bold text-slate-900">{maxToolRounds}</span>
               </div>
+              {isApiKeyChanged && (
+                <div className="flex items-center justify-between text-cyan-800 font-bold bg-cyan-50/60 p-1.5 rounded border border-cyan-200/60">
+                  <span className="flex items-center gap-1">
+                    <Key className="w-3 h-3" /> API Key:
+                  </span>
+                  <span>{apiKeyInput ? 'Diperbarui (disimpan di database)' : 'Direset (revert ke .env)'}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

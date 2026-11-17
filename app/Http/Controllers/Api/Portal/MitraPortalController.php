@@ -17,9 +17,12 @@ use App\Models\Store;
 use App\Models\StorePayoutAccount;
 use App\Models\StoreStaff;
 use App\Models\User;
+use App\Enums\OrderStatus;
 use App\Notifications\NotificationTrigger;
 use App\Http\Requests\Mitra\UpdateStoreProfileRequest;
 use App\Services\Store\StoreDashboardService;
+use App\Services\StoreService;
+use App\Traits\FormatsTimestamps;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,47 +31,14 @@ use Illuminate\Support\Str;
 
 class MitraPortalController extends Controller
 {
+    use FormatsTimestamps;
+
     /**
      * Resolve store for authenticated mitra (covers store owner AND active store staff).
      */
     protected function resolveStore(User $user, ?string $storeId = null): ?Store
     {
-        if ($storeId) {
-            $store = Store::where('id', $storeId)
-                ->where(function ($q) use ($user) {
-                    $q->where('owner_user_id', $user->id)
-                      ->orWhereHas('staff', fn ($s) => $s->where('user_id', $user->id)->where('is_active', true));
-                })
-                ->first();
-            if ($store) {
-                return $store;
-            }
-        }
-
-        // 1. Check if user is the store owner
-        $owned = Store::where('owner_user_id', $user->id)->first();
-        if ($owned) {
-            return $owned;
-        }
-
-        // 2. Check if user is active staff of a store
-        $staff = StoreStaff::where('user_id', $user->id)
-            ->where('is_active', true)
-            ->with('store')
-            ->first();
-
-        return $staff?->store;
-    }
-
-    /**
-     * Format timestamp with Asia/Jakarta timezone.
-     */
-    protected function formatTimestamp(?string $raw, $fallback = null): ?string
-    {
-        if ($raw) {
-            return Carbon::parse($raw, 'Asia/Jakarta')->toIso8601String();
-        }
-        return $fallback ? Carbon::parse($fallback)->setTimezone('Asia/Jakarta')->toIso8601String() : null;
+        return app(StoreService::class)->resolveForUser($user, $storeId);
     }
 
     /**
@@ -98,23 +68,11 @@ class MitraPortalController extends Controller
     }
 
     /**
-     * GET /api/v1/mitra/store & /api/v1/mitra/profile
+     * Format a store model as canonical store profile payload.
      */
-    public function storeProfile(Request $request): JsonResponse
+    protected function formatStoreProfile(Store $store): array
     {
-        $user = $request->user();
-        $store = $this->resolveStore($user);
-
-        if (! $store) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Toko tidak ditemukan untuk akun ini.',
-            ], 404);
-        }
-
-        $isOwner = (int) $store->owner_user_id === (int) $user->id;
-
-        $storeData = [
+        return [
             'id' => (string) $store->id,
             'name' => $store->name,
             'slug' => $store->slug,
@@ -131,6 +89,25 @@ class MitraPortalController extends Controller
             'is_active' => (bool) $store->is_active,
             'is_approved' => $store->isApproved(),
         ];
+    }
+
+    /**
+     * GET /api/v1/mitra/store & /api/v1/mitra/profile
+     */
+    public function storeProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $store = $this->resolveStore($user);
+
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Toko tidak ditemukan untuk akun ini.',
+            ], 404);
+        }
+
+        $isOwner = (int) $store->owner_user_id === (int) $user->id;
+        $storeData = $this->formatStoreProfile($store);
 
         return response()->json([
             'success' => true,
@@ -142,23 +119,7 @@ class MitraPortalController extends Controller
                 ],
             ],
             // Backwards-compatible root keys
-            'store' => [
-                'id' => $store->id,
-                'name' => $store->name,
-                'slug' => $store->slug,
-                'description' => $store->description,
-                'phone' => $store->phone,
-                'address' => $store->address,
-                'city' => $store->city,
-                'province' => $store->province,
-                'latitude' => $store->latitude !== null ? (float) $store->latitude : null,
-                'longitude' => $store->longitude !== null ? (float) $store->longitude : null,
-                'service_radius_km' => $store->service_radius_km !== null ? (float) $store->service_radius_km : null,
-                'operational_hours' => $store->operational_hours,
-                'status' => $store->status,
-                'is_active' => $store->is_active,
-                'is_approved' => $store->isApproved(),
-            ],
+            'store' => array_merge($storeData, ['id' => $store->id, 'is_active' => $store->is_active]),
             'membership' => [
                 'is_owner' => $isOwner,
                 'is_staff' => ! $isOwner,
@@ -223,23 +184,7 @@ class MitraPortalController extends Controller
             'success' => true,
             'message' => 'Profil gerai berhasil diperbarui.',
             'data' => [
-                'store' => [
-                    'id' => (string) $store->id,
-                    'name' => $store->name,
-                    'slug' => $store->slug,
-                    'description' => $store->description,
-                    'phone' => $store->phone,
-                    'address' => $store->address,
-                    'city' => $store->city,
-                    'province' => $store->province,
-                    'latitude' => $store->latitude !== null ? (float) $store->latitude : null,
-                    'longitude' => $store->longitude !== null ? (float) $store->longitude : null,
-                    'service_radius_km' => $store->service_radius_km !== null ? (float) $store->service_radius_km : null,
-                    'operational_hours' => $store->operational_hours,
-                    'status' => $store->status,
-                    'is_active' => (bool) $store->is_active,
-                    'is_approved' => $store->isApproved(),
-                ],
+                'store' => $this->formatStoreProfile($store),
                 'membership' => [
                     'is_owner' => true,
                     'is_staff' => false,
@@ -421,7 +366,7 @@ class MitraPortalController extends Controller
         $pelamarKurirPending = $pelamarQuery->count();
 
         $pesananBaru = Order::where('store_id', $store->id)
-            ->whereIn('status', ['created', 'pending_pickup'])
+            ->whereIn('status', [OrderStatus::CREATED->value, 'pending_pickup'])
             ->count();
 
         return response()->json([

@@ -430,8 +430,29 @@ export default function OrderDetailPage({
                   </div>
                 )}
 
-                {/* Action 2: Awaiting Payment Banner */}
-                {!isPaid && ['payment_required', 'awaiting_payment'].includes((order.status || (order as any).raw_status || '').toLowerCase()) && (
+                {/* Action 2a: COD Payment Info Banner */}
+                {!isPaid && (order.payment_method || '').toLowerCase() === 'cod' && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <h3 className="font-semibold text-sm text-emerald-950">
+                          Metode Pembayaran: Bayar di Tempat (COD)
+                        </h3>
+                      </div>
+                      <p className="text-xs text-emerald-800 leading-relaxed">
+                        Pesanan Anda sedang diproses toko. Silakan siapkan uang tunai sebesar{' '}
+                        <b className="text-emerald-950">
+                          {formatRupiah(order.total_amount ?? (order.final_price ?? (order.final_amount ?? (order.estimated_price ?? order.estimated_amount))))}
+                        </b>{' '}
+                        saat kurir mengantarkan cucian ke lokasi Anda.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action 2b: Awaiting Payment Banner (Non-COD) */}
+                {!isPaid && (order.payment_method || '').toLowerCase() !== 'cod' && ['payment_required', 'awaiting_payment'].includes((order.status || (order as any).raw_status || '').toLowerCase()) && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <h3 className="font-semibold text-sm text-amber-950">

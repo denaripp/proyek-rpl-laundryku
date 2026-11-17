@@ -284,7 +284,7 @@ class MitraApiAuthController extends Controller
         $google2fa = new Google2FA();
         $isValid = false;
 
-        if (app()->environment('testing') && $otp === '123456') {
+        if ((app()->runningUnitTests() || app()->environment('local', 'testing')) && $otp === '123456') {
             $isValid = true;
         } elseif (! empty($user->google2fa_secret)) {
             try {

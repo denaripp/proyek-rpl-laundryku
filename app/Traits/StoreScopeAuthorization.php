@@ -25,6 +25,17 @@ trait StoreScopeAuthorization
     }
 
     /**
+     * Check if the user is an active staff member for a specific store.
+     */
+    protected function isStoreStaffActive(User $user, Store $store): bool
+    {
+        return $store->staff()
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    /**
      * Get the store IDs the user has access to (as owner or active staff).
      */
     protected function userAccessibleStoreIds(User $user): array

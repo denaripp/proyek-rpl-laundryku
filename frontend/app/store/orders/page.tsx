@@ -12,10 +12,11 @@ import {
   EmptyState,
   ErrorState,
 } from '@/components/ui';
-import { getOrders, OrderDetail, ORDER_STATUS_META } from '@/lib/order';
+import { getStoreOrdersWithCounts, StoreOrdersTabCounts, OrderDetail, ORDER_STATUS_META } from '@/lib/order';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate, cn } from '@/lib/format';
+import { usePolling } from '@/hooks/usePolling';
 import {
   Calendar,
   User,
@@ -27,25 +28,35 @@ export default function StoreAdminOrdersPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [orders, setOrders] = useState<OrderDetail[]>([]);
+  const [serverTabCounts, setServerTabCounts] = useState<StoreOrdersTabCounts | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('all');
 
-  const loadStoreOrders = async () => {
-    setLoading(true);
-    setError(null);
+  const loadStoreOrders = async (isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const user = getStoredUser();
       setCurrentUser(user);
-      const res = await getOrders({ role: 'store_admin', per_page: 50 });
-      setOrders(res || []);
+      const res = await getStoreOrdersWithCounts({ per_page: 100 });
+      setOrders(res.orders || []);
+      if (res.tab_counts) {
+        setServerTabCounts(res.tab_counts);
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('laundryku_sidebar_count_refresh'));
       }
     } catch (err: unknown) {
-      setError(formatFriendlyErrorMessage(err, 'Gagal memuat pesanan toko.'));
+      if (!isBackground) {
+        setError(formatFriendlyErrorMessage(err, 'Gagal memuat pesanan toko.'));
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   };
 
@@ -53,9 +64,18 @@ export default function StoreAdminOrdersPage() {
     loadStoreOrders();
   }, []);
 
+  usePolling(() => loadStoreOrders(true), 15000, { enabled: true, refetchOnFocus: true });
+
   const handleLogout = async () => {
     await logoutAndRedirectHome('mitra');
   };
+
+  const isNeedWeigh = (s: string) =>
+    s === 'AT_STORE' || s === 'WEIGHED' || s === 'PICKED_UP' || s === 'PICKUP_ASSIGNED' || s === 'AWAITING_PRICE_APPROVAL' || s === 'PRICE_APPROVED';
+  const isProcessing = (s: string) =>
+    s === 'PAID' || s === 'PROCESSING' || s === 'AWAITING_PAYMENT';
+  const isDelivery = (s: string) =>
+    s === 'READY_FOR_DELIVERY' || s === 'DELIVERY_ASSIGNED' || s === 'OUT_FOR_DELIVERY' || s === 'COURIER_ASSIGNED_FOR_DELIVERY';
 
   // Filter orders by active tab
   const filteredOrders = React.useMemo(() => {
@@ -64,13 +84,13 @@ export default function StoreAdminOrdersPage() {
       return orders.filter((o) => o.status === 'PENDING_PICKUP');
     }
     if (activeTab === 'need_weigh') {
-      return orders.filter((o) => o.status === 'AT_STORE' || o.status === 'PICKED_UP' || o.status === 'PICKUP_ASSIGNED');
+      return orders.filter((o) => isNeedWeigh(o.status));
     }
     if (activeTab === 'processing') {
-      return orders.filter((o) => o.status === 'PAID' || o.status === 'PROCESSING');
+      return orders.filter((o) => isProcessing(o.status));
     }
     if (activeTab === 'delivery') {
-      return orders.filter((o) => o.status === 'READY_FOR_DELIVERY' || o.status === 'DELIVERY_ASSIGNED' || o.status === 'OUT_FOR_DELIVERY');
+      return orders.filter((o) => isDelivery(o.status));
     }
     if (activeTab === 'completed') {
       return orders.filter((o) => o.status === 'COMPLETED');
@@ -79,31 +99,31 @@ export default function StoreAdminOrdersPage() {
   }, [orders, activeTab]);
 
   const tabs = [
-    { id: 'all', label: 'Semua', count: orders.length },
+    { id: 'all', label: 'Semua', count: serverTabCounts?.all ?? orders.length },
     {
       id: 'pending_pickup',
       label: 'Perlu kurir jemput',
-      count: orders.filter((o) => o.status === 'PENDING_PICKUP').length,
+      count: serverTabCounts?.pending_pickup ?? orders.filter((o) => o.status === 'PENDING_PICKUP').length,
     },
     {
       id: 'need_weigh',
       label: 'Penjemputan & timbang',
-      count: orders.filter((o) => o.status === 'AT_STORE' || o.status === 'PICKED_UP' || o.status === 'PICKUP_ASSIGNED').length,
+      count: serverTabCounts?.need_weigh ?? orders.filter((o) => isNeedWeigh(o.status)).length,
     },
     {
       id: 'processing',
       label: 'Sedang diproses',
-      count: orders.filter((o) => o.status === 'PAID' || o.status === 'PROCESSING').length,
+      count: serverTabCounts?.processing ?? orders.filter((o) => isProcessing(o.status)).length,
     },
     {
       id: 'delivery',
       label: 'Pengantaran',
-      count: orders.filter((o) => o.status === 'READY_FOR_DELIVERY' || o.status === 'DELIVERY_ASSIGNED' || o.status === 'OUT_FOR_DELIVERY').length,
+      count: serverTabCounts?.delivery ?? orders.filter((o) => isDelivery(o.status)).length,
     },
     {
       id: 'completed',
       label: 'Selesai',
-      count: orders.filter((o) => o.status === 'COMPLETED').length,
+      count: serverTabCounts?.completed ?? orders.filter((o) => o.status === 'COMPLETED').length,
     },
   ];
 
@@ -129,7 +149,7 @@ export default function StoreAdminOrdersPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={loadStoreOrders}
+            onClick={() => loadStoreOrders()}
             disabled={loading}
             className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1.5 self-start sm:self-auto min-h-[38px] px-3.5 text-xs font-semibold"
           >

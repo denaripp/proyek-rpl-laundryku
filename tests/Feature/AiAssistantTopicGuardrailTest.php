@@ -259,6 +259,21 @@ class AiAssistantTopicGuardrailTest extends TestCase
         // 3. System prompt marker leakage
         $leak = "Halo! LANDURYKU_AI_SYSTEM_V1 Selamat datang di LaundryKu.";
         $this->assertStringNotContainsString('LANDURYKU_AI_SYSTEM_V1', $this->guardrail->sanitizeReply($leak));
+
+        // 4. Conversational closers & trailing pleasantries (WAJIB dibersihkan)
+        $pleasantryReplies = [
+            "Layanan cuci kiloan tersedia mulai dari Rp7.000 per kg.\n\nSemoga membantu! Ada yang bisa saya bantu lagi?" => "Layanan cuci kiloan tersedia mulai dari Rp7.000 per kg.",
+            "Status pesanan #ORD-123 saat ini sedang dalam proses pencucian.\nSemoga informasi ini bermanfaat ya!" => "Status pesanan #ORD-123 saat ini sedang dalam proses pencucian.",
+            "Batas waktu komplain adalah 1x24 jam setelah cucian diantar.\n\nJika ada pertanyaan lain seputar laundry, jangan ragu untuk bertanya ya!" => "Batas waktu komplain adalah 1x24 jam setelah cucian diantar.",
+            "Tarif setrika adalah Rp5.000 per kg.\n\nApakah ada hal lain yang ingin ditanyakan?" => "Tarif setrika adalah Rp5.000 per kg.",
+            "Jam operasional toko mitra dapat dilihat langsung pada profil toko.\n\nSilakan tanyakan jika Anda membutuhkan bantuan lebih lanjut." => "Jam operasional toko mitra dapat dilihat langsung pada profil toko.",
+            "Pembayaran bisa menggunakan QRIS atau Virtual Account.\nSemoga harimu menyenangkan!" => "Pembayaran bisa menggunakan QRIS atau Virtual Account.",
+        ];
+
+        foreach ($pleasantryReplies as $input => $expected) {
+            $cleaned = $this->guardrail->sanitizeReply($input);
+            $this->assertEquals($expected, $cleaned, "Kalimat penutup basa-basi '{$input}' harus terpangkas bersih!");
+        }
     }
 
     /**
@@ -510,5 +525,23 @@ class AiAssistantTopicGuardrailTest extends TestCase
         // Verifikasi memuat pengenalan bot LANDY dan informasi pesanan
         $this->assertStringContainsString('Saya LANDY, asisten AI LaundryKu', $res['reply']);
         $this->assertStringContainsString('Anda belum memiliki pesanan di LaundryKu', $res['reply']);
+    }
+
+    /**
+     * Q. Pertanyaan kebijakan/informasi tidak boleh ditempel kontak eskalasi CS tanpa diminta.
+     */
+    public function test_informational_policy_questions_do_not_append_unsolicited_escalation_cs_contact(): void
+    {
+        $infoQuestions = [
+            'Berapa batas waktu pengajuan komplain?',
+            'Bagaimana aturan refund untuk pesanan yang dibatalkan?',
+            'Kapan saya bisa mengajukan klaim pakaian rusak?',
+            'Apa syarat komplain jika pakaian hilang?',
+        ];
+
+        foreach ($infoQuestions as $q) {
+            $res = $this->service->chat($this->user, null, $q);
+            $this->assertStringNotContainsString('customer service manusia', $res['reply'], "Pertanyaan informasi '{$q}' tidak boleh ditempeli blok kontak CS.");
+        }
     }
 }

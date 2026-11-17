@@ -124,7 +124,7 @@ class AdminAuthController extends Controller
         }
 
         // Also allow local test bypass if in local testing mode
-        if (app()->environment('testing') && $otp === '123456') {
+        if ((app()->runningUnitTests() || app()->environment('local', 'testing')) && $otp === '123456') {
             $isValid = true;
         }
 

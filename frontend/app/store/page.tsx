@@ -7,7 +7,8 @@ import { Button, Skeleton } from '@/components/ui';
 import { getStoredUser, AuthUser, getActiveStoreId, logoutAndRedirectHome } from '@/lib/auth';
 import { getStoreMetrics, StoreMetricsData } from '@/lib/store';
 import { formatFriendlyErrorMessage } from '@/lib/api';
-import { formatRupiah, formatTanggalWaktu } from '@/lib/format';
+import { formatRupiah, formatTanggalWaktu, formatWaktuRelatif } from '@/lib/format';
+import { usePolling } from '@/hooks/usePolling';
 import {
   Sparkles,
   ShoppingBag,
@@ -101,6 +102,9 @@ export default function StoreDashboardOverviewPage() {
     };
   }, [loadData]);
 
+  // Real-time auto-polling every 15s for live dashboard operational stats
+  usePolling(() => loadData(true), 15000, { enabled: true, refetchOnFocus: true });
+
   const metrics = dashboardData?.metrics;
   const recentOrders = dashboardData?.recent_orders || [];
   const store = dashboardData?.store;
@@ -121,8 +125,8 @@ export default function StoreDashboardOverviewPage() {
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
               {store?.name
-                ? `Pantau performa harian dan pesanan aktif gerai ${store.name}.`
-                : 'Pantau performa harian dan pesanan aktif gerai Anda.'}
+                ? `Pantau performa harian dan pesanan aktif toko ${store.name}.`
+                : 'Pantau performa harian dan pesanan aktif toko Anda.'}
             </p>
           </div>
 
@@ -326,8 +330,13 @@ export default function StoreDashboardOverviewPage() {
                             <td className="py-3 px-4 font-medium text-slate-900">
                               {ord.customer_name}
                             </td>
-                            <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                              {ord.created_at ? formatTanggalWaktu(ord.created_at) : '-'}
+                            <td className="py-3 px-4 font-mono text-[11px]">
+                              <div className="font-semibold text-slate-800">
+                                {ord.created_at ? formatWaktuRelatif(ord.created_at) : '-'}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {ord.created_at ? formatTanggalWaktu(ord.created_at) : ''}
+                              </div>
                             </td>
                             <td className="py-3 px-4 font-mono tabular-nums font-semibold text-slate-900">
                               {formatRupiah(ord.total_amount)}
@@ -361,8 +370,9 @@ export default function StoreDashboardOverviewPage() {
                             {formatRupiah(ord.total_amount)}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          {ord.created_at ? formatTanggalWaktu(ord.created_at) : '-'}
+                        <div className="text-[11px] font-mono flex items-center justify-between">
+                          <span className="text-slate-700 font-semibold">{ord.created_at ? formatWaktuRelatif(ord.created_at) : '-'}</span>
+                          <span className="text-slate-400 text-[10px]">{ord.created_at ? formatTanggalWaktu(ord.created_at) : ''}</span>
                         </div>
                       </div>
                     ))}
