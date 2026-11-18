@@ -95,7 +95,7 @@ Sesuai ketentuan Panduan Proyek Akhir Mandiri RPL OBE:
   - Tautan Video Progres 2 (YouTube/Drive): `https://youtu.be/placeholder-progres-2`
 - **Tahap 3 & 4 (Implementasi, Pengujian, CI/CD & Final Demo)**:
   - Berkas: [`project akhir/03-tahap-3-implementasi-pengujian-ci-cd/`](file:///c:/laragon/www/laundryku/project%20akhir/03-tahap-3-implementasi-pengujian-ci-cd/)
-  - Tautan Video Final Demo & Testing (8–12 Menit): `https://youtu.be/placeholder-final-demo`
+  - Tautan Video Final Demo & Testing (8–12 Menit): `https://www.youtube.com/watch?v=7ACT68Ha8Bw`
 
 ---
 
