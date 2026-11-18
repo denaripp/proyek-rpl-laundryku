@@ -365,4 +365,77 @@ class CourierAssignmentTest extends TestCase
         $eligible = $service->findEligibleCouriers($newOrder, 'delivery');
         $this->assertTrue($eligible->contains('id', $courier->id));
     }
+
+    /** @test */
+    public function store_admin_can_assign_specific_courier_manually()
+    {
+        $storeOwner = User::factory()->create(['role' => User::ROLE_STORE_ADMIN]);
+        $store = \App\Models\Store::factory()->create(['owner_user_id' => $storeOwner->id]);
+
+        $courierUser = User::factory()->create(['role' => User::ROLE_COURIER]);
+        $courier = Courier::factory()->create([
+            'user_id' => $courierUser->id,
+            'store_id' => $store->id,
+            'is_available' => true,
+            'is_verified' => true,
+        ]);
+
+        $order = Order::factory()->create([
+            'customer_id' => $this->user->id,
+            'store_id' => $store->id,
+            'status' => 'waiting_pickup',
+        ]);
+
+        Sanctum::actingAs($storeOwner, ['role:store_admin']);
+
+        $res = $this->postJson("/api/v1/orders/{$order->id}/assign-courier", [
+            'task_type' => 'pickup',
+            'courier_id' => $courier->id,
+        ]);
+
+        $res->assertStatus(201);
+        $this->assertDatabaseHas('courier_tasks', [
+            'order_id' => $order->id,
+            'courier_id' => $courier->id,
+            'task_type' => 'pickup',
+            'status' => 'assigned',
+        ]);
+        $this->assertEquals($courierUser->id, $order->fresh()->courier_id);
+    }
+
+    /** @test */
+    public function courier_with_tasks_on_completed_orders_remains_eligible_for_new_orders()
+    {
+        $store = \App\Models\Store::factory()->create();
+        $courier = Courier::factory()->create([
+            'store_id' => $store->id,
+            'is_available' => true,
+            'is_verified' => true,
+        ]);
+
+        // Completed order with old assigned/unclosed task
+        $oldOrder = Order::factory()->create([
+            'customer_id' => $this->user->id,
+            'store_id' => $store->id,
+            'status' => 'completed',
+        ]);
+        CourierTask::factory()->create([
+            'order_id' => $oldOrder->id,
+            'courier_id' => $courier->id,
+            'task_type' => 'pickup',
+            'status' => 'assigned',
+        ]);
+
+        $newOrder = Order::factory()->create([
+            'customer_id' => $this->user->id,
+            'store_id' => $store->id,
+            'status' => 'waiting_pickup',
+            'pickup_latitude' => -6.2000,
+            'pickup_longitude' => 106.8000,
+        ]);
+
+        $service = app(\App\Services\Courier\CourierAssignmentService::class);
+        $eligible = $service->findEligibleCouriers($newOrder, 'pickup');
+        $this->assertTrue($eligible->contains('id', $courier->id));
+    }
 }

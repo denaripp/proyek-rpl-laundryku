@@ -29,7 +29,7 @@ class CourierAssignmentService
      * Assign a courier to an order's task.
      * Finds the nearest eligible courier and assigns them.
      */
-    public function assignCourier(Order $order, string $taskType = 'pickup'): CourierTask
+    public function assignCourier(Order $order, string $taskType = 'pickup', ?int $specificCourierId = null): CourierTask
     {
         // Validate order status
         if ($order->status === OrderStatus::CANCELLED->value) {
@@ -45,18 +45,31 @@ class CourierAssignmentService
             throw new Exception('An active task already exists for this order.');
         }
 
-        // Find eligible couriers
-        $couriers = $this->findEligibleCouriers($order, $taskType);
+        if ($specificCourierId) {
+            $courier = Courier::where('id', $specificCourierId)
+                ->where('is_verified', true)
+                ->first();
+            if (! $courier) {
+                throw new Exception('Kurir yang dipilih tidak ditemukan atau belum diverifikasi.');
+            }
+            if ($courier->store_id && (int) $courier->store_id !== (int) $order->store_id) {
+                throw new Exception('Kurir ini terdaftar pada toko lain.');
+            }
+            $distance = 0;
+        } else {
+            // Find eligible couriers
+            $couriers = $this->findEligibleCouriers($order, $taskType);
 
-        if ($couriers->isEmpty()) {
-            // No courier available — order goes to waiting state
-            $this->setOrderWaitingForCourier($order, $taskType);
-            throw new Exception('No eligible couriers available. Order is now waiting for courier.');
+            if ($couriers->isEmpty()) {
+                // No courier available — order goes to waiting state
+                $this->setOrderWaitingForCourier($order, $taskType);
+                throw new Exception('Tidak ada kurir yang tersedia saat ini untuk penugasan otomatis.');
+            }
+
+            // Assign the nearest / best suited courier
+            $courier = $couriers->first();
+            $distance = $courier->calculated_distance ?? 0;
         }
-
-        // Assign the nearest courier
-        $courier = $couriers->first();
-        $distance = $couriers->first()->calculated_distance ?? 0;
 
         return DB::transaction(function () use ($order, $courier, $taskType, $distance) {
             $task = CourierTask::create([
@@ -175,13 +188,21 @@ class CourierAssignmentService
         $eligibleWithoutDistance = collect();
 
         foreach ($couriers as $courier) {
-            // Check for conflicting active task
-            $conflicting = CourierTask::where('courier_id', $courier->id)
+            // Check active tasks on orders that are still ongoing (not completed or cancelled)
+            $activeTasksCount = CourierTask::where('courier_id', $courier->id)
                 ->whereIn('status', ['assigned', 'accepted', 'arrived', 'picked_up'])
-                ->exists();
-            if ($conflicting) {
+                ->whereHas('order', function ($q) {
+                    $q->whereNotIn('status', [OrderStatus::COMPLETED->value, OrderStatus::DELIVERED->value, OrderStatus::CANCELLED->value, 'completed', 'delivered', 'cancelled']);
+                })
+                ->count();
+
+            // Store couriers can handle up to 3 concurrent tasks; marketplace couriers max 1
+            $maxConcurrent = $courier->store_id ? 3 : 1;
+            if ($activeTasksCount >= $maxConcurrent) {
                 continue;
             }
+
+            $courier->active_tasks_count = $activeTasksCount;
 
             // Couriers without current GPS location remain eligible, sorted at the end
             if ($courier->current_latitude === null || $courier->current_longitude === null) {
@@ -196,14 +217,24 @@ class CourierAssignmentService
                 ['lat' => (float) $originLat, 'lng' => (float) $originLng]
             );
 
-            if ($distance !== null && $distance <= $searchRadius) {
+            if ($distance !== null && ($distance <= $searchRadius || $courier->store_id !== null)) {
                 $courier->calculated_distance = $distance;
                 $eligibleWithDistance->push($courier);
             }
         }
 
-        // Sort by distance ascending, then append couriers without GPS
-        return $eligibleWithDistance->sortBy('calculated_distance')->concat($eligibleWithoutDistance);
+        // Prioritize store couriers first, then fewer active tasks, then shortest distance
+        return $eligibleWithDistance->concat($eligibleWithoutDistance)->sort(function ($a, $b) use ($storeId) {
+            $aIsStore = (int) $a->store_id === (int) $storeId ? 0 : 1;
+            $bIsStore = (int) $b->store_id === (int) $storeId ? 0 : 1;
+            if ($aIsStore !== $bIsStore) {
+                return $aIsStore <=> $bIsStore;
+            }
+            if (($a->active_tasks_count ?? 0) !== ($b->active_tasks_count ?? 0)) {
+                return ($a->active_tasks_count ?? 0) <=> ($b->active_tasks_count ?? 0);
+            }
+            return ($a->calculated_distance ?? 999999) <=> ($b->calculated_distance ?? 999999);
+        })->values();
     }
 
     /**

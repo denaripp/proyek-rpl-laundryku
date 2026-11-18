@@ -21,6 +21,7 @@ import {
   ORDER_STATUS_META,
   OrderStatus,
 } from '@/lib/order';
+import { getStoreCouriers, AssignedCourierItem } from '@/lib/courier';
 import { formatFriendlyErrorMessage } from '@/lib/api';
 import { getStoredUser, AuthUser, logoutAndRedirectHome } from '@/lib/auth';
 import { formatRupiah, formatDate } from '@/lib/format';
@@ -63,6 +64,10 @@ export default function StoreAdminOrderDetailPage({
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [transitionNote, setTransitionNote] = useState<string>('');
 
+  // Store couriers for manual selection
+  const [storeCouriers, setStoreCouriers] = useState<AssignedCourierItem[]>([]);
+  const [selectedCourierId, setSelectedCourierId] = useState<string>('');
+
   const loadOrderDetail = async () => {
     setLoading(true);
     setError(null);
@@ -71,6 +76,12 @@ export default function StoreAdminOrderDetailPage({
       setCurrentUser(user);
       const res = await getOrder(orderId);
       setOrder(res);
+
+      getStoreCouriers().then((sc) => {
+        if (sc?.assigned_couriers) {
+          setStoreCouriers(sc.assigned_couriers);
+        }
+      }).catch(() => null);
 
       if (res.actual_weight_kg) {
         setActualWeightKg(res.actual_weight_kg);
@@ -145,7 +156,10 @@ export default function StoreAdminOrderDetailPage({
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await assignCourier(order.id, { task_type: 'pickup' });
+      await assignCourier(order.id, {
+        task_type: 'pickup',
+        courier_id: selectedCourierId ? selectedCourierId : undefined,
+      });
       await loadOrderDetail();
       setActionSuccessMsg('Kurir berhasil ditugaskan untuk menjemput cucian.');
       if (typeof window !== 'undefined') {
@@ -174,7 +188,10 @@ export default function StoreAdminOrderDetailPage({
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
     try {
-      await assignCourier(order.id, { task_type: 'delivery' });
+      await assignCourier(order.id, {
+        task_type: 'delivery',
+        courier_id: selectedCourierId ? selectedCourierId : undefined,
+      });
       await loadOrderDetail();
       setActionSuccessMsg('Kurir berhasil ditugaskan untuk mengantar cucian.');
       if (typeof window !== 'undefined') {
@@ -351,6 +368,25 @@ export default function StoreAdminOrderDetailPage({
                     <p className="text-xs text-slate-600 leading-relaxed">
                       Pesanan baru masuk dari customer. Tugaskan kurir toko untuk menjemput cucian ke alamat pelanggan.
                     </p>
+                    {storeCouriers.length > 0 && (
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-700">
+                          Pilih Kurir Toko:
+                        </label>
+                        <select
+                          value={selectedCourierId}
+                          onChange={(e) => setSelectedCourierId(e.target.value)}
+                          className="w-full sm:max-w-xs text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy-700"
+                        >
+                          <option value="">Otomatis (Rekomendasi Sistem / Beban Terendah)</option>
+                          {storeCouriers.map((c) => (
+                            <option key={c.courier_profile_id} value={c.courier_profile_id}>
+                              {c.name} {c.vehicle_type ? `(${c.vehicle_type})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div className="pt-1">
                       <Button
                         onClick={handleAssignPickupCourier}
@@ -578,6 +614,25 @@ export default function StoreAdminOrderDetailPage({
                     <p className="text-xs text-slate-600 leading-relaxed">
                       Tugaskan kurir untuk mengantarkan pakaian bersih kembali ke alamat pelanggan.
                     </p>
+                    {storeCouriers.length > 0 && (
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-700">
+                          Pilih Kurir Toko:
+                        </label>
+                        <select
+                          value={selectedCourierId}
+                          onChange={(e) => setSelectedCourierId(e.target.value)}
+                          className="w-full sm:max-w-xs text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy-700"
+                        >
+                          <option value="">Otomatis (Rekomendasi Sistem / Beban Terendah)</option>
+                          {storeCouriers.map((c) => (
+                            <option key={c.courier_profile_id} value={c.courier_profile_id}>
+                              {c.name} {c.vehicle_type ? `(${c.vehicle_type})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div className="pt-1">
                       <Button
                         onClick={handleAssignDeliveryCourier}

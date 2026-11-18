@@ -14,7 +14,8 @@ class AssignCourierRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'task_type' => 'required|string|in:pickup,delivery',
+            'task_type' => 'nullable|string|in:pickup,delivery',
+            'courier_id' => 'nullable|integer|exists:couriers,id',
         ];
     }
 }

@@ -459,9 +459,15 @@ class OrderController extends Controller
         Gate::forUser($request->user())->authorize('update', $order);
 
         try {
-            $task = $this->courierService->assignCourier($order, $request->input('task_type'));
+            $taskType = $request->input('task_type', 'pickup') ?: 'pickup';
+            $courierId = $request->filled('courier_id') ? (int) $request->input('courier_id') : null;
+            $task = $this->courierService->assignCourier($order, $taskType, $courierId);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 422);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => $e->getMessage(),
+            ], 422);
         }
 
         return response()->json($task, 201);

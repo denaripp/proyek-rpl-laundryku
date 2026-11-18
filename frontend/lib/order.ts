@@ -407,7 +407,7 @@ export async function transitionOrder(
 
 export async function assignCourier(
   id: string,
-  payload: { task_type?: 'pickup' | 'delivery' } = { task_type: 'pickup' }
+  payload: { task_type?: 'pickup' | 'delivery'; courier_id?: number | string } = { task_type: 'pickup' }
 ): Promise<unknown> {
   const response = await apiClient<unknown>(`/orders/${id}/assign-courier`, {
     method: 'POST',

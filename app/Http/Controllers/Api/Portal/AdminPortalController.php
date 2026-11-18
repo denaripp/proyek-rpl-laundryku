@@ -285,13 +285,15 @@ class AdminPortalController extends Controller
     {
         $request->validate([
             'task_type' => 'nullable|string|in:pickup,delivery',
+            'courier_id' => 'nullable|integer|exists:couriers,id',
         ]);
 
         $order = Order::findOrFail($id);
         $taskType = $request->input('task_type', 'delivery');
+        $courierId = $request->filled('courier_id') ? (int) $request->input('courier_id') : null;
 
         try {
-            $task = app(\App\Services\Courier\CourierAssignmentService::class)->assignCourier($order, $taskType);
+            $task = app(\App\Services\Courier\CourierAssignmentService::class)->assignCourier($order, $taskType, $courierId);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
