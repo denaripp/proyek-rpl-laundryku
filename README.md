@@ -85,18 +85,24 @@ Sistem mengimplementasikan **Strict Role Isolation** dengan 4 gerbang masuk terp
 
 Sesuai ketentuan Panduan Proyek Akhir Mandiri RPL OBE:
 
+- **Folder Google Drive Resmi (Lengkap Seluruh Berkas)**:
+  - Tautan Drive: [Folder Google Drive Proyek Akhir RPL LaundryKu (41257212)](https://drive.google.com/drive/folders/17H54-NTrZ1l93YMoltzbbO5zXz3QzBxc?usp=sharing)
 - **Dokumen Laporan Resmi Lengkap (Gabungan Tahap 1, 2, & 3 — 43 Halaman)**:
-  - Berkas PDF: [`project akhir/Laporan_Lengkap_Proyek_Akhir_RPL_LaundryKu_41257212.pdf`](./project%20akhir/Laporan_Lengkap_Proyek_Akhir_RPL_LaundryKu_41257212.pdf)
+  - Berkas PDF Lokal/Repo: [`project akhir/Laporan_Lengkap_Proyek_Akhir_RPL_LaundryKu_41257212.pdf`](./project%20akhir/Laporan_Lengkap_Proyek_Akhir_RPL_LaundryKu_41257212.pdf)
+  - Tautan Google Drive: [Lihat / Unduh Dokumen Lengkap PDF](https://drive.google.com/file/d/17bpgIlGcBBXmbwQrN_6PXQm9cJMu5oyB/view?usp=sharing)
 - **Tahap 1 (PRD & Spesifikasi Kebutuhan)**:
-  - Berkas: [`project akhir/01-tahap-1-prd/`](./project%20akhir/01-tahap-1-prd/)
+  - Berkas Repo: [`project akhir/01-tahap-1-prd/`](./project%20akhir/01-tahap-1-prd/)
+  - Berkas PDF Drive: [PRD LaundryKu Tahap 1 (Google Drive)](https://drive.google.com/file/d/1dW8uZG4mkT0wg3GJVz6PSXS5wOwSYJGm/view?usp=sharing)
   - Outline Video Progres 1 (3–5 Menit): [`project akhir/01-tahap-1-prd/video-progres-1-outline.md`](./project%20akhir/01-tahap-1-prd/video-progres-1-outline.md)
   - Tautan Video Progres 1 (YouTube/Drive): `https://youtu.be/placeholder-progres-1`
 - **Tahap 2 (SDD, UML, ERD & UI Design)**:
-  - Berkas: [`project akhir/02-tahap-2-sdd-uml-erd-figma/`](./project%20akhir/02-tahap-2-sdd-uml-erd-figma/)
+  - Berkas Repo: [`project akhir/02-tahap-2-sdd-uml-erd-figma/`](./project%20akhir/02-tahap-2-sdd-uml-erd-figma/)
+  - Berkas PDF Drive: [SDD LaundryKu Tahap 2 (Google Drive)](https://drive.google.com/file/d/1rrzHn96t-UMvzoXOG3iB76ypsKJkzDTA/view?usp=sharing)
   - Outline Video Progres 2 (5–7 Menit): [`project akhir/02-tahap-2-sdd-uml-erd-figma/video-progres-2-outline.md`](./project%20akhir/02-tahap-2-sdd-uml-erd-figma/video-progres-2-outline.md)
   - Tautan Video Progres 2 (YouTube/Drive): `https://youtu.be/placeholder-progres-2`
 - **Tahap 3 & 4 (Implementasi, Pengujian, CI/CD & Final Demo)**:
-  - Berkas: [`project akhir/03-tahap-3-implementasi-pengujian-ci-cd/`](./project%20akhir/03-tahap-3-implementasi-pengujian-ci-cd/)
+  - Berkas Repo: [`project akhir/03-tahap-3-implementasi-pengujian-ci-cd/`](./project%20akhir/03-tahap-3-implementasi-pengujian-ci-cd/)
+  - Berkas PDF Drive: [Laporan Pengujian & CI/CD Tahap 3 (Google Drive)](https://drive.google.com/file/d/11jzMcjC8YgI4kur3HCRM9DqBtOmEXYgl/view?usp=sharing)
   - Tautan Video Final Demo & Testing (8–12 Menit): [https://www.youtube.com/watch?v=7ACT68Ha8Bw](https://www.youtube.com/watch?v=7ACT68Ha8Bw)
 
 ---
