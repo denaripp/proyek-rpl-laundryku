@@ -85,6 +85,8 @@ Sistem mengimplementasikan **Strict Role Isolation** dengan 4 gerbang masuk terp
 
 Sesuai ketentuan Panduan Proyek Akhir Mandiri RPL OBE:
 
+- **Dokumen Laporan Resmi Lengkap (Gabungan Tahap 1, 2, & 3 — 43 Halaman)**:
+  - Berkas PDF: [`project akhir/Laporan_Lengkap_Proyek_Akhir_RPL_LaundryKu_41257212.pdf`](./project%20akhir/Laporan_Lengkap_Proyek_Akhir_RPL_LaundryKu_41257212.pdf)
 - **Tahap 1 (PRD & Spesifikasi Kebutuhan)**:
   - Berkas: [`project akhir/01-tahap-1-prd/`](./project%20akhir/01-tahap-1-prd/)
   - Outline Video Progres 1 (3–5 Menit): [`project akhir/01-tahap-1-prd/video-progres-1-outline.md`](./project%20akhir/01-tahap-1-prd/video-progres-1-outline.md)
