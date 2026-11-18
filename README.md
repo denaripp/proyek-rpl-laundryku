@@ -86,16 +86,16 @@ Sistem mengimplementasikan **Strict Role Isolation** dengan 4 gerbang masuk terp
 Sesuai ketentuan Panduan Proyek Akhir Mandiri RPL OBE:
 
 - **Tahap 1 (PRD & Spesifikasi Kebutuhan)**:
-  - Berkas: [`project akhir/01-tahap-1-prd/`](file:///c:/laragon/www/laundryku/project%20akhir/01-tahap-1-prd/)
-  - Outline Video Progres 1 (3–5 Menit): [`project akhir/01-tahap-1-prd/video-progres-1-outline.md`](file:///c:/laragon/www/laundryku/project%20akhir/01-tahap-1-prd/video-progres-1-outline.md)
+  - Berkas: [`project akhir/01-tahap-1-prd/`](./project%20akhir/01-tahap-1-prd/)
+  - Outline Video Progres 1 (3–5 Menit): [`project akhir/01-tahap-1-prd/video-progres-1-outline.md`](./project%20akhir/01-tahap-1-prd/video-progres-1-outline.md)
   - Tautan Video Progres 1 (YouTube/Drive): `https://youtu.be/placeholder-progres-1`
 - **Tahap 2 (SDD, UML, ERD & UI Design)**:
-  - Berkas: [`project akhir/02-tahap-2-sdd-uml-erd-figma/`](file:///c:/laragon/www/laundryku/project%20akhir/02-tahap-2-sdd-uml-erd-figma/)
-  - Outline Video Progres 2 (5–7 Menit): [`project akhir/02-tahap-2-sdd-uml-erd-figma/video-progres-2-outline.md`](file:///c:/laragon/www/laundryku/project%20akhir/02-tahap-2-sdd-uml-erd-figma/video-progres-2-outline.md)
+  - Berkas: [`project akhir/02-tahap-2-sdd-uml-erd-figma/`](./project%20akhir/02-tahap-2-sdd-uml-erd-figma/)
+  - Outline Video Progres 2 (5–7 Menit): [`project akhir/02-tahap-2-sdd-uml-erd-figma/video-progres-2-outline.md`](./project%20akhir/02-tahap-2-sdd-uml-erd-figma/video-progres-2-outline.md)
   - Tautan Video Progres 2 (YouTube/Drive): `https://youtu.be/placeholder-progres-2`
 - **Tahap 3 & 4 (Implementasi, Pengujian, CI/CD & Final Demo)**:
-  - Berkas: [`project akhir/03-tahap-3-implementasi-pengujian-ci-cd/`](file:///c:/laragon/www/laundryku/project%20akhir/03-tahap-3-implementasi-pengujian-ci-cd/)
-  - Tautan Video Final Demo & Testing (8–12 Menit): `https://www.youtube.com/watch?v=7ACT68Ha8Bw`
+  - Berkas: [`project akhir/03-tahap-3-implementasi-pengujian-ci-cd/`](./project%20akhir/03-tahap-3-implementasi-pengujian-ci-cd/)
+  - Tautan Video Final Demo & Testing (8–12 Menit): [https://www.youtube.com/watch?v=7ACT68Ha8Bw](https://www.youtube.com/watch?v=7ACT68Ha8Bw)
 
 ---
 
